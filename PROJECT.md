@@ -179,9 +179,9 @@ KVK sub-codes, codes in both SBI lists, codes that came from several SBI 2008 co
 marked with flag columns; derived sector columns are filled only when unambiguous (90% of
 active companies). Built by `kvk_silver.py`; see its docstring for every column.
 
-### Gold (to do)
+### Gold — `gold.py` (built)
 
-Built around the main question. Proposed tables:
+Built around the main question (column details in the `gold.py` docstring):
 
 - **`gold_absence_by_sector`** (quarterly, from 80072NED): absence % per SBI section and
   the national total; difference from the national total in percentage points; rank per
@@ -193,12 +193,16 @@ Built around the main question. Proposed tables:
   of employees absent, average frequency and duration, duration bands, share
   work-related, and the most common causes. Each value has its 95% interval and a flag
   showing whether the national value falls outside it. Answers questions 4 and 5.
-- **`gold_business_context`** (quarterly from 81589NED, plus KVK): number of businesses
-  per sector and size band; active BVs/NVs and median company age per sector from KVK.
-  Answers question 6.
+- **`gold_business_context`** (quarterly, 81589NED): number of businesses per sector and
+  size band. Answers question 6.
+- **`gold_kvk_context`** (latest KVK snapshot): active companies and median company age
+  per SBI 2008 section and legal form; groups under 10 companies flagged. Answers
+  question 6.
 
-Each gold row carries its period status (provisional/final) and the date of the newest
-data behind it.
+Each gold row carries its period status (provisional/final) and `data_as_of`, the date of
+the newest data behind it; comparisons that mix provisional and final figures are
+flagged. Gold is published like silver (staging, `run_id`, run log) and refuses to build
+from silver tables of different runs.
 
 ### Streamlit dashboard (to do)
 
@@ -373,7 +377,7 @@ maintenance.py          monthly tasks: quarantine cleanup (KVK retention, optimi
 cbs_silver.py           bronze CBS -> silver
 kvk_silver.py           bronze KVK -> silver kvk_company
 publish.py, runlog.py   staging, publishing and the run log, shared by the silver pipelines
-gold/                   silver -> gold (to do)
+gold.py                 silver -> gold
 dashboard/              Streamlit app (to do)
 orchestration/          Dagster definitions: assets, schedules, checks, maintenance (to do)
 tests/                  pytest
@@ -402,9 +406,9 @@ TODO.md                 open work
 | Data checks before ingestion (CBS) | Built (`checks/cbs.py`) |
 | Quarantine | Built for CBS, KVK and reference files; monthly cleanup in `maintenance.py` |
 | Alerting, freshness checks | To do |
-| pytest | 225 tests incl. real Delta tables in tmp_path; one opt-in live CBS test |
+| pytest | 240 tests incl. real Delta tables in tmp_path; one opt-in live CBS test |
 | Configuration file | Built (`config.yaml` + `config.py`) |
-| Gold | To do; tables proposed around the main question |
+| Gold | Built: 5 tables; provisional figures marked |
 | Streamlit dashboard | To do; pages proposed |
 | Dagster orchestration and maintenance | To do |
 | Docker Compose | To do |

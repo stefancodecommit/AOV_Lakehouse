@@ -261,23 +261,35 @@ Notes:
   can't be tracked across snapshots; compare snapshots only in aggregate.
 - Gold counts companies with `is_latest`; never sum across snapshots.
 
-## 3. Gold
+## 3. Gold (built 2026-10-05: `gold.py`)
 Main question: which company characteristics (sector, size class) go together with
 higher sickness absence. See `PROJECT.md` for the sub-questions.
-- [ ] `gold_absence_by_sector`: absence % per SBI section and national total; difference
-      from the total in percentage points; rank per quarter; change versus the same
-      quarter a year earlier; rolling four-quarter average
-- [ ] `gold_absence_by_size`: the same comparisons per size class (quarterly from
-      80072NED, yearly from 86009NED, shown side by side because the size units differ)
-- [ ] `gold_absence_profile`: per sector and size class: share absent, frequency,
-      duration, duration bands, share work-related, top causes; 95% intervals and a flag
-      when the national value falls outside the interval
-- [ ] `gold_business_context`: businesses per sector and size band (81589NED); active
-      BVs/NVs and median company age per sector (KVK, needs silver KVK)
-- [ ] Every gold row carries its period status and the date of the newest data behind it
-- [ ] Mark groups with fewer than 10 companies (KVK re-identification rule) with a flag;
-      the dashboard hides them by default (personal use, so marking is enough)
-- [ ] Same staging-and-swap publishing, `run_id` and run log (`runlog.py`) as silver
+- [x] `gold_absence_by_sector`: absence % per sector (every CBS level, `sbi_level` says
+      which; the dashboard defaults to sections) and national total; difference from the
+      total in percentage points; rank within the level per quarter; change versus the
+      same quarter a year earlier; rolling four-quarter average (only with four
+      consecutive quarters). Checked by hand: C Industrie 2026KW02 6.2%, +0.8 pp vs
+      national, +0.2 pp vs 2025KW02, rolling 6.3%
+- [x] `gold_absence_by_size`: the same comparisons per size class, quarterly absence % from
+      80072NED (persons employed) and yearly share of employees absent from 86009NED
+      (employees, with 95% bounds), side by side. Real data: absence rises with size
+      (2026KW02: 1-9 2.5%, 10-99 4.7%, 100+ 6.2%)
+- [x] `gold_absence_profile`: every 86009NED measure per sector and size class with 95%
+      interval, national value, `differs_from_national` (interval excludes the national
+      value) + `direction`, and `rank_in_topic` (e.g. top causes)
+- [x] `gold_business_context`: businesses per sector and size band (81589NED). CBS rounds
+      counts to fives, so bands can differ from the total by up to 15
+- [x] `gold_kvk_context` (split off from business context: other grain and period):
+      active companies and median company age per SBI 2008 section and legal form from
+      the latest KVK snapshot; companies without a determined section as "unknown"
+- [x] Every gold row carries its period status (`is_provisional`) and `data_as_of`;
+      comparisons that mix provisional and final figures are flagged
+      (`yoy_mixes_status`, `rolling_4q_has_provisional`); final rows never mix
+- [x] Mark groups with fewer than 10 companies (KVK re-identification rule) with
+      `is_small_group`; the dashboard hides them by default
+- [x] Same staging-and-swap publishing, `run_id` and run log as silver (pipeline `gold`);
+      the run log's inputs include the silver run_ids read. Gold refuses to build from
+      silver CBS tables of different runs
 - [x] Decision (2026-10-05): provisional figures are shown by default, clearly marked
       (`period_status`, `is_provisional`), with a dashboard switch "final figures only".
       Comparisons that mix provisional and final figures are flagged
@@ -338,8 +350,8 @@ higher sickness absence. See `PROJECT.md` for the sub-questions.
 `tests/test_kvk_logic.py` the KVK file verification; `tests/test_reference.py` the SBI
 crosswalk; `tests/test_checks.py` the CBS and KVK checks and quarantine;
 `tests/test_maintenance.py` the quarantine cleanup; `tests/test_config.py` the
-configuration; `tests/test_kvk_silver.py` silver KVK; `tests/test_delta.py` writes real
-Delta tables in `tmp_path` (225 tests, ~11 s). `conftest.py` fails a test when any module still points at the real
+configuration; `tests/test_kvk_silver.py` silver KVK; `tests/test_gold.py` gold;
+`tests/test_delta.py` writes real Delta tables in `tmp_path` (240 tests, ~14 s). `conftest.py` fails a test when any module still points at the real
 lakehouse or inbox. Checked by breaking the code on purpose:
 removing the delete-before-write, an empty `done_keys()` and non-UTC silver timestamps
 each make the right tests fail.

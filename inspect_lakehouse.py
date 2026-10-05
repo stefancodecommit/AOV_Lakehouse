@@ -11,8 +11,9 @@ Problems reported:
   - silver fact rows whose company characteristic is unknown in the code list
   - batches or files in quarantine (failed their checks; see report.json in each folder)
 
-  - silver tables whose run_id isn't the latest successful run of their pipeline
-    (silver_cbs, silver_kvk; a publish that stopped halfway), or a latest run that failed
+  - silver/gold tables whose run_id isn't the latest successful run of their pipeline
+    (silver_cbs, silver_kvk, gold; a publish that stopped halfway), or a latest run
+    that failed
 
 Warnings (shown, but not counted as problems): CBS tables that CBS has stopped or hasn't
 modified for longer than their frequency allows, from the newest TableInfos in bronze.
@@ -32,7 +33,9 @@ import sys
 from pathlib import Path
 
 PERIOD_COLUMNS = ("period_key", "_period", "Perioden")
-INGEST_COLUMNS = ("ingested_at", "_ingested_at")
+INGEST_COLUMNS = ("ingested_at", "_ingested_at", "data_as_of")
+EXPECTED_GOLD = ["gold_absence_by_sector", "gold_absence_by_size", "gold_absence_profile",
+                 "gold_business_context", "gold_kvk_context"]
 EXPECTED_SILVER = [
     "dim_period", "dim_sector", "dim_company_size", "dim_region", "dim_survey_measure",
     "map_characteristic", "map_sbi2008_sbi2025", "fct_absence_rate", "fct_absence_survey",
@@ -108,8 +111,13 @@ def expected_bronze_names() -> list[str]:
         return []
 
 
+def pipeline_layer(pipeline: str) -> str:
+    return "gold" if pipeline.startswith("gold") else "silver"
+
+
 def silver_run_problems(root: Path, pipeline: str = "silver_cbs") -> tuple[list[str], list[str]]:
-    """(summary lines, problems) from the run log and the run_id of each silver table."""
+    """(summary lines, problems) from the run log and the run_id of each table the
+    pipeline's latest successful run published (silver or gold)."""
     import pyarrow.compute as pc
     from deltalake import DeltaTable
     import runlog
@@ -129,13 +137,13 @@ def silver_run_problems(root: Path, pipeline: str = "silver_cbs") -> tuple[list[
         return lines, problems
     latest = ok.iloc[-1]
     for name, info in json.loads(latest["tables"]).items():
-        path = root / "silver" / name
+        path = root / pipeline_layer(pipeline) / name
         if info.get("status") != "published" or not (path / "_delta_log").exists():
             continue
         ids = DeltaTable(str(path)).to_pyarrow_dataset().to_table(columns=["run_id"]).column("run_id")
         found = set(pc.unique(ids).to_pylist())
         if found != {latest["run_id"]}:
-            problems.append(f"silver/{name}: run_id {sorted(map(str, found))} is not the latest "
+            problems.append(f"{pipeline_layer(pipeline)}/{name}: run_id {sorted(map(str, found))} is not the latest "
                             f"successful run {latest['run_id']} (publish incomplete?)")
     return lines, problems
 
@@ -199,10 +207,11 @@ def main() -> int:
             missing = [n for n in expected_bronze_names() if n not in present]
             for n in missing:
                 problems.append(f"bronze/{n}: configured in cbs_bronze.py but no table yet")
-        if layer == "silver" and tables:
-            for n in EXPECTED_SILVER:
+        expected = {"silver": EXPECTED_SILVER, "gold": EXPECTED_GOLD}.get(layer, [])
+        if tables:
+            for n in expected:
                 if n not in present:
-                    problems.append(f"silver/{n}: expected but missing")
+                    problems.append(f"{layer}/{n}: expected but missing")
 
     if not args.layer or args.layer == "bronze":
         from checks.quarantine import list_entries
@@ -217,10 +226,10 @@ def main() -> int:
             problems.append(f"quarantine/{e.get('source', '?')}/{e.get('name', '?')}: failed its checks "
                             f"(see {e['folder']}/report.json)")
 
-    if not args.layer or args.layer == "silver":
+    if not args.layer or args.layer in ("silver", "gold"):
         import runlog
-        pipelines = sorted(set(runlog.read_runs(root / "_run_log")["pipeline"])) or ["silver_cbs"]
-        for pipeline in pipelines:
+        pipelines = sorted(set(runlog.read_runs(root / "_run_log")["pipeline"]))
+        for pipeline in [p for p in pipelines if not args.layer or pipeline_layer(p) == args.layer]:
             lines, run_problems = silver_run_problems(root, pipeline)
             print(f"\n=== {pipeline} runs (latest 5, from _run_log)")
             for line in lines:
