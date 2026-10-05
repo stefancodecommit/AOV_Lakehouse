@@ -57,14 +57,24 @@ ingest, problems).
   5 start dates don't parse, range 1806–2026; 381,513 rows are exact duplicates of
   another row, which is expected without a company ID (don't deduplicate).
 
-### Silver CBS
-- [ ] `python cbs_silver.py --preview`: row counts per table, and any warnings about
-      keys missing from the code lists
-- [ ] `python cbs_silver.py`, then `inspect_lakehouse.py --layer silver`: all ten tables
-      present, no unknown keys
-- [ ] Spot-check against CBS StatLine: the national absence percentage for the latest
+### Silver CBS (done 2026-10-05)
+- [x] `python cbs_silver.py --preview`: row counts per table, and any warnings about
+      keys missing from the code lists (no warnings)
+- [x] `python cbs_silver.py`, then `inspect_lakehouse.py --layer silver`: all ten tables
+      present, no unknown keys. 3.7 s, ~590 MB peak memory, 1.6 MB on disk; largest is
+      `fct_business_count` (521,937 rows). No problems reported.
+- [x] Spot-check against CBS StatLine: the national absence percentage for the latest
       quarter, and one sector's figure
-- [ ] Check the types after reading back: dates, whole-number counts, UTC timestamps
+      2026KW02 (provisional): national 5.4%, C Industrie 6.2%, both equal to the CBS
+      table page for 80072NED; also 2025KW02 5.2%, 2025KW04 5.6%, 2024KW04 5.4% match
+      CBS. All 39 rows of 2026KW02 and 2020KW01 equal a fresh API request.
+      (The OData v4 API at datasets.cbs.nl returned 404, so it couldn't be used.)
+- [x] Check the types after reading back: dates, whole-number counts, UTC timestamps
+      Delta schema is right: `date32` dates, `int64` counts/bounds/year/quarter,
+      `timestamp[us, UTC]`. Note: plain `DeltaTable.to_pandas()` turns int columns with
+      nulls into float64 (`count` has 1,586 nulls, `quarter`/`month` are null for
+      other period types). Gold and the dashboard should read with nullable types,
+      e.g. `to_pandas(types_mapper=pd.ArrowDtype)`.
 
 ### Afterwards
 - [ ] Fix what the run uncovered, and add a test for each fix
