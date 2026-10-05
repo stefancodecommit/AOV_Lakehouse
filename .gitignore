@@ -1,0 +1,50 @@
+# --- Data: never in the repository -----------------------------------------
+# The lakehouse is rebuilt from the sources; it can be large and changes daily.
+lakehouse/
+# KVK uploads for the agent
+inbox/
+*.zip
+*.csv
+!tests/**/*.csv
+
+# --- Python -------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+build/
+dist/
+
+# --- Tests and tooling ----------------------------------------------------------
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# --- Secrets and local settings ---------------------------------------------------
+.env
+.env.*
+!.env.example
+.streamlit/secrets.toml
+config.local.yaml
+
+# --- Dagster local state (runs, logs, schedules) ----------------------------------
+.dagster/
+dagster_home/
+.tmp_dagster_home_*/
+.logs_queue/
+.nux/
+.telemetry/
+history/
+storage/
+schedules/
+
+# --- Editors and OS -----------------------------------------------------------------
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db

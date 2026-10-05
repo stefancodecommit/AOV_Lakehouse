@@ -1,0 +1,39 @@
+# Stage 1 CI: run the test suite on every push and pull request.
+# Later stages (see TODO.md): Delta tests run here automatically once added;
+# a Docker build step is added after the Dockerfile exists.
+name: tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:          # also allows a manual run from the Actions tab
+
+permissions:
+  contents: read              # the job only needs to read the code
+
+concurrency:                  # a newer push cancels the older run on the same branch
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip                          # reuse downloaded packages between runs
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Run tests
+        run: pytest -m "not live"            # live CBS tests stay off in CI

@@ -1,0 +1,5 @@
+deltalake>=0.18
+pyarrow>=14
+requests>=2.31
+pandas>=2.0
+ollama>=0.4
