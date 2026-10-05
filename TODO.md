@@ -250,8 +250,8 @@ Planned columns:
   2008 section and division, 72.1% with a single SBI 2008 code. Section filled per
   mapping: 1:1 100%, ambiguous_version 90%, merge 71%. 12 s, ~2.3 GB peak memory
   (matters for Docker sizing), 23 MB per snapshot in silver
-- [ ] Possible refinement later: 4-digit KVK codes such as 7111 are SBI 2008 class codes
-      without a subclass; they are `unknown_code` now (they are not in the crosswalk)
+- [x] Decision (2026-10-05): 4-digit KVK codes such as 7111 (SBI 2008 class codes without
+      a subclass, not in the crosswalk) stay `unknown_code`; no extra mapping rule
 
 Notes:
 - There is no KVK number or company ID in the open dataset, so individual companies
