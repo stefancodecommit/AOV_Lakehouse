@@ -27,7 +27,7 @@ PERIOD_COLUMNS = ("period_key", "_period", "Perioden")
 INGEST_COLUMNS = ("ingested_at", "_ingested_at")
 EXPECTED_SILVER = [
     "dim_period", "dim_sector", "dim_company_size", "dim_region", "dim_survey_measure",
-    "map_characteristic", "fct_absence_rate", "fct_absence_survey",
+    "map_characteristic", "map_sbi2008_sbi2025", "fct_absence_rate", "fct_absence_survey",
     "fct_business_count", "fct_establishment_count",
 ]
 
@@ -102,7 +102,9 @@ def expected_bronze_names() -> list[str]:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="Overview of the lakehouse Delta tables.")
-    ap.add_argument("--root", default="lakehouse", help="lakehouse folder (default: lakehouse)")
+    from config import project_path, settings
+    ap.add_argument("--root", default=str(project_path(settings["paths"]["lakehouse"])),
+                    help="lakehouse folder (default: paths.lakehouse in config.yaml)")
     ap.add_argument("--layer", choices=["bronze", "silver", "gold"], help="only this layer")
     args = ap.parse_args()
 

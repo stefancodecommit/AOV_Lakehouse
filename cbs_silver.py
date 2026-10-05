@@ -50,8 +50,11 @@ from pathlib import Path
 
 import pandas as pd
 
-BRONZE_ROOT = Path("lakehouse/bronze")
-SILVER_ROOT = Path("lakehouse/silver")
+from config import project_path, settings
+
+LAKEHOUSE = project_path(settings["paths"]["lakehouse"])
+BRONZE_ROOT = LAKEHOUSE / "bronze"
+SILVER_ROOT = LAKEHOUSE / "silver"
 
 log = logging.getLogger("cbs_silver")
 

@@ -42,18 +42,21 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-BASE_URL = "https://opendata.cbs.nl/ODataApi/odata"
-BRONZE_ROOT = Path("lakehouse/bronze")
+from config import project_path, settings
+
+_CFG = settings["cbs"]
+BASE_URL = _CFG["base_url"]
+BRONZE_ROOT = project_path(settings["paths"]["lakehouse"]) / "bronze"
 LOG_TABLE = BRONZE_ROOT / "_ingestion_log"
 PAGE_SIZE = 10_000          # CBS ODataApi returns at most 10,000 records per response
-PAUSE_SECONDS = 0.25        # be polite to the CBS API
+PAUSE_SECONDS = float(_CFG["pause_seconds"])
 
 log = logging.getLogger("cbs_bronze")
 
 
 # --------------------------------------------------------------------------- config
-START_YEAR = 2020                    # first year to ingest for TypedDataSets
-PERIOD_PREFERENCE = ("KW", "JJ")     # quarters if the dataset has them, else years
+START_YEAR = int(_CFG["start_year"])                      # first year for TypedDataSets
+PERIOD_PREFERENCE = tuple(_CFG["period_preference"])      # e.g. quarters, else years
 
 
 @dataclass(frozen=True)
@@ -81,40 +84,21 @@ class Endpoint:
         return None
 
 
-ENDPOINTS: list[Endpoint] = [
-    Endpoint("86009NED", "Bedrijfskenmerken"),
-    # All TypedDataSets: every quarter from START_YEAR up to the latest CBS publishes
-    # (years instead, if a dataset has no quarterly figures).
-    Endpoint("86009NED", "TypedDataSet", split_by_period=True),
-    Endpoint("80072NED", "TypedDataSet", split_by_period=True),
-    Endpoint("83130NED", "TypedDataSet", split_by_period=True),
-    Endpoint("83130NED", "Bedrijfskenmerken"),
-    Endpoint("81644NED", "TypedDataSet", split_by_period=True),
-    Endpoint("81589NED"),
-    Endpoint("81589NED", "Perioden"),
-    Endpoint("81589NED", "TypedDataSet", split_by_period=True),
+def endpoints_from_config(cfg: dict) -> list[Endpoint]:
+    """`tables` -> their TypedDataSet, one request per period from START_YEAR up to the
+    latest CBS publishes; `metadata` -> "TABLE/Entity" (or "TABLE" for the service root),
+    one request each. A metadata entry may also be a mapping of Endpoint fields."""
+    eps = [Endpoint(t, "TypedDataSet", split_by_period=True) for t in cfg["tables"]]
+    for item in cfg["metadata"]:
+        if isinstance(item, dict):
+            eps.append(Endpoint(**item))
+        else:
+            table_id, _, entity = str(item).partition("/")
+            eps.append(Endpoint(table_id, entity))
+    return eps
 
-    # Code lists and metadata used by silver. Each is one small request, made once.
-    # To refresh one later: python cbs_bronze.py --only <name> --force
-    Endpoint("86009NED", "CategoryGroups"),
-    Endpoint("86009NED", "Marges"),
-    Endpoint("86009NED", "DataProperties"),
-    Endpoint("86009NED", "Perioden"),
-    Endpoint("83130NED", "CategoryGroups"),
-    Endpoint("83130NED", "Marges"),
-    Endpoint("83130NED", "DataProperties"),
-    Endpoint("83130NED", "Perioden"),
-    Endpoint("80072NED", "BedrijfskenmerkenSBI2008"),
-    Endpoint("80072NED", "CategoryGroups"),
-    Endpoint("80072NED", "DataProperties"),
-    Endpoint("80072NED", "Perioden"),
-    Endpoint("81589NED", "BedrijfstakkenBranchesSBI2008"),
-    Endpoint("81589NED", "DataProperties"),
-    Endpoint("81644NED", "BedrijfstakkenBranchesSBI2008"),
-    Endpoint("81644NED", "RegioS"),
-    Endpoint("81644NED", "DataProperties"),
-    Endpoint("81644NED", "Perioden"),
-]
+
+ENDPOINTS: list[Endpoint] = endpoints_from_config(_CFG)
 
 
 # --------------------------------------------------------------------------- schemas

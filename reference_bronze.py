@@ -56,10 +56,11 @@ from pathlib import Path
 
 import pandas as pd
 
-CROSSWALK_URL = ("https://www.cbs.nl/-/media/cbs/onze-diensten/methoden/classificaties/"
-                 "documents/2026/schakelschema-sbi2008sbi2025-v20.xlsx")
-DOWNLOAD_DIR = Path("inbox/reference")
-REF_ROOT = Path("lakehouse/bronze/reference")
+from config import project_path, settings
+
+CROSSWALK_URL = settings["reference"]["sbi_crosswalk_url"]
+DOWNLOAD_DIR = project_path(settings["paths"]["inbox"]) / "reference"
+REF_ROOT = project_path(settings["paths"]["lakehouse"]) / "bronze" / "reference"
 DATA_TABLE = REF_ROOT / "sbi2008_sbi2025"
 LOG_TABLE = REF_ROOT / "_batch_log"
 DATASET = "sbi2008_sbi2025"
@@ -246,7 +247,8 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser(description="Load the CBS SBI 2008 -> SBI 2025 crosswalk into bronze.")
     src = ap.add_mutually_exclusive_group()
     src.add_argument("--file", help="a local copy of the crosswalk xlsx")
-    src.add_argument("--url", default=CROSSWALK_URL, help="download from this URL (default: v2.0)")
+    src.add_argument("--url", default=CROSSWALK_URL,
+                     help="download from this URL (default: reference.sbi_crosswalk_url in config.yaml)")
     args = ap.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 

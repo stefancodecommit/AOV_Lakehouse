@@ -83,12 +83,17 @@ ingest, problems).
 - [ ] Later: the same checks as Dagster asset checks (section 5)
 
 ## 0. Foundations
-- [ ] Decide the dashboard's audience (personal use, team, or shared outside this machine)
-- [ ] `config.yaml` with all settings (lakehouse path, CBS endpoints, start year, KVK URL
-      and required columns, retention, Ollama host and model, schedules, alert targets),
-      overridable with environment variables
-- [ ] Replace the hard-coded settings in `cbs_bronze.py`, `cbs_silver.py` and
-      `kvk_bronze_agent.py` with the configuration
+- [x] Decide the dashboard's audience: personal use, for an educational project
+      (2026-10-05). Runs on this machine; no login or public hosting needed.
+- [x] `config.yaml` + `config.py` (2026-10-05): paths, CBS base URL/tables/metadata/start
+      year/period preference/pause, KVK URLs/columns/malformed limit, SBI crosswalk URL,
+      Ollama host and model. Overrides: `config.local.yaml`, then environment variables
+      `LAKEHOUSE__<SECTION>__<KEY>`; unknown keys are an error (`tests/test_config.py`)
+- [x] Replace the hard-coded settings in `cbs_bronze.py`, `cbs_silver.py`,
+      `kvk_bronze_agent.py`, `reference_bronze.py` and `inspect_lakehouse.py`; paths are
+      now relative to the project folder, so the scripts work from any directory
+- [ ] Add retention, Dagster schedules and alert targets to `config.yaml` when those
+      parts are built
 
 ## 1. Bronze
 
@@ -170,19 +175,26 @@ Planned columns:
 - [x] Decision (2026-10-05): a company's sector is its **main activity**
       ("Hoofdactiviteiten"). "SBI activiteiten" (all activities) is not used for the
       sector; keep it in bronze only.
-- [ ] Companies with several main codes (11,433 rows, 0.6%): take the first listed and
-      set `has_multiple_main_activities`; companies without one (167,002 rows, nearly
-      all inactive) get a null sector
-- [ ] `sbi_version` of the main code. Profile of the 2026-10-01 file, active companies
-      with one main code: 942,484 SBI 2025 only, 307,732 in both lists, 64 SBI 2008
-      only, 9 unknown. So KVK has recoded active companies to SBI 2025: treat main codes
-      of active companies as SBI 2025 (also when the code exists in both lists); SBI
-      2008-only codes occur almost only on inactive companies (371,900)
+- [x] Decision (2026-10-05): edge cases get a **marker column, not a rule**. Original
+      codes stay unchanged; derived columns are filled only where the answer is
+      unambiguous, and a flag says why one is missing or uncertain. Gold and the
+      dashboard can then filter on the flags.
+- [ ] Keep the original main code list as it is (`main_activity_codes`)
+- [ ] Flags for the edge cases found in the 2026-10-01 file:
+      - `has_multiple_main_activities`: 11,433 rows (0.6%) list several main codes
+      - `has_no_main_activity`: 167,002 rows (nearly all inactive)
+      - `is_kvk_subcode`: 6-digit KVK sub-codes such as 620102 (not in either SBI list)
+      - `sbi_version`: `2025`, `2008`, `both` (code exists in both lists, so the number
+        alone doesn't say which) or `unknown`. Active companies with one main code:
+        942,484 only-2025, 307,732 both, 64 only-2008, 9 unknown; only-2008 codes occur
+        almost only on inactive companies (371,900). So KVK has evidently recoded
+        active companies to SBI 2025, but `both` stays `both` rather than being assumed
+      - `sbi_mapping`: how the code maps to SBI 2008 for joining `dim_sector`
+        (`1:1`, `merge` = the 2025 code came from several 2008 codes, `none`)
 - [ ] Map SBI 2025 main codes to SBI 2008 with `map_sbi2008_sbi2025` (2025 -> 2008
-      direction) before joining with the CBS `dim_sector`; codes that came from several
-      SBI 2008 codes (`sbi2008_sources` > 1) need a rule, e.g. use the section/division
-      when all sources share it, otherwise flag as ambiguous. Strip 6-digit KVK sub-codes
-      (e.g. 620102) to 5 digits before the lookup
+      direction) for the join with the CBS `dim_sector`; fill the SBI 2008
+      section/division only when all source codes share it, else leave it null and
+      the flags explain why
 
 Notes:
 - There is no KVK number or company ID in the open dataset, so individual companies
@@ -204,7 +216,8 @@ higher sickness absence. See `PROJECT.md` for the sub-questions.
 - [ ] `gold_business_context`: businesses per sector and size band (81589NED); active
       BVs/NVs and median company age per sector (KVK, needs silver KVK)
 - [ ] Every gold row carries its period status and the date of the newest data behind it
-- [ ] Hide groups with fewer than 10 companies (KVK re-identification rule)
+- [ ] Mark groups with fewer than 10 companies (KVK re-identification rule) with a flag;
+      the dashboard hides them by default (personal use, so marking is enough)
 - [ ] Same staging-and-swap publishing and `run_id` as silver
 - [ ] Decide whether provisional figures are shown by default
 

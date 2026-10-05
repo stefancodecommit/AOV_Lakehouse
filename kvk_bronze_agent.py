@@ -51,35 +51,28 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
+from config import project_path, settings
+
 # --------------------------------------------------------------------------- config
-KVK_ROOT = Path("lakehouse/bronze/kvk")
+_CFG = settings["kvk"]
+KVK_ROOT = project_path(settings["paths"]["lakehouse"]) / "bronze" / "kvk"
 DATA_TABLE = KVK_ROOT / "basis_bedrijfsgegevens"
 LOG_TABLE = KVK_ROOT / "_batch_log"
 
-DATASET_PAGE = "https://www.kvk.nl/producten-bestellen/kvk-handelsregister-open-data-set/"
-DOWNLOAD_URL = "https://www.kvk.nl/download/kvk-open-dataset-basis-bedrijfsgegevens.zip"
+DATASET_PAGE = _CFG["dataset_page"]
+DOWNLOAD_URL = _CFG["download_url"]
 LICENSE = "CC BY 4.0 (source: KVK)"
 
 DELIMITER = ";"
-MAX_MALFORMED_SHARE = 0.001        # fail if more than 0.1% of rows have a wrong field count
+MAX_MALFORMED_SHARE = float(_CFG["max_malformed_share"])  # reject above this share
 BATCH_ROWS = 200_000               # rows per Arrow batch while writing (memory, not commits)
 
-# Logical column -> accepted header spellings, compared after lower-casing and removing
-# everything that isn't a letter or digit ("datum_aanvang" == "datumAanvang").
-REQUIRED_COLUMNS = {
-    "start_date": {"datumaanvang", "startdatum"},
-    "active": {"actief", "indicatieactief"},
-    "legal_form": {"rechtsvormcode", "rechtsvorm"},
-    "postcode_region": {"postcoderegio", "postcode"},
-}
-OPTIONAL_COLUMNS = {
-    "insolvency": {"insolventiecode", "insolventie"},
-    # Real file (2026-10): "SBI activiteiten" = all codes, "Hoofdactiviteiten" = main
-    # code(s); both comma-separated lists within one row per company.
-    "sbi": {"sbiactiviteiten", "sbicode", "sbi", "activiteiten"},
-    "main_activity": {"hoofdactiviteiten", "hoofdactiviteit"},
-    "member_state": {"lidstaat"},
-}
+# Logical column -> accepted header spellings (see config.yaml), compared after
+# lower-casing and removing everything that isn't a letter or digit.
+REQUIRED_COLUMNS = {k: set(v) for k, v in _CFG["required_columns"].items()}
+OPTIONAL_COLUMNS = {k: set(v) for k, v in _CFG["optional_columns"].items()}
+OLLAMA_HOST = settings["ollama"]["host"]
+OLLAMA_MODEL = settings["ollama"]["model"]
 
 
 def _norm(name: str) -> str:
@@ -458,19 +451,21 @@ invent file paths or batch ids. Keep replies short."""
 
 def run_agent(model: str) -> None:
     try:
-        from ollama import chat
+        from ollama import Client
     except ImportError:
         sys.exit("The 'ollama' package is missing: pip install ollama")
+    client = Client(host=OLLAMA_HOST)
 
     messages = [{"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": "Hi, I want to load the KVK open dataset."}]
     print(f"KVK intake agent ({model}). Type 'exit' to stop.\n")
     while True:
         try:
-            response = chat(model=model, messages=messages, tools=list(TOOLS.values()),
-                            options={"temperature": 0})
+            response = client.chat(model=model, messages=messages, tools=list(TOOLS.values()),
+                                   options={"temperature": 0})
         except Exception as e:
-            sys.exit(f"Could not reach Ollama ({e}). Is it running, and is '{model}' pulled?")
+            sys.exit(f"Could not reach Ollama at {OLLAMA_HOST} ({e}). "
+                     f"Is it running, and is '{model}' pulled?")
         msg = response.message
         messages.append(msg)
 
@@ -510,7 +505,8 @@ def run_direct(file_path: str) -> None:
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(description="Get the KVK open dataset into the KVK bronze layer.")
-    ap.add_argument("--model", default="qwen2.5:7b", help="Ollama model with tool support")
+    ap.add_argument("--model", default=OLLAMA_MODEL,
+                    help="Ollama model with tool support (default: ollama.model in config.yaml)")
     ap.add_argument("--file", help="skip the agent: verify and ingest this file directly")
     args = ap.parse_args()
     run_direct(args.file) if args.file else run_agent(args.model)

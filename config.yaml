@@ -1,0 +1,86 @@
+# Settings for the CBS/KVK lakehouse. Read by config.py.
+#
+# Override per machine in config.local.yaml (same structure, only the keys you change;
+# not in git), or with environment variables: LAKEHOUSE__<SECTION>__<KEY>, e.g.
+#   LAKEHOUSE__CBS__START_YEAR=2022
+#   LAKEHOUSE__PATHS__LAKEHOUSE=/data/lakehouse
+#   LAKEHOUSE__OLLAMA__HOST=http://ollama:11434
+# Values from environment variables are read as YAML, so 2022 is a number and
+# "[KW, JJ]" a list. LAKEHOUSE_CONFIG=<file> uses another file instead of this one.
+# Order: config.yaml < config.local.yaml < environment. Unknown keys are an error.
+#
+# Relative paths are relative to this file's folder.
+
+paths:
+  lakehouse: lakehouse            # bronze/, silver/, gold/ live here
+  inbox: inbox                    # uploads and downloaded files (KVK zip, reference files)
+
+cbs:
+  base_url: https://opendata.cbs.nl/ODataApi/odata
+  start_year: 2020                # first year ingested for the data tables
+  period_preference: [KW, JJ]     # quarters if a table has them, else years
+  pause_seconds: 0.25             # pause between API requests (be polite to CBS)
+  # Data tables: their TypedDataSet is requested one period at a time (incremental).
+  tables:
+    - 86009NED   # absence survey: share absent, frequency, duration, causes (yearly)
+    - 80072NED   # absence percentage per sector and size class (quarterly)
+    - 83130NED   # earlier absence survey, 2014-2023 (stopped by CBS)
+    - 81644NED   # establishments per sector and region (yearly)
+    - 81589NED   # businesses per sector, size class and legal form (quarterly)
+  # Code lists and metadata: one small request each, made once.
+  # To refresh one later: python cbs_bronze.py --only <name> --force
+  # "<table>" alone is the table's service root (its list of entity sets).
+  metadata:
+    - 86009NED/Bedrijfskenmerken
+    - 86009NED/CategoryGroups
+    - 86009NED/Marges
+    - 86009NED/DataProperties
+    - 86009NED/Perioden
+    - 83130NED/Bedrijfskenmerken
+    - 83130NED/CategoryGroups
+    - 83130NED/Marges
+    - 83130NED/DataProperties
+    - 83130NED/Perioden
+    - 80072NED/BedrijfskenmerkenSBI2008
+    - 80072NED/CategoryGroups
+    - 80072NED/DataProperties
+    - 80072NED/Perioden
+    - 81589NED
+    - 81589NED/Perioden
+    - 81589NED/BedrijfstakkenBranchesSBI2008
+    - 81589NED/DataProperties
+    - 81644NED/BedrijfstakkenBranchesSBI2008
+    - 81644NED/RegioS
+    - 81644NED/DataProperties
+    - 81644NED/Perioden
+
+kvk:
+  dataset_page: https://www.kvk.nl/producten-bestellen/kvk-handelsregister-open-data-set/
+  download_url: https://www.kvk.nl/download/kvk-open-dataset-basis-bedrijfsgegevens.zip
+  max_malformed_share: 0.001      # reject a file when more rows have a wrong field count
+  # Logical column -> accepted header spellings, compared after lower-casing and removing
+  # everything that isn't a letter or digit ("Datum aanvang" == "datumaanvang").
+  required_columns:
+    start_date: [datumaanvang, startdatum]
+    active: [actief, indicatieactief]
+    legal_form: [rechtsvormcode, rechtsvorm]
+    postcode_region: [postcoderegio, postcode]
+  # Real file (2026-10): "SBI activiteiten" = all codes, "Hoofdactiviteiten" = main
+  # code(s); both comma-separated lists within one row per company.
+  optional_columns:
+    insolvency: [insolventiecode, insolventie]
+    sbi: [sbiactiviteiten, sbicode, sbi, activiteiten]
+    main_activity: [hoofdactiviteiten, hoofdactiviteit]
+    member_state: [lidstaat]
+
+reference:
+  # CBS crosswalk SBI 2008 -> SBI 2025. For a newer version: change the URL, or run
+  # python reference_bronze.py --url <url>
+  sbi_crosswalk_url: https://www.cbs.nl/-/media/cbs/onze-diensten/methoden/classificaties/documents/2026/schakelschema-sbi2008sbi2025-v20.xlsx
+
+ollama:
+  host: http://localhost:11434
+  model: qwen2.5:7b               # any model that supports tool calling
+
+# Still to add when they are built (see TODO.md): KVK retention, Dagster schedules,
+# alert targets.

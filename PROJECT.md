@@ -267,17 +267,21 @@ mix of new and old tables. To prevent that:
 
 ## Configuration
 
-All settings come from one file (`config.yaml`), overridable with environment
-variables, instead of being written into the scripts:
+All settings come from one file (`config.yaml`, read by `config.py`) instead of being
+written into the scripts:
 
-- lakehouse root path
-- CBS endpoints, start year and period preference
-- KVK download URL, required columns and retention policy
+- lakehouse and inbox paths (relative to the project folder)
+- CBS base URL, data tables, metadata endpoints, start year, period preference, pause
+- KVK download URL, accepted column names and the malformed-row limit
+- SBI crosswalk URL
 - Ollama host and model
-- schedules and alert targets
+- still to add when built: KVK retention, schedules and alert targets
 
-The same code then runs locally, in Docker, or on another machine with only the
-configuration changed.
+Overrides, later wins: `config.yaml` < `config.local.yaml` (per machine, not in git) <
+environment variables `LAKEHOUSE__<SECTION>__<KEY>` (e.g. `LAKEHOUSE__CBS__START_YEAR=2022`,
+read as YAML). `LAKEHOUSE_CONFIG` points at another file. An override of a key that
+doesn't exist in `config.yaml` is an error, so typos don't go unnoticed. The same code
+then runs locally, in Docker, or on another machine with only the configuration changed.
 
 ## Licence and privacy
 
@@ -337,8 +341,10 @@ services; disk space depends mostly on the KVK retention policy.
 ## Repository layout (target)
 
 ```
+config.yaml, config.py  all settings, with local and environment overrides
 cbs_bronze.py           CBS API -> bronze
 kvk_bronze_agent.py     KVK zip -> bronze, via the agent
+reference_bronze.py     CBS SBI 2008 -> SBI 2025 crosswalk -> bronze
 checks/                 data checks shared by ingestion, Dagster and pytest (to do)
 cbs_silver.py           bronze CBS -> silver
 kvk_silver.py           bronze KVK -> silver (to do)
@@ -347,8 +353,7 @@ dashboard/              Streamlit app (to do)
 orchestration/          Dagster definitions: assets, schedules, checks, maintenance (to do)
 tests/                  pytest
 inspect_lakehouse.py    overview of all Delta tables and problems after a run
-config.yaml             all settings (to do)
-inbox/                  KVK zip uploads for the agent (to do)
+inbox/                  KVK zip uploads and downloaded reference files (not in git)
 docker-compose.yml      (to do)
 Dockerfile              (to do)
 .github/workflows/      CI: tests.yml runs pytest on every push
@@ -362,15 +367,16 @@ TODO.md                 open work
 
 | Part | Status |
 |---|---|
-| First real run (all built layers) | Next step: not yet run against real data |
-| Bronze CBS | Built; Delta behaviour still to test on a local machine |
-| Bronze KVK + agent | Built; confirm the real CSV header on the first file |
-| Silver CBS | Built |
-| Silver KVK | To do |
+| First real run (all built layers) | Done 2026-10-05; results in `TODO.md` |
+| Bronze CBS | Built and run on real data (92 requests, 39 s) |
+| Bronze KVK + agent | Built and run on the real file (1.92M rows) with Ollama |
+| Reference: SBI 2008 -> 2025 crosswalk | Built; loaded v2.0 |
+| Silver CBS | Built, incl. `map_sbi2008_sbi2025`; checked against CBS StatLine |
+| Silver KVK | To do; sector = main activity, edge cases as flags |
 | Data checks before ingestion (CBS) | To do |
 | Quarantine, alerting, freshness checks | To do |
-| pytest | 106 logic tests for bronze and silver CBS; Delta tests to do |
-| Configuration file | To do |
+| pytest | 142 tests incl. real Delta tables in tmp_path; one opt-in live CBS test |
+| Configuration file | Built (`config.yaml` + `config.py`) |
 | Gold | To do; tables proposed around the main question |
 | Streamlit dashboard | To do; pages proposed |
 | Dagster orchestration and maintenance | To do |
