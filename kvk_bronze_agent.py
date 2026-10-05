@@ -74,7 +74,10 @@ REQUIRED_COLUMNS = {
 }
 OPTIONAL_COLUMNS = {
     "insolvency": {"insolventiecode", "insolventie"},
-    "sbi": {"sbicode", "sbi", "activiteiten", "hoofdactiviteit"},
+    # Real file (2026-10): "SBI activiteiten" = all codes, "Hoofdactiviteiten" = main
+    # code(s); both comma-separated lists within one row per company.
+    "sbi": {"sbiactiviteiten", "sbicode", "sbi", "activiteiten"},
+    "main_activity": {"hoofdactiviteiten", "hoofdactiviteit"},
     "member_state": {"lidstaat"},
 }
 

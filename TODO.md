@@ -33,11 +33,29 @@ ingest, problems).
       All do. Not final yet: 80072NED 2026KW01–02 (Voorlopig); 81644NED 2025–2026
       (Voorlopig); 81589NED 2025KW01–04 (NaderVoorlopig), 2026KW01–03 (Voorlopig).
 
-### Bronze KVK
-- [ ] Load one real file with the agent (`python kvk_bronze_agent.py`)
-- [ ] Note the real CSV header; update `REQUIRED_COLUMNS` if needed
-- [ ] Answer: one row per company, or one row per company per activity?
-- [ ] Note the file size and row count (input for the retention policy)
+### Bronze KVK (done 2026-10-05)
+- [x] Load one real file with the agent (`python kvk_bronze_agent.py`)
+      Ollama 0.35.1 (CPU only) with `qwen2.5:7b`; verify + confirm + ingest took 3.8 min,
+      ~470 MB peak memory. Batch `kvk_20261005T153745Z_52785a6f`.
+- [x] Note the real CSV header; update `REQUIRED_COLUMNS` if needed
+      `"Datum aanvang";"Actief";"Insolventie";"Rechtsvorm";"Postcode regio";`
+      `"SBI activiteiten";"Hoofdactiviteiten";"Lidstaat"` (quoted, `;`, UTF-8, CRLF).
+      Required columns matched as they were; the SBI columns were not recognised, so
+      `OPTIONAL_COLUMNS` now has `sbi` = "SBI activiteiten" and `main_activity` =
+      "Hoofdactiviteiten" (test: `tests/test_kvk_logic.py`).
+- [x] Answer: one row per company, or one row per company per activity?
+      One row per company. "SBI activiteiten" is a comma-separated list (1–6+ codes,
+      73% have one); "Hoofdactiviteiten" is usually one code (99.4%) but can be several,
+      and is always part of the SBI list. Codes are 4, 5 or 6 digits.
+- [x] Note the file size and row count (input for the retention policy)
+      Zip 12.9 MB, CSV 96.7 MB, 1,921,911 rows; 22 MB per snapshot in bronze Delta.
+      File dated 2026-10-01 inside the zip.
+- Data notes for silver KVK: only BV (1,916,604) and NV (5,307); Actief J 1,277,560 /
+  N 644,351; Insolventie empty, FAIL (77,284) or SURS (14); Lidstaat always NL;
+  174,286 rows (9.1%) have an empty postcode region (mostly inactive, nearly all with
+  no SBI code) -> the verification warning is expected; 167,002 rows have no SBI code;
+  5 start dates don't parse, range 1806–2026; 381,513 rows are exact duplicates of
+  another row, which is expected without a company ID (don't deduplicate).
 
 ### Silver CBS
 - [ ] `python cbs_silver.py --preview`: row counts per table, and any warnings about
@@ -85,10 +103,8 @@ that fails is not written and not logged, so it's retried next run.
 - [ ] KVK: rejected files are recorded in quarantine with their verification report
 
 ### KVK
-- [ ] Load the first real file and confirm the CSV header; update `REQUIRED_COLUMNS` in
-      `kvk_bronze_agent.py` if the names differ from the documented field names
-- [ ] Find out whether the CSV has one row per company or one row per company per
-      activity (needed for silver KVK)
+- [x] Load the first real file and confirm the CSV header (see "Bronze KVK" above)
+- [x] One row per company, with SBI codes as comma-separated lists (see above)
 - [ ] Move the verification checks into `checks/` so the agent and Dagster both use them
 - [ ] Read uploads from the `inbox/` folder (needed for Docker)
 
@@ -115,7 +131,9 @@ Planned columns:
 - [ ] `start_date` (date), `is_active` (bool from J/N)
 - [ ] `legal_form`, `insolvency_code` (null when empty), `postcode_region`, `member_state`
 - [ ] `sbi_code`, `sbi_section`, `sbi_division` (joinable with `dim_sector`)
-- [ ] `is_main_activity`, if the CSV lists several activities per company
+- [ ] `is_main_activity`: needed, the CSV lists several activities per company. Explode
+      "SBI activiteiten" to one row per company per code, or keep one row per company
+      with the main activity only (decide per gold question; several main codes occur)
 
 Notes:
 - There is no KVK number or company ID in the open dataset, so individual companies
