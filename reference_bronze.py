@@ -25,6 +25,7 @@ Checks before writing (the file is rejected, nothing written, if one fails)
 * every SBI code is 4 to 6 digits, and none looks like it lost a leading zero
   (0111 stored as the number 111: '0' + code starts with its 2-digit column)
 * no (SBI 2008, SBI 2025) pair appears twice
+A rejected file is copied to lakehouse/quarantine/reference/ with its report.
 Other mismatches between a code and its 2-digit column are warnings: v2.0 has five rows
 where the SBI 2025 2-digit column was copied from the SBI 2008 side (e.g. 71111 / 74).
 Silver takes the division from the code itself.
@@ -61,6 +62,7 @@ from config import project_path, settings
 CROSSWALK_URL = settings["reference"]["sbi_crosswalk_url"]
 DOWNLOAD_DIR = project_path(settings["paths"]["inbox"]) / "reference"
 REF_ROOT = project_path(settings["paths"]["lakehouse"]) / "bronze" / "reference"
+QUARANTINE_ROOT = project_path(settings["paths"]["lakehouse"]) / "quarantine"
 DATA_TABLE = REF_ROOT / "sbi2008_sbi2025"
 LOG_TABLE = REF_ROOT / "_batch_log"
 DATASET = "sbi2008_sbi2025"
@@ -221,7 +223,11 @@ def ingest(path: Path, source_url: str | None = None) -> dict:
 
     df, version, errors, warnings = read_crosswalk(path)
     if errors:
-        return {"status": "FAILED", "errors": errors, "warnings": warnings, "file_sha256": sha}
+        from checks.quarantine import quarantine
+        report = {"status": "FAILED", "errors": errors, "warnings": warnings,
+                  "file_sha256": sha, "source_url": source_url}
+        folder = quarantine(QUARANTINE_ROOT, "reference", path.name, report, file=path)
+        return {**report, "quarantine": str(folder) if folder else "already in quarantine"}
 
     now = datetime.now(timezone.utc)
     batch_id = f"{DATASET}_{now:%Y%m%dT%H%M%S%fZ}_{sha[:8]}"

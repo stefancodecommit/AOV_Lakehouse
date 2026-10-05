@@ -9,6 +9,7 @@ Problems reported:
   - expected silver tables that are missing
   - empty tables
   - silver fact rows whose company characteristic is unknown in the code list
+  - batches or files in quarantine (failed their checks; see report.json in each folder)
 
 Usage
 -----
@@ -146,6 +147,19 @@ def main() -> int:
             for n in EXPECTED_SILVER:
                 if n not in present:
                     problems.append(f"silver/{n}: expected but missing")
+
+    if not args.layer or args.layer == "bronze":
+        from checks.quarantine import list_entries
+        entries = list_entries(root / "quarantine")
+        print(f"\n=== quarantine ({len(entries)} batches)")
+        if not entries:
+            print("  (none)")
+        for e in entries:
+            failed = [c["name"] for c in e.get("checks", []) if not c.get("passed")] or e.get("errors", [])
+            print(f"  {e.get('source', '?')}/{e.get('name', '?'):<46}{str(e.get('quarantined_at', ''))[:16]:<17} "
+                  f"{'; '.join(map(str, failed))[:80]}")
+            problems.append(f"quarantine/{e.get('source', '?')}/{e.get('name', '?')}: failed its checks "
+                            f"(see {e['folder']}/report.json)")
 
     print("\n=== problems")
     if problems:

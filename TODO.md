@@ -97,15 +97,19 @@ ingest, problems).
 
 ## 1. Bronze
 
-### CBS: data checks before ingestion
-`cbs_bronze.py` already avoids repeat requests. It doesn't yet check the data itself
-before writing. Add a validation step between `fetch_all` and `write_bronze`; a request
-that fails is not written and not logged, so it's retried next run.
-- [ ] Every record has the table's dimension columns and the measures from DataProperties
-- [ ] The `Perioden` value in every record equals the period that was requested
-- [ ] Measures are numeric or null
-- [ ] At least one record for a period that CBS lists as published
-- [ ] Put the checks in `checks/` so ingestion, pytest and Dagster asset checks reuse them
+### CBS: data checks before ingestion (done 2026-10-05)
+A validation step between `fetch_all` and `write_bronze`; a request that fails is not
+written and not logged, so it's retried next run. The expected structure comes from the
+table's DataProperties, fetched live once per table per run, only when there is new data.
+- [x] Every record has the table's dimension columns and the measures from DataProperties
+- [x] The `Perioden` value in every record equals the period that was requested
+- [x] Measures are numeric or null (for measures whose Datatype is numeric)
+- [x] At least one record for a period that CBS lists as published (code lists too)
+- [x] Extra: no two records with the same dimension keys
+- [x] Put the checks in `checks/` (`checks/cbs.py`) so ingestion, pytest and Dagster
+      asset checks reuse them
+- Ran on all 92 batches already in bronze: all pass (no false alarms). A forced
+  re-fetch of 80072NED with live checks: 26 of 26 passed.
 
 ### CBS: source lifecycle and scope
 - [ ] Ingest each table's `TableInfos`; warn when CBS marks a table as stopped or it
@@ -135,15 +139,23 @@ Source: CBS "schakelschema SBI 2008 - SBI 2025" v2.0
 - [ ] Decide how silver KVK handles SBI 2025 main codes that came from several SBI 2008
       codes (see Silver KVK below)
 
-### Quarantine
-- [ ] Batches that fail a runtime check go to `lakehouse/quarantine/<source>/<timestamp>/`
-      with the check report; not logged as ingested
-- [ ] KVK: rejected files are recorded in quarantine with their verification report
+### Quarantine (done 2026-10-05)
+- [x] Batches that fail a runtime check go to `lakehouse/quarantine/<source>/<timestamp>_<name>/`
+      with `report.json` and `records.json`; not logged as ingested (`checks/quarantine.py`)
+- [x] The same content (SHA-256) is quarantined once per source and name, so a source that
+      keeps failing doesn't add a copy on every run
+- [x] KVK: rejected files are copied to quarantine with their verification report (not
+      when the file was rejected only because it is already in bronze)
+- [x] Reference files (SBI crosswalk) that fail their checks are quarantined the same way
+- [x] `inspect_lakehouse.py` lists quarantined batches and counts them as problems
+- [ ] Decide when to clean up quarantine (e.g. remove entries whose request was later
+      ingested successfully; part of the monthly maintenance job)
 
 ### KVK
 - [x] Load the first real file and confirm the CSV header (see "Bronze KVK" above)
 - [x] One row per company, with SBI codes as comma-separated lists (see above)
-- [ ] Move the verification checks into `checks/` so the agent and Dagster both use them
+- [ ] Move the verification checks into `checks/` (like `checks/cbs.py`) so the agent and
+      Dagster both use them
 - [ ] Read uploads from the `inbox/` folder (needed for Docker)
 
 ## 2. Silver
@@ -271,7 +283,10 @@ higher sickness absence. See `PROJECT.md` for the sub-questions.
 
 `tests/test_bronze_logic.py` and `tests/test_silver_logic.py` cover the pure logic;
 `tests/test_kvk_logic.py` the KVK file verification; `tests/test_reference.py` the SBI
-crosswalk; `tests/test_delta.py` writes real Delta tables in `tmp_path` (132 tests, ~7 s). Checked by breaking the code on purpose:
+crosswalk; `tests/test_checks.py` the data checks and quarantine; `tests/test_config.py`
+the configuration; `tests/test_delta.py` writes real Delta tables in `tmp_path` (169
+tests, ~7 s). `conftest.py` fails a test when any module still points at the real
+lakehouse or inbox. Checked by breaking the code on purpose:
 removing the delete-before-write, an empty `done_keys()` and non-UTC silver timestamps
 each make the right tests fail.
 

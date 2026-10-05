@@ -99,6 +99,8 @@ def test_invalid_file_is_rejected_and_nothing_written(tmp_path, kwargs, error):
     assert report["status"] == "FAILED"
     assert any(error in e for e in report["errors"]), report["errors"]
     assert not (r.DATA_TABLE / "_delta_log").exists() and not (r.LOG_TABLE / "_delta_log").exists()
+    folder = r.Path(report["quarantine"])
+    assert folder.parent == r.QUARANTINE_ROOT / "reference" and (folder / "bad.xlsx").exists()
 
 
 def test_title_header_with_another_date_is_accepted(tmp_path):

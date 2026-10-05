@@ -17,6 +17,9 @@ from test_bronze_logic import periods
 
 Endpoint = b.Endpoint
 ABSENCE = Endpoint("80072NED", "TypedDataSet", split_by_period=True)
+DP_80072 = [{"Type": "Dimension", "Key": "BedrijfskenmerkenSBI2008"},
+            {"Type": "TimeDimension", "Key": "Perioden"},
+            {"Type": "Topic", "Key": "Ziekteverzuimpercentage_1", "Datatype": "Float"}]
 
 
 def period_request(period, status, ep=ABSENCE):
@@ -100,6 +103,8 @@ def cbs_api(monkeypatch):
     def fetch_all(session, url, params):
         if url.endswith("/Perioden"):
             return state["periods"], 1
+        if url.endswith("/DataProperties"):
+            return DP_80072, 1
         state["data_calls"] += 1
         period = params["$filter"].split("'")[1]
         return records(period, state["value"]), 1

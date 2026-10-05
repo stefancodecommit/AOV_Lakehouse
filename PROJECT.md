@@ -345,7 +345,7 @@ config.yaml, config.py  all settings, with local and environment overrides
 cbs_bronze.py           CBS API -> bronze
 kvk_bronze_agent.py     KVK zip -> bronze, via the agent
 reference_bronze.py     CBS SBI 2008 -> SBI 2025 crosswalk -> bronze
-checks/                 data checks shared by ingestion, Dagster and pytest (to do)
+checks/                 data checks shared by ingestion, Dagster and pytest; quarantine
 cbs_silver.py           bronze CBS -> silver
 kvk_silver.py           bronze KVK -> silver (to do)
 gold/                   silver -> gold (to do)
@@ -373,9 +373,10 @@ TODO.md                 open work
 | Reference: SBI 2008 -> 2025 crosswalk | Built; loaded v2.0 |
 | Silver CBS | Built, incl. `map_sbi2008_sbi2025`; checked against CBS StatLine |
 | Silver KVK | To do; sector = main activity, edge cases as flags |
-| Data checks before ingestion (CBS) | To do |
-| Quarantine, alerting, freshness checks | To do |
-| pytest | 142 tests incl. real Delta tables in tmp_path; one opt-in live CBS test |
+| Data checks before ingestion (CBS) | Built (`checks/cbs.py`) |
+| Quarantine | Built for CBS, KVK and reference files |
+| Alerting, freshness checks | To do |
+| pytest | 169 tests incl. real Delta tables in tmp_path; one opt-in live CBS test |
 | Configuration file | Built (`config.yaml` + `config.py`) |
 | Gold | To do; tables proposed around the main question |
 | Streamlit dashboard | To do; pages proposed |

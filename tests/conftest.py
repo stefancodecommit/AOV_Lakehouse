@@ -14,6 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import cbs_bronze  # noqa: E402
 import cbs_silver  # noqa: E402
+import kvk_bronze_agent  # noqa: E402
 import reference_bronze  # noqa: E402
 
 INGESTED_AT = pd.Timestamp("2026-10-05 09:00", tz="UTC")
@@ -26,13 +27,29 @@ def isolated_lakehouse(tmp_path, monkeypatch):
     """Point every lakehouse path at a temp folder so tests never touch real data."""
     monkeypatch.setattr(cbs_bronze, "BRONZE_ROOT", tmp_path / "bronze")
     monkeypatch.setattr(cbs_bronze, "LOG_TABLE", tmp_path / "bronze" / "_ingestion_log")
+    monkeypatch.setattr(cbs_bronze, "QUARANTINE_ROOT", tmp_path / "quarantine")
     monkeypatch.setattr(cbs_bronze, "PAUSE_SECONDS", 0)
     monkeypatch.setattr(cbs_silver, "BRONZE_ROOT", tmp_path / "bronze")
     monkeypatch.setattr(cbs_silver, "SILVER_ROOT", tmp_path / "silver")
+    monkeypatch.setattr(cbs_silver, "LAKEHOUSE", tmp_path)
     ref = tmp_path / "bronze" / "reference"
+    monkeypatch.setattr(reference_bronze, "REF_ROOT", ref)
     monkeypatch.setattr(reference_bronze, "DATA_TABLE", ref / "sbi2008_sbi2025")
     monkeypatch.setattr(reference_bronze, "LOG_TABLE", ref / "_batch_log")
     monkeypatch.setattr(reference_bronze, "DOWNLOAD_DIR", tmp_path / "inbox")
+    monkeypatch.setattr(reference_bronze, "QUARANTINE_ROOT", tmp_path / "quarantine")
+    monkeypatch.setattr(kvk_bronze_agent, "KVK_ROOT", tmp_path / "bronze" / "kvk")
+    monkeypatch.setattr(kvk_bronze_agent, "DATA_TABLE", tmp_path / "bronze" / "kvk" / "basis_bedrijfsgegevens")
+    monkeypatch.setattr(kvk_bronze_agent, "LOG_TABLE", tmp_path / "bronze" / "kvk" / "_batch_log")
+    monkeypatch.setattr(kvk_bronze_agent, "QUARANTINE_ROOT", tmp_path / "quarantine")
+
+    # Safety net: no module-level path may still point into the real lakehouse or inbox
+    import config
+    real = [config.project_path(config.settings["paths"][k]) for k in ("lakehouse", "inbox")]
+    for mod in (cbs_bronze, cbs_silver, reference_bronze, kvk_bronze_agent):
+        for name, value in vars(mod).items():
+            if isinstance(value, Path) and any(value == r or r in value.parents for r in real):
+                pytest.fail(f"{mod.__name__}.{name} still points at real data: {value}")
 
 
 # --------------------------------------------------------------------------- builders

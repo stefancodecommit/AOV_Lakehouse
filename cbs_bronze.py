@@ -15,6 +15,11 @@ How "ask only once" works
   period is fetched again, and its old rows are replaced (not duplicated).
 * Pagination inside a request is followed until the last page (odata.nextLink,
   or $skip when a page comes back full without a nextLink).
+* Before writing, the records are checked (checks/cbs.py): data requests against the
+  table's DataProperties (columns, period, numeric measures, unique keys, not empty),
+  code lists on not being empty. A batch that fails is not written and not logged,
+  so it's retried next run, and it's saved to lakehouse/quarantine/cbs/ with a report.
+  DataProperties is fetched live, once per table per run, only when there is new data.
 
 Bronze tables keep the raw record as JSON plus lineage columns; parsing and typing
 happen in silver.
@@ -48,6 +53,7 @@ _CFG = settings["cbs"]
 BASE_URL = _CFG["base_url"]
 BRONZE_ROOT = project_path(settings["paths"]["lakehouse"]) / "bronze"
 LOG_TABLE = BRONZE_ROOT / "_ingestion_log"
+QUARANTINE_ROOT = project_path(settings["paths"]["lakehouse"]) / "quarantine"
 PAGE_SIZE = 10_000          # CBS ODataApi returns at most 10,000 records per response
 PAUSE_SECONDS = float(_CFG["pause_seconds"])
 
@@ -281,11 +287,37 @@ def log_success(req: Request, row_count: int, pages: int) -> None:
     write_deltalake(str(LOG_TABLE), row, mode="append")
 
 
+# --------------------------------------------------------------------------- checks
+def check_records(session, req: Request, records: list[dict], dataprops_cache: dict) -> list:
+    """Run the checks for one request. DataProperties are fetched once per table."""
+    from checks.cbs import check_metadata, check_typed_dataset
+    ep = req.endpoint
+    if ep.entity != "TypedDataSet":
+        return check_metadata(records)
+    if ep.table_id not in dataprops_cache:
+        dataprops_cache[ep.table_id], _ = fetch_all(
+            session, f"{BASE_URL}/{ep.table_id}/DataProperties", {})
+    return check_typed_dataset(records, dataprops_cache[ep.table_id], req.period)
+
+
+def quarantine_batch(req: Request, records: list[dict], results: list, pages: int):
+    from checks.quarantine import quarantine
+    report = {"request_key": req.key, "table_id": req.endpoint.table_id,
+              "entity": req.endpoint.entity or "root", "period": req.period,
+              "period_status": req.period_status, "source_url": req.display_url,
+              "row_count": len(records), "pages": pages,
+              "checks": [r.as_dict() for r in results]}
+    return quarantine(QUARANTINE_ROOT, "cbs", req.endpoint.name + (f"_{req.period}" if req.period else ""),
+                      report, records=records)
+
+
 # --------------------------------------------------------------------------- main
 def run(only: str | None, force: bool, dry_run: bool) -> None:
+    from checks import failures
     session = make_session()
     already = set() if force else done_keys()
-    fetched = skipped = failed = 0
+    fetched = skipped = failed = quarantined = 0
+    dataprops_cache: dict[str, list[dict]] = {}
 
     for ep in ENDPOINTS:
         if only and only.lower() not in ep.name:
@@ -306,6 +338,14 @@ def run(only: str | None, force: bool, dry_run: bool) -> None:
                 continue
             try:
                 records, pages = fetch_all(session, ep.url, req.params)
+                results = check_records(session, req, records, dataprops_cache)
+                if failures(results):
+                    folder = quarantine_batch(req, records, results, pages)
+                    quarantined += 1
+                    log.error("Checks failed for %s: %s -> %s", req.display_url,
+                              "; ".join(f"{r.name}: {r.detail}" for r in failures(results)),
+                              folder or "already in quarantine")
+                    continue
                 write_bronze(req, records)
                 log_success(req, len(records), pages)
                 already.add(req.key)
@@ -316,7 +356,8 @@ def run(only: str | None, force: bool, dry_run: bool) -> None:
                 failed += 1
                 log.error("Failed %s: %s", req.display_url, e)
 
-    log.info("Done. fetched=%d skipped(already in bronze)=%d failed=%d", fetched, skipped, failed)
+    log.info("Done. fetched=%d skipped(already in bronze)=%d failed=%d quarantined=%d",
+             fetched, skipped, failed, quarantined)
 
 
 if __name__ == "__main__":

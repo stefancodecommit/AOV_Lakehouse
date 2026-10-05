@@ -58,6 +58,7 @@ _CFG = settings["kvk"]
 KVK_ROOT = project_path(settings["paths"]["lakehouse"]) / "bronze" / "kvk"
 DATA_TABLE = KVK_ROOT / "basis_bedrijfsgegevens"
 LOG_TABLE = KVK_ROOT / "_batch_log"
+QUARANTINE_ROOT = project_path(settings["paths"]["lakehouse"]) / "quarantine"
 
 DATASET_PAGE = _CFG["dataset_page"]
 DOWNLOAD_URL = _CFG["download_url"]
@@ -208,8 +209,9 @@ def verify_dataset(file_path: str) -> str:
 
     sha = _sha256(path)
     result["sha256"] = sha
-    if (batch := ingested_hashes().get(sha)):
-        errors.append(f"This exact file was already ingested as batch {batch}")
+    already_ingested = ingested_hashes().get(sha)
+    if already_ingested:
+        errors.append(f"This exact file was already ingested as batch {already_ingested}")
 
     header, rows, encoding = [], 0, None
     if not errors:
@@ -261,6 +263,11 @@ def verify_dataset(file_path: str) -> str:
     passed = not errors
     report = {**result, "status": "PASSED" if passed else "FAILED",
               "errors": errors, "warnings": warnings}
+    if not passed and not already_ingested:
+        # a rejected file is kept with its report; a file that is already in bronze isn't
+        from checks.quarantine import quarantine
+        folder = quarantine(QUARANTINE_ROOT, "kvk", path.name, report, file=path)
+        report["quarantine"] = str(folder) if folder else "already in quarantine"
     VERIFIED[str(path)] = Verification(str(path), sha, passed, member, encoding,
                                        header, rows, report)
     return json.dumps(report, ensure_ascii=False)

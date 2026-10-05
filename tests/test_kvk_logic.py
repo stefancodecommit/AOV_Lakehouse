@@ -1,6 +1,7 @@
 """Bronze KVK: verification of an uploaded file. Offline: the batch log points at tmp_path."""
 import json
 import zipfile
+from pathlib import Path
 
 import pytest
 
@@ -36,3 +37,23 @@ def test_verify_recognises_every_column_of_the_real_header(kvk_zip):
         "sbi": "SBI activiteiten", "main_activity": "Hoofdactiviteiten",
         "member_state": "Lidstaat",
     }
+
+
+def test_rejected_file_is_quarantined_with_its_report(tmp_path):
+    bad = tmp_path / "kvk.csv"
+    bad.write_text("just;one\n1;2\n")                 # required columns missing
+    report = json.loads(k.verify_dataset(str(bad)))
+    assert report["status"] == "FAILED"
+    folder = Path(report["quarantine"])
+    assert folder.parent == k.QUARANTINE_ROOT / "kvk"
+    assert (folder / "kvk.csv").read_bytes() == bad.read_bytes()
+    saved = json.loads((folder / "report.json").read_text())
+    assert saved["status"] == "FAILED" and any("Required column missing" in e for e in saved["errors"])
+    # verifying the same file again doesn't add a second copy
+    assert json.loads(k.verify_dataset(str(bad)))["quarantine"] == "already in quarantine"
+
+
+def test_passed_file_is_not_quarantined(kvk_zip):
+    report = json.loads(k.verify_dataset(str(kvk_zip)))
+    assert report["status"] == "PASSED" and "quarantine" not in report
+    assert not k.QUARANTINE_ROOT.exists()

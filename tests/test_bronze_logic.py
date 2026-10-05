@@ -1,10 +1,13 @@
 """Bronze CBS: period selection, request keys, pagination and the skip/fetch rules.
 Offline: HTTP and Delta writes are replaced by in-memory fakes."""
+import json
+
 import pytest
 import requests
 
 import cbs_bronze as b
 import cbs_silver as s
+from conftest import DP_81589, topic_keys
 
 Endpoint = b.Endpoint
 
@@ -121,8 +124,10 @@ def test_fetch_all_does_not_page_past_a_user_top(monkeypatch):
 def pipeline(monkeypatch):
     """Two small endpoints with fake HTTP and an in-memory ingestion log.
     state["fetched"] records every API call, including the Perioden lookup that
-    plans the per-period requests (that small call is made on every run)."""
-    state = {"log": set(), "fetched": [], "written": [], "fail": set()}
+    plans the per-period requests (that small call is made on every run), except the
+    DataProperties lookups for the checks, which go to state["dataprops"]."""
+    state = {"log": set(), "fetched": [], "written": [], "fail": set(), "dataprops": [],
+             "records": None}
     eps = [Endpoint("81589NED", "TypedDataSet", split_by_period=True),
            Endpoint("81589NED", "Perioden")]
     monkeypatch.setattr(b, "ENDPOINTS", eps)
@@ -130,12 +135,18 @@ def pipeline(monkeypatch):
     monkeypatch.setattr(b, "done_keys", lambda: set(state["log"]))
 
     def fetch_all(session, url, params):
+        if url.endswith("/DataProperties"):
+            state["dataprops"].append(url)
+            return DP_81589_FULL, 1
         state["fetched"].append((url, params.get("$filter")))
         if url.endswith("/Perioden"):
             return periods("2024KW04", "2025KW01"), 1
         if params.get("$filter") in state["fail"]:
             raise requests.ConnectionError("boom")
-        return [{"row": 1}], 1
+        period = params["$filter"].split("'")[1] if params.get("$filter") else None
+        if state["records"] is not None:
+            return state["records"](period), 1
+        return [business_record(period)], 1
 
     monkeypatch.setattr(b, "fetch_all", fetch_all)
     monkeypatch.setattr(b, "write_bronze", lambda req, recs: state["written"].append(req.key))
@@ -144,6 +155,19 @@ def pipeline(monkeypatch):
 
 
 PLAN_CALL = (f"{b.BASE_URL}/81589NED/Perioden", None)
+
+
+# DataProperties as CBS returns them: dimensions too, and a Datatype per measure
+DP_81589_FULL = ([{"Type": "Dimension", "Key": "BedrijfstakkenBranchesSBI2008"},
+                  {"Type": "TimeDimension", "Key": "Perioden"}]
+                 + [{**d, "Datatype": "Long"} for d in DP_81589])
+
+
+def business_record(period, **override):
+    """A valid 81589NED record: both dimensions and every measure of DP_81589."""
+    rec = {"ID": 0, "BedrijfstakkenBranchesSBI2008": "T001081", "Perioden": period,
+           **{k: 100 for k in topic_keys(DP_81589)}}
+    return {**rec, **override}
 
 
 def test_first_run_fetches_every_request_and_logs_it(pipeline):
@@ -186,6 +210,63 @@ def test_dry_run_fetches_and_writes_nothing(pipeline):
 def test_only_filters_by_endpoint_name(pipeline):
     b.run(only="81589NED_PERIODEN", force=False, dry_run=False)
     assert pipeline["fetched"] == [PLAN_CALL] and len(pipeline["written"]) == 1
+
+
+# =========================================================================== run(): checks & quarantine
+def quarantine_folders():
+    return sorted(p.name for p in (b.QUARANTINE_ROOT / "cbs").glob("*") if p.is_dir())
+
+
+def test_batch_failing_a_check_is_quarantined_not_written_and_retried(pipeline):
+    pipeline["records"] = lambda period: [business_record(period, TotaalBedrijven_1="n/a")]
+    b.run(None, False, False)
+    # the Perioden code list passes; both data periods fail
+    assert pipeline["written"] == ["81589NED/Perioden"]
+    assert not any("TypedDataSet" in k for k in pipeline["log"])
+    folders = quarantine_folders()
+    assert len(folders) == 2 and folders[0].endswith("_81589ned_typeddataset_2024KW04")
+
+    report = json.loads((b.QUARANTINE_ROOT / "cbs" / folders[0] / "report.json").read_text())
+    assert report["request_key"] == "81589NED/TypedDataSet?Perioden=2024KW04#status=Definitief"
+    failed = [c["name"] for c in report["checks"] if not c["passed"]]
+    assert failed == ["measures_numeric_or_null"]
+    records = json.loads((b.QUARANTINE_ROOT / "cbs" / folders[0] / "records.json").read_text())
+    assert records[0]["TotaalBedrijven_1"] == "n/a"
+
+    pipeline["records"] = None                     # CBS fixes the data
+    b.run(None, False, False)
+    assert sum("TypedDataSet" in k for k in pipeline["written"]) == 2
+
+
+def test_same_failing_batch_is_quarantined_once(pipeline):
+    pipeline["records"] = lambda period: []        # a published period without records
+    b.run(None, False, False)
+    b.run(None, False, False)
+    assert len(quarantine_folders()) == 2          # one per period, not one per run
+
+
+@pytest.mark.parametrize("bad, check", [
+    (lambda p: [business_record("2019KW01")], "period_matches_request"),
+    (lambda p: [{k: v for k, v in business_record(p).items() if k != "TotaalBedrijven_1"}],
+     "has_all_columns"),
+    (lambda p: [business_record(p), business_record(p, ID=1)], "unique_dimension_keys"),
+    (lambda p: [], "not_empty"),
+])
+def test_each_check_stops_a_batch(pipeline, bad, check):
+    pipeline["records"] = bad
+    b.run(None, False, False)
+    folder = b.QUARANTINE_ROOT / "cbs" / quarantine_folders()[0]
+    report = json.loads((folder / "report.json").read_text())
+    assert check in [c["name"] for c in report["checks"] if not c["passed"]]
+    assert not any("TypedDataSet" in k for k in pipeline["written"])
+
+
+def test_dataprops_fetched_once_per_table_and_only_with_new_data(pipeline):
+    b.run(None, False, False)
+    assert pipeline["dataprops"] == [f"{b.BASE_URL}/81589NED/DataProperties"]
+    pipeline["dataprops"].clear()
+    b.run(None, False, False)                      # nothing new
+    assert pipeline["dataprops"] == []
 
 
 # =========================================================================== configuration
