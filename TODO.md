@@ -77,9 +77,10 @@ ingest, problems).
       e.g. `to_pandas(types_mapper=pd.ArrowDtype)`.
 
 ### Afterwards
-- [ ] Fix what the run uncovered, and add a test for each fix
-- [ ] Turn the checks above into the Delta tests (section 7) and, later, Dagster asset
-      checks
+- [x] Fix what the run uncovered, and add a test for each fix (only fix: the KVK SBI
+      column names, tested in `tests/test_kvk_logic.py`)
+- [x] Turn the checks above into the Delta tests (section 7: `tests/test_delta.py`)
+- [ ] Later: the same checks as Dagster asset checks (section 5)
 
 ## 0. Foundations
 - [ ] Decide the dashboard's audience (personal use, team, or shared outside this machine)
@@ -209,15 +210,23 @@ higher sickness absence. See `PROJECT.md` for the sub-questions.
 
 ## 7. Tests and CI
 
-The current tests (`tests/`) cover the pure logic and run without `deltalake`/`pyarrow`.
+`tests/test_bronze_logic.py` and `tests/test_silver_logic.py` cover the pure logic;
+`tests/test_kvk_logic.py` the KVK file verification; `tests/test_delta.py` writes real
+Delta tables in `tmp_path` (117 tests, ~6 s). Checked by breaking the code on purpose:
+removing the delete-before-write, an empty `done_keys()` and non-UTC silver timestamps
+each make the right tests fail.
 
-Still to add, using `tmp_path` and real Delta tables (on a local machine):
-- [ ] Bronze: a revised period replaces its rows (no duplicates) after `write_bronze`
-- [ ] Bronze: `done_keys()` reads back what `log_success()` wrote
-- [ ] Silver: `cbs_silver.py` end to end from real bronze Delta tables, then read the
-      silver tables back and check types (dates, Int64 counts, UTC timestamps)
-- [ ] Optional live test, marked `@pytest.mark.live` and skipped by default: fetch one
-      small CBS endpoint (e.g. `81589NED/Perioden`) to catch API or code-list changes
+Delta tests (done 2026-10-05, `tests/test_delta.py`):
+- [x] Bronze: a revised period replaces its rows (no duplicates) after `write_bronze`;
+      also a repeated write (crash before the log) and a non-split request
+- [x] Bronze: `done_keys()` reads back what `log_success()` wrote
+- [x] Bronze: `run()` with fake HTTP but real Delta: second run makes no data
+      requests; a status change refetches only that period and replaces its rows
+- [x] Silver: `cbs_silver.py` end to end from real bronze Delta tables; values equal
+      the in-memory build; types read back (date32, int64 counts, bool, UTC timestamps);
+      a rerun replaces the tables
+- [x] Optional live test, marked `@pytest.mark.live` and skipped by default (also in
+      `pytest.ini`): fetches `81589NED/Perioden`. Run with `pytest -m live`
 
 Later, as each part is built:
 - [ ] Tests for the data checks, quarantine, scope cleanup, silver KVK, gold, the

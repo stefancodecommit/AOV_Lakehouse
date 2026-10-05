@@ -1,4 +1,4 @@
-"""Shared fixtures. All tests are offline: no CBS API calls, no Delta Lake needed.
+"""Shared fixtures. All tests are offline (no CBS API calls) except those marked `live`.
 
 The sample records below are copied from real CBS OData responses (Oct 2026),
 including CBS's habit of padding dimension keys with spaces ('301000 ').
