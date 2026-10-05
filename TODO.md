@@ -5,10 +5,35 @@ Open work, in the order of `PROJECT.md`. Each phase builds on the one before it.
 Rule for every phase: run each new layer on real data and check it before building the
 next layer on top of it.
 
-## Next: first real run
+## Where to continue (status 2026-10-05)
 
-Nothing has run against the real CBS API or real Delta tables yet; so far everything is
-tested on sample records. Do this on a local machine, one layer at a time, and use
+Built and run on real data: bronze (CBS, KVK, SBI crosswalk) with checks and quarantine,
+silver (CBS, KVK), gold (5 tables), config, run log, 240 tests. All committed.
+
+**Next step: 4. Streamlit dashboard** (reads gold only). Decisions already made for it:
+personal/educational use; provisional figures shown by default, marked, with a switch
+"final figures only"; KVK groups under 10 companies hidden by default (`is_small_group`);
+sections are the default sector level (`sbi_level`).
+
+Run order (from the project folder, with the virtualenv):
+
+    .venv/bin/python cbs_bronze.py                 # CBS API -> bronze (only new data)
+    .venv/bin/python reference_bronze.py           # SBI crosswalk (skips a known file)
+    .venv/bin/python kvk_bronze_agent.py --inbox   # newest new KVK file in inbox/kvk/
+    .venv/bin/python cbs_silver.py
+    .venv/bin/python kvk_silver.py                 # needs silver CBS (crosswalk)
+    .venv/bin/python gold.py
+    .venv/bin/python inspect_lakehouse.py          # overview, warnings, problems
+    .venv/bin/pytest                               # tests (live CBS test: -m live)
+
+Local setup: `.venv/` holds the Python packages (`pip install -r requirements-dev.txt`).
+Ollama is installed in `~/.local/ollama` (no sudo) with model `qwen2.5:7b`; start the
+server with `~/.local/ollama/bin/ollama serve` before using the KVK agent in chat mode
+(not needed for `--inbox` / `--file`).
+
+## First real run (done 2026-10-05)
+
+Done on this machine, one layer at a time, using
 `python inspect_lakehouse.py` after each step for an overview (rows, periods, latest
 ingest, problems).
 
