@@ -186,7 +186,7 @@ def test_silver_end_to_end_matches_the_in_memory_build(bronze_delta, silver, mon
             assert not (s.SILVER_ROOT / name).exists(), name
             continue
         got = silver_table(name).to_pandas()
-        assert list(got.columns) == list(expected.columns), name
+        assert list(got.columns) == list(expected.columns) + ["run_id"], name
         assert len(got) == len(expected), name
         keep = [c for c in expected.columns if c != "ingested_at"]
         pd.testing.assert_frame_equal(
@@ -293,3 +293,110 @@ def test_cleanup_scope_leaves_kvk_and_reference_alone(tmp_path):
     write_deltalake(str(b.BRONZE_ROOT / "reference" / "sbi2008_sbi2025"), pa.table({"a": [1]}))
     assert b.cleanup_scope(session=object(), dry_run=False) == []
     assert (b.BRONZE_ROOT / "kvk" / "basis_bedrijfsgegevens").exists()
+
+
+# =========================================================================== silver runs and run log
+import inspect_lakehouse  # noqa: E402
+import runlog  # noqa: E402
+
+
+def run_ids(name):
+    return set(silver_table(name).to_pandas(columns=["run_id"])["run_id"])
+
+
+def test_successful_run_is_logged_and_joinable(bronze_delta):
+    run_id = s.run()
+    runs = runlog.read_runs(s.RUN_LOG)
+    assert list(runs.run_id) == [run_id] and list(runs.status) == ["success"]
+    row = runs.iloc[0]
+    assert row.pipeline == "silver_cbs" and row.finished_at >= row.started_at
+
+    tables = json.loads(row.tables)
+    assert tables["fct_absence_rate"]["status"] == "published"
+    for name, info in tables.items():
+        assert run_ids(name) == {run_id}, name                 # every row carries the run_id
+        assert len(silver_table(name).to_pandas()) == info["rows"], name
+    inputs = json.loads(row.inputs)
+    assert inputs["bronze/80072ned_typeddataset"] == 0          # Delta version that was read
+    assert inputs["bronze/reference/sbi2008_sbi2025#batch_id"] == CROSSWALK_BATCH
+
+    joined = silver_table("fct_absence_rate").to_pandas().merge(runs, on="run_id")
+    assert len(joined) == tables["fct_absence_rate"]["rows"]
+    assert not (s.SILVER_ROOT / "_staging").exists()           # staging cleaned up
+
+
+def test_failed_build_leaves_live_tables_untouched(bronze_delta, monkeypatch):
+    first = s.run()
+    monkeypatch.setattr(s, "build_all", lambda **kw: (_ for _ in ()).throw(ValueError("boom")))
+    with pytest.raises(ValueError):
+        s.run()
+    runs = runlog.read_runs(s.RUN_LOG)
+    assert list(runs.status) == ["success", "failed"]
+    assert runs.iloc[1].error == "ValueError: boom"
+    assert run_ids("fct_absence_rate") == {first}
+    assert silver_table("fct_absence_rate").version() == 0
+
+
+def test_empty_required_table_fails_before_anything_is_written(bronze_delta, monkeypatch):
+    real = s.build_all
+    monkeypatch.setattr(s, "build_all", lambda **kw: {**real(**kw), "dim_region": pd.DataFrame()})
+    with pytest.raises(s.RunFailed, match="required tables came out empty: dim_region"):
+        s.run()
+    assert not (s.SILVER_ROOT / "fct_absence_rate").exists()
+    assert runlog.read_runs(s.RUN_LOG).iloc[0].status == "failed"
+
+
+def test_empty_optional_table_is_skipped(bronze_delta, monkeypatch):
+    real = s.build_all
+    monkeypatch.setattr(s, "build_all",
+                        lambda **kw: {**real(**kw), "map_sbi2008_sbi2025": pd.DataFrame()})
+    s.run()
+    row = runlog.read_runs(s.RUN_LOG).iloc[0]
+    assert row.status == "success"
+    assert json.loads(row.tables)["map_sbi2008_sbi2025"] == {"rows": 0, "status": "skipped"}
+
+
+def test_staging_failure_leaves_live_tables_untouched(bronze_delta, monkeypatch):
+    first = s.run()
+    real = s.write_silver
+
+    def fail_on_fifth(name, df, root=None, calls=[]):
+        calls.append(name)
+        if len(calls) == 5:
+            raise OSError("disk full")
+        real(name, df, root)
+
+    monkeypatch.setattr(s, "write_silver", fail_on_fifth)
+    with pytest.raises(OSError):
+        s.run()
+    for name in ("dim_period", "fct_absence_rate", "map_sbi2008_sbi2025"):
+        assert run_ids(name) == {first}, name
+    assert not (s.SILVER_ROOT / "_staging").exists()
+
+
+def test_publish_stopping_halfway_is_logged_and_detected(bronze_delta, monkeypatch):
+    first = s.run()
+    real = s._overwrite
+
+    def fail_on_third(path, table, calls=[]):
+        if "_staging" not in str(path):           # count only writes to live tables
+            calls.append(path)
+            if len(calls) == 3:
+                raise OSError("power cut")
+        real(path, table)
+
+    monkeypatch.setattr(s, "_overwrite", fail_on_third)
+    with pytest.raises(s.RunFailed, match="publish incomplete after 2 tables"):
+        s.run()
+    runs = runlog.read_runs(s.RUN_LOG)
+    assert runs.iloc[1].status == "failed" and "power cut" in runs.iloc[1].error
+
+    _, problems = inspect_lakehouse.silver_run_problems(s.LAKEHOUSE)
+    assert any("latest silver_cbs run" in p and "failed" in p for p in problems)
+    mixed = [p for p in problems if "is not the latest successful run" in p]
+    assert len(mixed) == 2                         # the two tables already replaced
+    assert first in mixed[0]
+
+    monkeypatch.setattr(s, "_overwrite", real)
+    s.run()                                        # a clean rerun fixes it
+    assert inspect_lakehouse.silver_run_problems(s.LAKEHOUSE)[1] == []

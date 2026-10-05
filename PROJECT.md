@@ -92,7 +92,9 @@ lakehouse/
             reference/sbi2008_sbi2025  CBS SBI 2008 -> SBI 2025 crosswalk, one batch per file version
             reference/_batch_log       reference files: one row per loaded file (by SHA-256)
   quarantine/                          batches that failed their checks, kept for inspection
-  silver/   dim_*, fct_*, map_*        cleaned, typed, conformed tables
+  _run_log/                            one row per silver/gold run, joinable on run_id
+  silver/   dim_*, fct_*, map_*        cleaned, typed, conformed tables, each with run_id
+            _staging/<run_id>/         a run's tables before they replace the live ones
   gold/     ...                        tables shaped for the dashboard
 ```
 
@@ -245,6 +247,13 @@ mix of new and old tables. To prevent that:
   tables once every table in that run succeeded.
 - Every table records the `run_id` it was built in; gold and the dashboard check that the
   tables they combine come from the same run.
+- Every run, successful or failed, is a row in `lakehouse/_run_log` (`runlog.py`): run_id,
+  pipeline, start and end time, status, error, rows per table, the Delta version of each
+  input table it read, and the git commit of the code. Joining a table's `run_id` to it
+  shows when and how any row was produced.
+- Delta can't replace several tables in one commit, so a crash while publishing could
+  still leave tables of two runs. `inspect_lakehouse.py` reports that (every silver table
+  must carry the latest successful run_id); a rerun fixes it.
 
 ## Storage and maintenance
 
@@ -379,12 +388,12 @@ TODO.md                 open work
 | Bronze CBS | Built and run on real data (92 requests, 39 s); lifecycle warnings, scope cleanup |
 | Bronze KVK + agent | Built and run on the real file (1.92M rows) with Ollama; reads `inbox/kvk/` |
 | Reference: SBI 2008 -> 2025 crosswalk | Built; loaded v2.0 |
-| Silver CBS | Built, incl. `map_sbi2008_sbi2025`; checked against CBS StatLine |
+| Silver CBS | Built, incl. `map_sbi2008_sbi2025`; checked against CBS StatLine; staging, `run_id`, run log |
 | Silver KVK | To do; sector = main activity, edge cases as flags |
 | Data checks before ingestion (CBS) | Built (`checks/cbs.py`) |
 | Quarantine | Built for CBS, KVK and reference files; monthly cleanup in `maintenance.py` |
 | Alerting, freshness checks | To do |
-| pytest | 203 tests incl. real Delta tables in tmp_path; one opt-in live CBS test |
+| pytest | 209 tests incl. real Delta tables in tmp_path; one opt-in live CBS test |
 | Configuration file | Built (`config.yaml` + `config.py`) |
 | Gold | To do; tables proposed around the main question |
 | Streamlit dashboard | To do; pages proposed |

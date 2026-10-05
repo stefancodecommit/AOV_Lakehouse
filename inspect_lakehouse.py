@@ -11,6 +11,9 @@ Problems reported:
   - silver fact rows whose company characteristic is unknown in the code list
   - batches or files in quarantine (failed their checks; see report.json in each folder)
 
+  - silver tables whose run_id isn't the latest successful silver_cbs run (a publish
+    that stopped halfway), or a latest silver run that failed
+
 Warnings (shown, but not counted as problems): CBS tables that CBS has stopped or hasn't
 modified for longer than their frequency allows, from the newest TableInfos in bronze.
 
@@ -24,6 +27,7 @@ Exit code 1 when problems are found, so it can also be used in scripts.
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
@@ -104,6 +108,38 @@ def expected_bronze_names() -> list[str]:
         return []
 
 
+def silver_run_problems(root: Path, pipeline: str = "silver_cbs") -> tuple[list[str], list[str]]:
+    """(summary lines, problems) from the run log and the run_id of each silver table."""
+    import pyarrow.compute as pc
+    from deltalake import DeltaTable
+    import runlog
+    runs = runlog.read_runs(root / "_run_log")
+    runs = runs[runs["pipeline"] == pipeline]
+    if runs.empty:
+        return ["(no runs logged)"], []
+    lines, problems = [], []
+    for r in runs.tail(5).itertuples():
+        lines.append(f"{r.run_id:<44}{r.status:<9}{str(r.started_at)[:19]}  "
+                     f"{(r.code_version or ''):<16}{(r.error or '')[:60]}")
+    last = runs.iloc[-1]
+    if last["status"] != "success":
+        problems.append(f"_run_log: latest {pipeline} run {last['run_id']} failed: {last['error']}")
+    ok = runs[runs["status"] == "success"]
+    if ok.empty:
+        return lines, problems
+    latest = ok.iloc[-1]
+    for name, info in json.loads(latest["tables"]).items():
+        path = root / "silver" / name
+        if info.get("status") != "published" or not (path / "_delta_log").exists():
+            continue
+        ids = DeltaTable(str(path)).to_pyarrow_dataset().to_table(columns=["run_id"]).column("run_id")
+        found = set(pc.unique(ids).to_pylist())
+        if found != {latest["run_id"]}:
+            problems.append(f"silver/{name}: run_id {sorted(map(str, found))} is not the latest "
+                            f"successful run {latest['run_id']} (publish incomplete?)")
+    return lines, problems
+
+
 def lifecycle_warnings(bronze: Path) -> list[str]:
     """Lifecycle warnings from the newest TableInfos snapshot of each CBS table."""
     import json
@@ -180,6 +216,13 @@ def main() -> int:
                   f"{'; '.join(map(str, failed))[:80]}")
             problems.append(f"quarantine/{e.get('source', '?')}/{e.get('name', '?')}: failed its checks "
                             f"(see {e['folder']}/report.json)")
+
+    if not args.layer or args.layer == "silver":
+        lines, run_problems = silver_run_problems(root)
+        print("\n=== silver runs (latest 5, from _run_log)")
+        for line in lines:
+            print(f"  {line}")
+        problems += run_problems
 
     if not args.layer or args.layer == "bronze":
         found = lifecycle_warnings(root / "bronze")

@@ -183,12 +183,20 @@ Source: CBS "schakelschema SBI 2008 - SBI 2025" v2.0
 - [x] `map_sbi2008_sbi2025`: crosswalk with division per code (from the code itself),
       `sbi2025_targets`, `sbi2008_sources` and `link_type` (1:1, split, merge,
       many-to-many), `source_version`, `batch_id`
-- [ ] Write into a staging folder and replace the live tables only when every table
-      succeeded; record the `run_id` on every table
+- [x] Write into a staging folder and replace the live tables only when every table
+      succeeded; record the `run_id` on every table (2026-10-05). `silver/_staging/<run_id>/`
+      is removed after each run; a required table that comes out empty fails the run,
+      `map_sbi2008_sbi2025` is optional
+- [x] Run log `lakehouse/_run_log` (`runlog.py`), one row per run: run_id, pipeline,
+      start/end, status, error, rows per table, Delta version of every bronze input,
+      git commit. Joinable with every silver table on `run_id`
+- [x] `inspect_lakehouse.py` shows the latest runs and reports a failed latest run or
+      silver tables whose run_id isn't the latest successful one
 
 ### KVK (postponed)
 Build one thin table, `lakehouse/silver/kvk_company`, from
-`lakehouse/bronze/kvk/basis_bedrijfsgegevens`.
+`lakehouse/bronze/kvk/basis_bedrijfsgegevens`. Same staging, `run_id` column and run log
+as silver CBS (pipeline `silver_kvk`).
 
 Why it's needed:
 - Every upload is a full snapshot appended as a new batch, so querying bronze directly
@@ -248,7 +256,7 @@ higher sickness absence. See `PROJECT.md` for the sub-questions.
 - [ ] Every gold row carries its period status and the date of the newest data behind it
 - [ ] Mark groups with fewer than 10 companies (KVK re-identification rule) with a flag;
       the dashboard hides them by default (personal use, so marking is enough)
-- [ ] Same staging-and-swap publishing and `run_id` as silver
+- [ ] Same staging-and-swap publishing, `run_id` and run log (`runlog.py`) as silver
 - [ ] Decide whether provisional figures are shown by default
 
 ## 4. Streamlit dashboard
@@ -304,8 +312,8 @@ higher sickness absence. See `PROJECT.md` for the sub-questions.
 `tests/test_kvk_logic.py` the KVK file verification; `tests/test_reference.py` the SBI
 crosswalk; `tests/test_checks.py` the CBS and KVK checks and quarantine;
 `tests/test_maintenance.py` the quarantine cleanup; `tests/test_config.py` the
-configuration; `tests/test_delta.py` writes real Delta tables in `tmp_path` (203 tests,
-~7 s). `conftest.py` fails a test when any module still points at the real
+configuration; `tests/test_delta.py` writes real Delta tables in `tmp_path` (209 tests,
+~10 s). `conftest.py` fails a test when any module still points at the real
 lakehouse or inbox. Checked by breaking the code on purpose:
 removing the delete-before-write, an empty `done_keys()` and non-UTC silver timestamps
 each make the right tests fail.
