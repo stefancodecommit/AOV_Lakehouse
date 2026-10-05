@@ -8,6 +8,7 @@ import cbs_bronze as b
 import maintenance as m
 from checks.quarantine import cleanup, list_entries, quarantine
 from test_delta import ABSENCE, DP_80072, records
+from conftest import table_info
 from test_bronze_logic import periods
 
 NOW = datetime(2026, 10, 5, 12, tzinfo=timezone.utc)
@@ -99,6 +100,8 @@ def test_quarantined_period_is_cleaned_up_after_cbs_fixes_it(monkeypatch):
             return periods("2026KW01"), 1
         if url.endswith("/DataProperties"):
             return DP_80072, 1
+        if url.endswith("/TableInfos"):
+            return [table_info()], 1
         return records("2026KW01", state["value"]), 1
 
     monkeypatch.setattr(b, "fetch_all", fetch_all)

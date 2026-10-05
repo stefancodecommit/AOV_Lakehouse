@@ -3,8 +3,12 @@ import json
 
 import pytest
 
-from checks import all_passed, failures
-from checks.cbs import check_metadata, check_typed_dataset, table_structure
+from datetime import datetime, timezone
+
+from checks import all_passed, failures, warnings
+from checks.cbs import (check_metadata, check_table_lifecycle, check_typed_dataset,
+                        table_structure)
+from conftest import table_info
 from checks.kvk import check_file, check_rows, match_columns
 from checks.quarantine import list_entries, quarantine
 
@@ -189,3 +193,31 @@ def test_kvk_check_rows_counts():
     total, malformed, hits = check_rows(
         [["20060721", "J", "BV", "92"], ["", "N", "NV", "01"], ["short"]], 4, found)
     assert (total, malformed) == (3, 1) and not any(hits.values())
+
+
+# =========================================================================== CBS table lifecycle
+NOW = datetime(2026, 10, 5, tzinfo=timezone.utc)
+
+
+def test_regular_recent_table_has_no_warnings():
+    assert all_passed(check_table_lifecycle(table_info(), NOW))
+
+
+def test_stopped_table_is_a_warning_not_an_error():
+    results = check_table_lifecycle(
+        table_info("Stopgezet", "2024-04-17T02:00:00", "Gediscontinueerd"), NOW)
+    assert [w.name for w in warnings(results)] == ["table_not_stopped"]
+    assert failures(results) == []                 # never blocks ingestion
+    assert "table_recently_modified" not in [r.name for r in results]  # no age check then
+
+
+@pytest.mark.parametrize("frequency, modified, stale", [
+    ("Perkwartaal", "2026-06-10T02:00:00", False),   # 116 days, limit 122
+    ("Perkwartaal", "2026-05-01T02:00:00", True),    # 156 days
+    ("Perjaar", "2025-08-01T02:00:00", False),
+    ("Perjaar", "2025-06-01T02:00:00", True),
+    ("Onregelmatig", "2010-01-01T00:00:00", False),  # unknown frequency: no age check
+])
+def test_stale_table_warning(frequency, modified, stale):
+    results = check_table_lifecycle(table_info(frequency, modified), NOW)
+    assert ("table_recently_modified" in [w.name for w in warnings(results)]) == stale

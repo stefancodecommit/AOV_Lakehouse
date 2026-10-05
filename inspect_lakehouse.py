@@ -11,6 +11,9 @@ Problems reported:
   - silver fact rows whose company characteristic is unknown in the code list
   - batches or files in quarantine (failed their checks; see report.json in each folder)
 
+Warnings (shown, but not counted as problems): CBS tables that CBS has stopped or hasn't
+modified for longer than their frequency allows, from the newest TableInfos in bronze.
+
 Usage
 -----
     python inspect_lakehouse.py                  # all layers
@@ -101,6 +104,23 @@ def expected_bronze_names() -> list[str]:
         return []
 
 
+def lifecycle_warnings(bronze: Path) -> list[str]:
+    """Lifecycle warnings from the newest TableInfos snapshot of each CBS table."""
+    import json
+    from deltalake import DeltaTable
+    from checks import warnings
+    from checks.cbs import check_table_lifecycle
+    out = []
+    for path in sorted(bronze.glob("*_tableinfos")):
+        df = DeltaTable(str(path)).to_pandas(columns=["_table_id", "_ingested_at", "raw_json"])
+        if df.empty:
+            continue
+        newest = df.sort_values("_ingested_at").iloc[-1]
+        for w in warnings(check_table_lifecycle(json.loads(newest["raw_json"]))):
+            out.append(f"{newest['_table_id']}: {w.detail}")
+    return out
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="Overview of the lakehouse Delta tables.")
     from config import project_path, settings
@@ -160,6 +180,12 @@ def main() -> int:
                   f"{'; '.join(map(str, failed))[:80]}")
             problems.append(f"quarantine/{e.get('source', '?')}/{e.get('name', '?')}: failed its checks "
                             f"(see {e['folder']}/report.json)")
+
+    if not args.layer or args.layer == "bronze":
+        found = lifecycle_warnings(root / "bronze")
+        print(f"\n=== warnings ({len(found)})")
+        for w in found or ["(none)"]:
+            print(f"  {w}")
 
     print("\n=== problems")
     if problems:

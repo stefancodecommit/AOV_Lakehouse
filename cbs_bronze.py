@@ -20,9 +20,23 @@ How "ask only once" works
   code lists on not being empty. A batch that fails is not written and not logged,
   so it's retried next run, and it's saved to lakehouse/quarantine/cbs/ with a report.
   DataProperties is fetched live, once per table per run, only when there is new data.
+* Source lifecycle: every run fetches each data table's TableInfos (one small request
+  per table) and warns when CBS has stopped the table or hasn't modified it for longer
+  than its frequency allows (checks/cbs.py). The TableInfos record is stored in
+  bronze/<table>_tableinfos only when it changed: its Modified and MetaDataModified
+  dates are part of the request key, so bronze keeps one row per version.
 
 Bronze tables keep the raw record as JSON plus lineage columns; parsing and typing
 happen in silver.
+
+Scope cleanup
+-------------
+When the configuration shrinks (a later start year, another period preference, a table
+or endpoint removed from config.yaml), `--cleanup-scope` removes the bronze rows and
+ingestion-log entries that fall outside it, so bronze matches the configuration again.
+Periods are judged with the same rule as ingestion (select_periods on CBS's current
+period list): only periods before the start year or of a type that is no longer chosen
+are removed. Run it with --dry-run first.
 
 Usage
 -----
@@ -31,6 +45,8 @@ Usage
     python cbs_bronze.py --dry-run       # show what would be requested
     python cbs_bronze.py --only 81589    # limit to endpoints whose name contains "81589"
     python cbs_bronze.py --force         # ignore the log and re-request (replaces rows)
+    python cbs_bronze.py --cleanup-scope --dry-run   # list what is outside the config
+    python cbs_bronze.py --cleanup-scope             # remove it
 """
 from __future__ import annotations
 
@@ -300,6 +316,46 @@ def check_records(session, req: Request, records: list[dict], dataprops_cache: d
     return check_typed_dataset(records, dataprops_cache[ep.table_id], req.period)
 
 
+def table_infos_request(table_id: str, info: dict) -> Request:
+    ep = Endpoint(table_id, "TableInfos")
+    key = (f"{table_id}/TableInfos#modified={info.get('Modified')}"
+           f"#metadata={info.get('MetaDataModified')}")
+    return Request(endpoint=ep, key=key, params={})
+
+
+def ingest_table_infos(session, table_ids: list[str], already: set[str],
+                       dry_run: bool) -> tuple[int, int, int]:
+    """Lifecycle warnings per table, and a bronze snapshot when TableInfos changed.
+    Returns (snapshots written, warnings, failed requests)."""
+    from checks import warnings
+    from checks.cbs import check_table_lifecycle
+    written = warned = failed = 0
+    for table_id in table_ids:
+        try:
+            infos, pages = fetch_all(session, f"{BASE_URL}/{table_id}/TableInfos", {})
+        except requests.RequestException as e:
+            log.error("Could not fetch TableInfos for %s: %s", table_id, e)
+            failed += 1
+            continue
+        if not infos:
+            log.error("TableInfos for %s is empty", table_id)
+            failed += 1
+            continue
+        for w in warnings(check_table_lifecycle(infos[0])):
+            log.warning("%s: %s", table_id, w.detail)
+            warned += 1
+        req = table_infos_request(table_id, infos[0])
+        if req.key in already or dry_run:
+            continue
+        write_bronze(req, infos)
+        log_success(req, len(infos), pages)
+        already.add(req.key)
+        written += 1
+        log.info("%-40s TableInfos changed (modified %s), snapshot stored",
+                 req.endpoint.name, infos[0].get("Modified"))
+    return written, warned, failed
+
+
 def quarantine_batch(req: Request, records: list[dict], results: list, pages: int):
     from checks.quarantine import quarantine
     report = {"request_key": req.key, "table_id": req.endpoint.table_id,
@@ -311,6 +367,75 @@ def quarantine_batch(req: Request, records: list[dict], results: list, pages: in
                       report, records=records)
 
 
+# --------------------------------------------------------------------------- scope cleanup
+def configured_table_names() -> set[str]:
+    """Bronze folder names that the configuration produces, TableInfos snapshots included."""
+    names = {e.name for e in ENDPOINTS}
+    names |= {Endpoint(e.table_id, "TableInfos").name for e in ENDPOINTS if e.split_by_period}
+    return names
+
+
+def out_of_scope_periods(ep: Endpoint, present: set[str], cbs_periods: list[dict]) -> set[str]:
+    """Periods in bronze that ingestion wouldn't select now: before the start year, or
+    of a period type that is no longer the chosen one. Periods CBS no longer lists are
+    kept (that is CBS's change, not a configuration change)."""
+    selected = {p["Key"].strip() for p in select_periods(cbs_periods, ep.start_year, ep.period_types)}
+    listed = {p["Key"].strip() for p in cbs_periods}
+    return {p for p in present if p in listed and p not in selected}
+
+
+def _sql_list(values) -> str:
+    return ", ".join("'" + str(v).replace("'", "''") + "'" for v in sorted(values))
+
+
+def cleanup_scope(session=None, dry_run: bool = True) -> list[str]:
+    """Remove bronze tables, rows and log entries outside the configuration.
+    Returns a description of every action (done, or with dry_run only planned)."""
+    import shutil
+    from deltalake import DeltaTable
+    actions: list[str] = []
+    log_dt = DeltaTable(str(LOG_TABLE)) if (LOG_TABLE / "_delta_log").exists() else None
+    log_df = (log_dt.to_pandas(columns=["table_id", "entity"]).drop_duplicates()
+              if log_dt else None)
+    configured = configured_table_names()
+
+    # 1. whole tables that are no longer configured (KVK and reference live in subfolders)
+    for path in sorted(BRONZE_ROOT.glob("*/_delta_log")):
+        table = path.parent
+        if table.name.startswith("_") or table.name in configured:
+            continue
+        actions.append(f"remove table bronze/{table.name} (not in config.yaml)")
+        pairs = []
+        if log_df is not None:
+            pairs = [(r.table_id, r.entity) for r in log_df.itertuples()
+                     if f"{r.table_id}_{r.entity}".lower() == table.name]
+        if not dry_run:
+            shutil.rmtree(table)
+            for table_id, entity in pairs:
+                log_dt.delete(f"table_id = '{table_id}' AND entity = '{entity}'")
+
+    # 2. periods outside the start year / period preference
+    session = session or make_session()
+    for ep in ENDPOINTS:
+        path = BRONZE_ROOT / ep.name
+        if not ep.split_by_period or not (path / "_delta_log").exists():
+            continue
+        dt = DeltaTable(str(path))
+        present = set(dt.to_pandas(columns=["_period"])["_period"].dropna())
+        cbs_periods, _ = fetch_all(session, f"{BASE_URL}/{ep.table_id}/Perioden", {})
+        drop = out_of_scope_periods(ep, present, cbs_periods)
+        if not drop:
+            continue
+        actions.append(f"remove {len(drop)} periods from bronze/{ep.name}: "
+                       f"{', '.join(sorted(drop))}")
+        if not dry_run:
+            dt.delete(f"_period IN ({_sql_list(drop)})")
+            if log_dt:
+                log_dt.delete(f"table_id = '{ep.table_id}' AND entity = '{ep.entity}' "
+                              f"AND period IN ({_sql_list(drop)})")
+    return actions
+
+
 # --------------------------------------------------------------------------- main
 def run(only: str | None, force: bool, dry_run: bool) -> None:
     from checks import failures
@@ -318,6 +443,13 @@ def run(only: str | None, force: bool, dry_run: bool) -> None:
     already = set() if force else done_keys()
     fetched = skipped = failed = quarantined = 0
     dataprops_cache: dict[str, list[dict]] = {}
+
+    data_tables = list(dict.fromkeys(e.table_id for e in ENDPOINTS if e.split_by_period))
+    data_tables = [t for t in data_tables
+                   if not only or only.lower() in f"{t}_tableinfos".lower()]
+    infos_written, warned, infos_failed = ingest_table_infos(session, data_tables, already,
+                                                             dry_run)
+    failed += infos_failed
 
     for ep in ENDPOINTS:
         if only and only.lower() not in ep.name:
@@ -356,8 +488,9 @@ def run(only: str | None, force: bool, dry_run: bool) -> None:
                 failed += 1
                 log.error("Failed %s: %s", req.display_url, e)
 
-    log.info("Done. fetched=%d skipped(already in bronze)=%d failed=%d quarantined=%d",
-             fetched, skipped, failed, quarantined)
+    log.info("Done. fetched=%d skipped(already in bronze)=%d failed=%d quarantined=%d "
+             "tableinfos_changed=%d lifecycle_warnings=%d",
+             fetched, skipped, failed, quarantined, infos_written, warned)
 
 
 if __name__ == "__main__":
@@ -365,6 +498,15 @@ if __name__ == "__main__":
     ap.add_argument("--only", help="only endpoints whose name contains this text, e.g. 81589")
     ap.add_argument("--force", action="store_true", help="ignore the ingestion log and re-request")
     ap.add_argument("--dry-run", action="store_true", help="list requests without fetching data")
+    ap.add_argument("--cleanup-scope", action="store_true",
+                    help="remove bronze data outside config.yaml instead of ingesting "
+                         "(combine with --dry-run to only list it)")
     args = ap.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-    run(args.only, args.force, args.dry_run)
+    if args.cleanup_scope:
+        actions = cleanup_scope(dry_run=args.dry_run)
+        for a in actions:
+            log.info("%s%s", "[dry-run] " if args.dry_run else "", a)
+        log.info("Scope cleanup: %d action(s)%s", len(actions), " planned" if args.dry_run else "")
+    else:
+        run(args.only, args.force, args.dry_run)

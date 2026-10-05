@@ -57,3 +57,53 @@ def test_passed_file_is_not_quarantined(kvk_zip):
     report = json.loads(k.verify_dataset(str(kvk_zip)))
     assert report["status"] == "PASSED" and "quarantine" not in report
     assert not k.QUARANTINE_ROOT.exists()
+
+
+# =========================================================================== inbox
+def inbox_zip(name, rows=REAL_ROWS, age=0):
+    import os
+    k.INBOX.mkdir(parents=True, exist_ok=True)
+    path = k.INBOX / name
+    with zipfile.ZipFile(path, "w") as z:
+        z.writestr("kvk.csv", "\r\n".join([REAL_HEADER, *rows]) + "\r\n")
+    os.utime(path, (1_790_000_000 - age, 1_790_000_000 - age))
+    return path
+
+
+def test_empty_or_missing_inbox():
+    listing = json.loads(k.list_inbox())
+    assert listing["files"] == [] and listing["new_files"] == []
+    assert "get_dataset_info" in listing["next_step"]
+    assert k.newest_new_inbox_file() is None
+
+
+def test_list_inbox_tells_the_agent_which_file_is_new():
+    inbox_zip("kvk.zip")
+    listing = json.loads(k.list_inbox())
+    assert listing["new_files"] == ["kvk.zip"] and "verify_dataset" in listing["next_step"]
+
+
+def test_inbox_lists_newest_first_and_marks_ingested_files(monkeypatch):
+    old = inbox_zip("old.zip", age=86_400)
+    inbox_zip("new.zip", rows=REAL_ROWS[:2])
+    (k.INBOX / "notes.txt").write_text("ignored")
+    monkeypatch.setattr(k, "ingested_hashes", lambda: {k._sha256(old): "kvk_batch_1"})
+    files = json.loads(k.list_inbox())["files"]
+    assert [f["file"] for f in files] == ["new.zip", "old.zip"]
+    assert [f["already_ingested_as"] for f in files] == [None, "kvk_batch_1"]
+
+
+def test_newest_new_file_skips_ingested_ones(monkeypatch):
+    inbox_zip("old.zip", age=86_400)
+    new = inbox_zip("new.zip", rows=REAL_ROWS[:2])
+    assert k.newest_new_inbox_file() == "new.zip"
+    monkeypatch.setattr(k, "ingested_hashes", lambda: {k._sha256(new): "kvk_batch_2"})
+    assert k.newest_new_inbox_file() == "old.zip"
+
+
+def test_bare_file_name_is_looked_up_in_the_inbox(tmp_path, monkeypatch):
+    path = inbox_zip("kvk.zip")
+    monkeypatch.chdir(tmp_path)                    # not the inbox
+    assert k._resolve("kvk.zip") == path.resolve()
+    assert json.loads(k.verify_dataset("kvk.zip"))["status"] == "PASSED"
+    assert k._resolve("'/somewhere/else.zip'") == Path("/somewhere/else.zip")

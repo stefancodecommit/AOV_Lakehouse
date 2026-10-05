@@ -7,7 +7,7 @@ import requests
 
 import cbs_bronze as b
 import cbs_silver as s
-from conftest import DP_81589, topic_keys
+from conftest import DP_81589, table_info, topic_keys
 
 Endpoint = b.Endpoint
 
@@ -125,9 +125,10 @@ def pipeline(monkeypatch):
     """Two small endpoints with fake HTTP and an in-memory ingestion log.
     state["fetched"] records every API call, including the Perioden lookup that
     plans the per-period requests (that small call is made on every run), except the
-    DataProperties lookups for the checks, which go to state["dataprops"]."""
+    DataProperties lookups for the checks, which go to state["dataprops"], and the
+    TableInfos lookups (every run), which go to state["tableinfos"]."""
     state = {"log": set(), "fetched": [], "written": [], "fail": set(), "dataprops": [],
-             "records": None}
+             "records": None, "tableinfos": [], "info": table_info()}
     eps = [Endpoint("81589NED", "TypedDataSet", split_by_period=True),
            Endpoint("81589NED", "Perioden")]
     monkeypatch.setattr(b, "ENDPOINTS", eps)
@@ -138,6 +139,9 @@ def pipeline(monkeypatch):
         if url.endswith("/DataProperties"):
             state["dataprops"].append(url)
             return DP_81589_FULL, 1
+        if url.endswith("/TableInfos"):
+            state["tableinfos"].append(url)
+            return [state["info"]], 1
         state["fetched"].append((url, params.get("$filter")))
         if url.endswith("/Perioden"):
             return periods("2024KW04", "2025KW01"), 1
@@ -174,14 +178,16 @@ def test_first_run_fetches_every_request_and_logs_it(pipeline):
     b.run(only=None, force=False, dry_run=False)
     # planning lookup + two periods + the Perioden code-list endpoint itself
     assert len(pipeline["fetched"]) == 4
-    assert len(pipeline["log"]) == 3 and pipeline["log"] == set(pipeline["written"])
+    # those three requests + the first TableInfos snapshot
+    assert len(pipeline["log"]) == 4 and pipeline["log"] == set(pipeline["written"])
+    assert sum("TableInfos" in k for k in pipeline["written"]) == 1
 
 
 def test_second_run_only_makes_the_planning_call(pipeline):
     b.run(None, False, False)
     pipeline["fetched"].clear()
     b.run(None, False, False)
-    assert pipeline["fetched"] == [PLAN_CALL] and len(pipeline["written"]) == 3
+    assert pipeline["fetched"] == [PLAN_CALL] and len(pipeline["written"]) == 4
 
 
 def test_failed_request_is_not_logged_and_is_retried(pipeline):
@@ -221,7 +227,7 @@ def test_batch_failing_a_check_is_quarantined_not_written_and_retried(pipeline):
     pipeline["records"] = lambda period: [business_record(period, TotaalBedrijven_1="n/a")]
     b.run(None, False, False)
     # the Perioden code list passes; both data periods fail
-    assert pipeline["written"] == ["81589NED/Perioden"]
+    assert [k for k in pipeline["written"] if "TableInfos" not in k] == ["81589NED/Perioden"]
     assert not any("TypedDataSet" in k for k in pipeline["log"])
     folders = quarantine_folders()
     assert len(folders) == 2 and folders[0].endswith("_81589ned_typeddataset_2024KW04")

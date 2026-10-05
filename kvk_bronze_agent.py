@@ -4,8 +4,9 @@ KVK intake agent: a local Ollama model guides you through getting the
 
 Flow
 ----
-1. The agent tells you where to download the zip and asks you to upload it
-   (type or drag the file path into the terminal).
+1. The agent looks in the inbox (inbox/kvk/, the folder Docker shares with your
+   computer) for a file that isn't ingested yet. If there is none, it tells you where to
+   download the zip: save it in the inbox, or type or drag its path into the terminal.
 2. verify_dataset() checks the file with checks/kvk.py. The checks run in Python,
    not in the model:
      - a readable zip with a CSV inside (or a CSV directly)
@@ -36,6 +37,7 @@ Usage
     python kvk_bronze_agent.py --model llama3.1
     python kvk_bronze_agent.py --file ~/Downloads/kvk-open-dataset-basis-bedrijfsgegevens.zip
                                                # no LLM: verify, confirm, ingest directly
+    python kvk_bronze_agent.py --inbox         # no LLM: the newest new file in inbox/kvk/
 """
 from __future__ import annotations
 
@@ -57,6 +59,7 @@ KVK_ROOT = project_path(settings["paths"]["lakehouse"]) / "bronze" / "kvk"
 DATA_TABLE = KVK_ROOT / "basis_bedrijfsgegevens"
 LOG_TABLE = KVK_ROOT / "_batch_log"
 QUARANTINE_ROOT = project_path(settings["paths"]["lakehouse"]) / "quarantine"
+INBOX = project_path(settings["paths"]["inbox"]) / "kvk"     # uploads land here (Docker volume)
 
 DATASET_PAGE = _CFG["dataset_page"]
 DOWNLOAD_URL = _CFG["download_url"]
@@ -94,7 +97,27 @@ VERIFIED: dict[str, Verification] = {}   # resolved file path -> latest verifica
 def _resolve(file_path: str) -> Path:
     # dragging a file into a terminal often adds quotes or escaped spaces
     cleaned = file_path.strip().strip("'\"").replace("\\ ", " ")
-    return Path(cleaned).expanduser().resolve()
+    path = Path(cleaned).expanduser()
+    if not path.exists() and path.name == cleaned and (INBOX / cleaned).exists():
+        path = INBOX / cleaned                       # a bare file name: look in the inbox
+    return path.resolve()
+
+
+def inbox_files() -> list[dict]:
+    """Zip and CSV files in the inbox, newest first, marked when already ingested."""
+    if not INBOX.is_dir():
+        return []
+    done = ingested_hashes()
+    files = sorted((f for f in INBOX.iterdir()
+                    if f.is_file() and f.suffix.lower() in {".zip", ".csv"}),
+                   key=lambda f: f.stat().st_mtime, reverse=True)
+    out = []
+    for f in files:
+        batch = done.get(_sha256(f))
+        out.append({"file": f.name, "size_mb": round(f.stat().st_size / 1e6, 1),
+                    "modified": datetime.fromtimestamp(f.stat().st_mtime, timezone.utc).isoformat(),
+                    "already_ingested_as": batch})
+    return out
 
 
 def ingested_hashes() -> dict[str, str]:
@@ -123,9 +146,30 @@ def get_dataset_info() -> str:
         "format": "zip containing one semicolon-separated CSV (too large for Excel)",
         "refreshed": "every working day",
         "license": LICENSE,
-        "next_step": "Ask the user to download the zip and give its file path "
-                     "(they can drag the file into the terminal).",
+        "inbox": str(INBOX),
+        "next_step": "Ask the user to download the zip and save it in the inbox folder, "
+                     "or give its file path (they can drag the file into the terminal).",
     })
+
+
+def list_inbox() -> str:
+    """
+    List the KVK files (zip or csv) waiting in the inbox folder, newest first.
+
+    Returns:
+        str: JSON with the inbox folder and its files: name, size, modification time and,
+             when this exact file is already in bronze, the batch_id it was ingested as.
+    """
+    files = inbox_files()
+    new = [f["file"] for f in files if not f["already_ingested_as"]]
+    if new:
+        next_step = (f"Tell the user that {new[0]} is new and offer to verify it "
+                     f"(call verify_dataset with '{new[0]}').")
+    else:
+        next_step = ("There is no new file (every file here is already ingested). Call "
+                     "get_dataset_info and ask the user to download a new zip into the inbox.")
+    return json.dumps({"inbox": str(INBOX), "files": files, "new_files": new,
+                       "next_step": next_step})
 
 
 def verify_dataset(file_path: str) -> str:
@@ -316,16 +360,19 @@ def write_log(v: Verification, batch_id: str, now: datetime, rows: int) -> None:
 
 
 # --------------------------------------------------------------------------- agent
-TOOLS = {f.__name__: f for f in (get_dataset_info, verify_dataset,
+TOOLS = {f.__name__: f for f in (get_dataset_info, list_inbox, verify_dataset,
                                  ingest_verified_dataset, list_batches)}
 
 SYSTEM_PROMPT = f"""You are the KVK intake agent. Your job is to get the KVK Handelsregister
 Open Dataset Basis Bedrijfsgegevens into the KVK bronze Delta Lake.
 
 Steps:
-1. Call get_dataset_info and tell the user, briefly, to download the zip from
-   {DOWNLOAD_URL} and then give you the file path (they can drag the file into the terminal).
-2. When the user gives a path, call verify_dataset with it. Summarise the report:
+1. Call list_inbox. If it has a file that is not already ingested, tell the user and
+   offer to verify the newest one. Otherwise call get_dataset_info and tell the user,
+   briefly, to download the zip from {DOWNLOAD_URL} and save it in the inbox folder
+   ({INBOX}), or give you the file path (they can drag the file into the terminal).
+2. When the user gives a path or file name, or agrees to an inbox file, call
+   verify_dataset with it (an inbox file name alone is enough). Summarise the report:
    status, row count, recognised columns, errors and warnings.
 3. If the status is PASSED, ask the user whether to ingest it. Only if they agree,
    call ingest_verified_dataset with the same path. The tool asks the user to type YES itself.
@@ -381,6 +428,10 @@ def run_agent(model: str) -> None:
         messages.append({"role": "user", "content": user})
 
 
+def newest_new_inbox_file() -> str | None:
+    return next((f["file"] for f in inbox_files() if not f["already_ingested_as"]), None)
+
+
 def run_direct(file_path: str) -> None:
     """Same verification and gate, without an LLM."""
     report = json.loads(verify_dataset(file_path))
@@ -394,6 +445,18 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser(description="Get the KVK open dataset into the KVK bronze layer.")
     ap.add_argument("--model", default=OLLAMA_MODEL,
                     help="Ollama model with tool support (default: ollama.model in config.yaml)")
-    ap.add_argument("--file", help="skip the agent: verify and ingest this file directly")
+    src = ap.add_mutually_exclusive_group()
+    src.add_argument("--file", help="skip the agent: verify and ingest this file directly "
+                                    "(a bare file name is looked up in the inbox)")
+    src.add_argument("--inbox", action="store_true",
+                     help="skip the agent: verify and ingest the newest new file in the inbox")
     args = ap.parse_args()
-    run_direct(args.file) if args.file else run_agent(args.model)
+    if args.inbox:
+        newest = newest_new_inbox_file()
+        if newest is None:
+            sys.exit(f"No new KVK file in {INBOX}")
+        run_direct(newest)
+    elif args.file:
+        run_direct(args.file)
+    else:
+        run_agent(args.model)

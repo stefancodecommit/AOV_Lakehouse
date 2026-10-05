@@ -43,6 +43,7 @@ def isolated_lakehouse(tmp_path, monkeypatch):
     monkeypatch.setattr(kvk_bronze_agent, "DATA_TABLE", tmp_path / "bronze" / "kvk" / "basis_bedrijfsgegevens")
     monkeypatch.setattr(kvk_bronze_agent, "LOG_TABLE", tmp_path / "bronze" / "kvk" / "_batch_log")
     monkeypatch.setattr(kvk_bronze_agent, "QUARANTINE_ROOT", tmp_path / "quarantine")
+    monkeypatch.setattr(kvk_bronze_agent, "INBOX", tmp_path / "inbox" / "kvk")
     monkeypatch.setattr(maintenance, "LAKEHOUSE", tmp_path)
     monkeypatch.setattr(maintenance, "QUARANTINE_ROOT", tmp_path / "quarantine")
     monkeypatch.setattr(maintenance, "BATCH_LOGS", {
@@ -212,6 +213,13 @@ def sample_crosswalk():
     df = pd.DataFrame(CROSSWALK, columns=list(reference_bronze.COLUMNS))
     return df.assign(_batch_id=CROSSWALK_BATCH, _ingested_at=INGESTED_AT, _source_version="v2.0",
                      _row_number=range(1, len(df) + 1))
+
+
+def table_info(frequency="Perkwartaal", modified="2026-09-15T02:00:00",
+               status="Regulier", metadata="2026-09-15T02:00:00"):
+    """A TableInfos record with the fields the lifecycle check reads."""
+    return {"ID": 0, "Identifier": "x", "Frequency": frequency, "Modified": modified,
+            "MetaDataModified": metadata, "OutputStatus": status, "Period": "2020-2026"}
 
 
 @pytest.fixture

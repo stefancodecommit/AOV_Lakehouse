@@ -261,11 +261,14 @@ mix of new and old tables. To prevent that:
 
 - **Discontinued CBS tables:** CBS regularly stops a table and continues the series under
   a new ID (83130NED ended in 2023 this way). Bronze checks each table's status and last
-  modification date in CBS's `TableInfos` and warns when a table is stopped or hasn't
-  been updated for longer than its normal interval.
-- **Scope changes:** when `START_YEAR` changes or a table is removed from the
-  configuration, a cleanup step removes bronze rows and log entries outside the new
-  scope, so bronze always matches the configuration.
+  modification date in CBS's `TableInfos` on every run and warns when a table is stopped
+  or hasn't been updated for longer than its normal interval (quarterly 4 months, yearly
+  15 months). Warnings don't block ingestion. A `TableInfos` snapshot is kept in bronze
+  each time CBS changes it.
+- **Scope changes:** when the start year or period preference changes or a table is
+  removed from `config.yaml`, `python cbs_bronze.py --cleanup-scope` (try `--dry-run`
+  first) removes bronze rows and log entries outside the new scope, so bronze matches
+  the configuration. It's run by hand, never automatically.
 
 ## Configuration
 
@@ -357,7 +360,8 @@ dashboard/              Streamlit app (to do)
 orchestration/          Dagster definitions: assets, schedules, checks, maintenance (to do)
 tests/                  pytest
 inspect_lakehouse.py    overview of all Delta tables and problems after a run
-inbox/                  KVK zip uploads and downloaded reference files (not in git)
+inbox/                  kvk/: KVK zip uploads for the agent; reference/: downloaded
+                        reference files (not in git)
 docker-compose.yml      (to do)
 Dockerfile              (to do)
 .github/workflows/      CI: tests.yml runs pytest on every push
@@ -372,15 +376,15 @@ TODO.md                 open work
 | Part | Status |
 |---|---|
 | First real run (all built layers) | Done 2026-10-05; results in `TODO.md` |
-| Bronze CBS | Built and run on real data (92 requests, 39 s) |
-| Bronze KVK + agent | Built and run on the real file (1.92M rows) with Ollama |
+| Bronze CBS | Built and run on real data (92 requests, 39 s); lifecycle warnings, scope cleanup |
+| Bronze KVK + agent | Built and run on the real file (1.92M rows) with Ollama; reads `inbox/kvk/` |
 | Reference: SBI 2008 -> 2025 crosswalk | Built; loaded v2.0 |
 | Silver CBS | Built, incl. `map_sbi2008_sbi2025`; checked against CBS StatLine |
 | Silver KVK | To do; sector = main activity, edge cases as flags |
 | Data checks before ingestion (CBS) | Built (`checks/cbs.py`) |
 | Quarantine | Built for CBS, KVK and reference files; monthly cleanup in `maintenance.py` |
 | Alerting, freshness checks | To do |
-| pytest | 186 tests incl. real Delta tables in tmp_path; one opt-in live CBS test |
+| pytest | 203 tests incl. real Delta tables in tmp_path; one opt-in live CBS test |
 | Configuration file | Built (`config.yaml` + `config.py`) |
 | Gold | To do; tables proposed around the main question |
 | Streamlit dashboard | To do; pages proposed |

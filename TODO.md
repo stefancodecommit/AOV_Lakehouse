@@ -111,11 +111,21 @@ table's DataProperties, fetched live once per table per run, only when there is 
 - Ran on all 92 batches already in bronze: all pass (no false alarms). A forced
   re-fetch of 80072NED with live checks: 26 of 26 passed.
 
-### CBS: source lifecycle and scope
-- [ ] Ingest each table's `TableInfos`; warn when CBS marks a table as stopped or it
-      hasn't been modified for longer than its normal interval
-- [ ] Cleanup step for scope changes: remove bronze rows and log entries outside the
-      configured start year or for tables no longer configured
+### CBS: source lifecycle and scope (done 2026-10-05)
+- [x] Ingest each table's `TableInfos`; warn when CBS marks a table as stopped or it
+      hasn't been modified for longer than its normal interval. Every run fetches it (5
+      small requests); a snapshot is stored in `bronze/<table>_tableinfos` only when its
+      Modified/MetaDataModified dates change (part of the request key, so bronze keeps a
+      history). Warnings never block ingestion (`check_table_lifecycle`, severity
+      warning); `inspect_lakehouse.py` shows them separately from problems. Real run:
+      83130NED warned as stopped (OutputStatus Gediscontinueerd); others regular
+- [x] Cleanup step for scope changes: `python cbs_bronze.py --cleanup-scope [--dry-run]`
+      removes tables no longer configured (with their log entries) and periods outside
+      the start year / period preference. Periods are judged with the ingestion rule on
+      CBS's current period list (the Perioden table in bronze is a one-time snapshot and
+      would miss newer periods); periods CBS stopped listing are kept. KVK and reference
+      tables are never touched. Tested on a copy of the real lakehouse with start year
+      2025: 54 periods removed, the next run fetched nothing again
 
 ### Reference: SBI 2008 -> SBI 2025 crosswalk (done 2026-10-05)
 The CBS tables used here classify sectors with SBI 2008 (CBS publishes SBI 2025 versions
@@ -161,7 +171,10 @@ Source: CBS "schakelschema SBI 2008 - SBI 2025" v2.0
 - [x] One row per company, with SBI codes as comma-separated lists (see above)
 - [x] Move the verification checks into `checks/kvk.py` so the agent and Dagster both use
       them (2026-10-05); the report on the real file is identical before and after
-- [ ] Read uploads from the `inbox/` folder (needed for Docker)
+- [x] Read uploads from `inbox/kvk/` (2026-10-05): agent tool `list_inbox` (newest first,
+      marks files already ingested, says what to do next), bare file names are looked up
+      in the inbox, `python kvk_bronze_agent.py --inbox` loads the newest new file
+      without the LLM. Checked with Ollama on the real inbox
 
 ## 2. Silver
 
@@ -291,7 +304,7 @@ higher sickness absence. See `PROJECT.md` for the sub-questions.
 `tests/test_kvk_logic.py` the KVK file verification; `tests/test_reference.py` the SBI
 crosswalk; `tests/test_checks.py` the CBS and KVK checks and quarantine;
 `tests/test_maintenance.py` the quarantine cleanup; `tests/test_config.py` the
-configuration; `tests/test_delta.py` writes real Delta tables in `tmp_path` (186 tests,
+configuration; `tests/test_delta.py` writes real Delta tables in `tmp_path` (203 tests,
 ~7 s). `conftest.py` fails a test when any module still points at the real
 lakehouse or inbox. Checked by breaking the code on purpose:
 removing the delete-before-write, an empty `done_keys()` and non-UTC silver timestamps

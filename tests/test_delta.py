@@ -12,7 +12,7 @@ from deltalake import DeltaTable
 import cbs_bronze as b
 import cbs_silver as s
 import reference_bronze as r
-from conftest import CROSSWALK_BATCH, INGESTED_AT, sample_bronze, sample_crosswalk
+from conftest import CROSSWALK_BATCH, INGESTED_AT, sample_bronze, sample_crosswalk, table_info
 from test_bronze_logic import periods
 
 Endpoint = b.Endpoint
@@ -105,6 +105,8 @@ def cbs_api(monkeypatch):
             return state["periods"], 1
         if url.endswith("/DataProperties"):
             return DP_80072, 1
+        if url.endswith("/TableInfos"):
+            return [table_info()], 1
         state["data_calls"] += 1
         period = params["$filter"].split("'")[1]
         return records(period, state["value"]), 1
@@ -127,7 +129,33 @@ def test_run_twice_then_revision(cbs_api):
     df = bronze_rows()
     assert list(df._period_status) == ["Definitief", "Definitief"]
     assert json.loads(df.raw_json.iloc[1])["Ziekteverzuimpercentage_1"] == 6.3
-    assert len(b.done_keys()) == 3                 # old provisional key stays in the log
+    data_keys = [k for k in b.done_keys() if "TypedDataSet" in k]
+    assert len(data_keys) == 3                     # old provisional key stays in the log
+
+
+# =========================================================================== TableInfos
+def test_table_infos_snapshot_only_when_cbs_changes_it(cbs_api, monkeypatch, caplog):
+    info = {"value": table_info()}
+    real_fetch = b.fetch_all
+    monkeypatch.setattr(b, "fetch_all", lambda s, url, params: (
+        ([info["value"]], 1) if url.endswith("/TableInfos") else real_fetch(s, url, params)))
+    infos = Endpoint("80072NED", "TableInfos")
+
+    b.run(None, False, False)
+    b.run(None, False, False)                      # unchanged: nothing new stored
+    assert len(bronze_rows(infos)) == 1
+
+    info["value"] = table_info(modified="2026-10-01T02:00:00")
+    b.run(None, False, False)                      # CBS updated the table: second version
+    df = bronze_rows(infos)
+    assert sorted(json.loads(r)["Modified"] for r in df.raw_json) == [
+        "2026-09-15T02:00:00", "2026-10-01T02:00:00"]
+
+    info["value"] = table_info("Stopgezet", "2024-04-17T02:00:00", "Gediscontinueerd")
+    caplog.clear()
+    b.run(None, False, False)
+    assert any("CBS has stopped this table" in r.message for r in caplog.records)
+    assert len(bronze_rows(infos)) == 3
 
 
 # =========================================================================== silver end to end
@@ -211,3 +239,57 @@ def test_live_cbs_periods_and_status():
     for p in selected:
         assert (p.get("Status") or "").strip() in {"Definitief", "NaderVoorlopig", "Voorlopig"}, p
         assert s.parse_period(p["Key"].strip())["period_type"] == "quarter", p
+
+
+# =========================================================================== scope cleanup
+def test_out_of_scope_periods_rule():
+    ep = Endpoint("80072NED", "TypedDataSet", split_by_period=True, start_year=2026)
+    cbs = periods("2025KW04", "2025JJ00", "2026KW01")
+    # 2025KW04: before the start year -> out; 2019KW01: CBS no longer lists it -> kept
+    assert b.out_of_scope_periods(ep, {"2025KW04", "2026KW01", "2019KW01"}, cbs) == {"2025KW04"}
+    yearly = Endpoint("80072NED", "TypedDataSet", split_by_period=True, start_year=2025,
+                      period_types=("JJ",))
+    assert b.out_of_scope_periods(yearly, {"2025KW04", "2025JJ00"}, cbs) == {"2025KW04"}
+
+
+def test_cleanup_scope_after_a_later_start_year(cbs_api, monkeypatch):
+    b.run(None, False, False)                      # 2025KW04 and 2026KW01 in bronze
+    later = Endpoint("80072NED", "TypedDataSet", split_by_period=True, start_year=2026)
+    monkeypatch.setattr(b, "ENDPOINTS", [later])
+
+    planned = b.cleanup_scope(dry_run=True)
+    assert planned == ["remove 1 periods from bronze/80072ned_typeddataset: 2025KW04"]
+    assert len(bronze_rows()) == 2                 # dry run changed nothing
+
+    assert b.cleanup_scope(dry_run=False) == planned
+    assert list(bronze_rows()._period) == ["2026KW01"]
+    assert not any("2025KW04" in k for k in b.done_keys())
+    assert b.cleanup_scope(dry_run=False) == []    # nothing left to do
+
+    calls = cbs_api["data_calls"]
+    b.run(None, False, False)                      # and ingestion doesn't fetch it again
+    assert cbs_api["data_calls"] == calls
+
+
+def test_cleanup_scope_removes_tables_no_longer_configured(cbs_api, monkeypatch):
+    b.run(None, False, False)
+    b.write_bronze(b.plan_requests(None, Endpoint("80072NED", "Perioden"))[0],
+                   [{"Key": "2026KW01"}])
+    b.log_success(b.plan_requests(None, Endpoint("80072NED", "Perioden"))[0], 1, 1)
+    monkeypatch.setattr(b, "ENDPOINTS", [Endpoint("80072NED", "Perioden")])
+
+    actions = b.cleanup_scope(dry_run=False)
+    assert sorted(actions) == ["remove table bronze/80072ned_tableinfos (not in config.yaml)",
+                               "remove table bronze/80072ned_typeddataset (not in config.yaml)"]
+    assert not (b.BRONZE_ROOT / "80072ned_typeddataset").exists()
+    assert (b.BRONZE_ROOT / "80072ned_perioden").exists()
+    assert b.done_keys() == {"80072NED/Perioden"}
+
+
+def test_cleanup_scope_leaves_kvk_and_reference_alone(tmp_path):
+    from deltalake import write_deltalake
+    import pyarrow as pa
+    write_deltalake(str(b.BRONZE_ROOT / "kvk" / "basis_bedrijfsgegevens"), pa.table({"a": [1]}))
+    write_deltalake(str(b.BRONZE_ROOT / "reference" / "sbi2008_sbi2025"), pa.table({"a": [1]}))
+    assert b.cleanup_scope(session=object(), dry_run=False) == []
+    assert (b.BRONZE_ROOT / "kvk" / "basis_bedrijfsgegevens").exists()
