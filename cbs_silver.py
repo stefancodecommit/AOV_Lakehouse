@@ -15,6 +15,9 @@ dim_region          regions of 81644NED with their level (country, landsdeel, pr
 dim_survey_measure  measures of the absence survey: name, CBS title, topic group, unit
 map_characteristic  every company-characteristic key per source table and what it is:
                     total, sector or size class
+map_sbi2008_sbi2025 CBS crosswalk SBI 2008 <-> SBI 2025 (from reference_bronze.py), latest
+                    file version only. Many-to-many: link_type says whether a link is
+                    1:1, a split (one 2008 code -> several 2025 codes), a merge, or both
 
 Facts
 -----
@@ -80,6 +83,23 @@ def read_bronze(table_id: str, entity: str) -> pd.DataFrame:
     raw = DeltaTable(str(path)).to_pandas(columns=["_period_status", "_ingested_at", "raw_json"])
     # ID is only a row number in data rows; in CategoryGroups/DataProperties it's a real key
     return parse_raw(raw, drop_id=entity == "TypedDataSet")
+
+
+def read_reference(dataset: str) -> pd.DataFrame:
+    """Rows of the latest successful batch of a reference table (reference_bronze.py).
+    Bronze keeps every file version; silver uses only the newest one."""
+    root = BRONZE_ROOT / "reference"
+    if not (root / dataset / "_delta_log").exists() or not (root / "_batch_log" / "_delta_log").exists():
+        log.warning("Reference table missing: %s (run reference_bronze.py first)", root / dataset)
+        return pd.DataFrame()
+    from deltalake import DeltaTable
+    batches = DeltaTable(str(root / "_batch_log")).to_pandas()
+    batches = batches[(batches["dataset"] == dataset) & (batches["status"] == "success")]
+    if batches.empty:
+        return pd.DataFrame()
+    newest = batches.sort_values("ingested_at")["batch_id"].iloc[-1]
+    df = DeltaTable(str(root / dataset)).to_pandas()
+    return df[df["_batch_id"] == newest].sort_values("_row_number").reset_index(drop=True)
 
 
 def parse_raw(raw: pd.DataFrame, drop_id: bool = True) -> pd.DataFrame:
@@ -478,7 +498,29 @@ def build_fct_counts(table_id: str, data: pd.DataFrame, dataprops: pd.DataFrame,
 
 
 # =========================================================================== orchestration
-def build_all(read=read_bronze) -> dict[str, pd.DataFrame]:
+def build_map_sbi2008_sbi2025(ref: pd.DataFrame) -> pd.DataFrame:
+    if ref.empty:
+        return pd.DataFrame()
+    df = pd.DataFrame({
+        "sbi2008_code": ref["sbi2008"], "sbi2008_division": ref["sbi2008"].str[:2],
+        "sbi2008_title": ref["sbi2008_title"],
+        "sbi2025_code": ref["sbi2025"], "sbi2025_division": ref["sbi2025"].str[:2],
+        "sbi2025_title": ref["sbi2025_title"], "link_description": ref["link_description"]})
+    df = df.drop_duplicates(["sbi2008_code", "sbi2025_code"])     # bronze checks this too
+    df["sbi2025_targets"] = df.groupby("sbi2008_code")["sbi2025_code"].transform("size")
+    df["sbi2008_sources"] = df.groupby("sbi2025_code")["sbi2008_code"].transform("size")
+    split, merge = df["sbi2025_targets"] > 1, df["sbi2008_sources"] > 1
+    df["link_type"] = "1:1"
+    df.loc[split & ~merge, "link_type"] = "split"
+    df.loc[merge & ~split, "link_type"] = "merge"
+    df.loc[split & merge, "link_type"] = "many-to-many"
+    df["source_version"] = ref["_source_version"].to_numpy()
+    df["batch_id"] = ref["_batch_id"].to_numpy()
+    df["ingested_at"] = ref["_ingested_at"].to_numpy()
+    return df.sort_values(["sbi2008_code", "sbi2025_code"]).reset_index(drop=True)
+
+
+def build_all(read=read_bronze, read_ref=read_reference) -> dict[str, pd.DataFrame]:
     code_lists = {t: read(t, dim) for t, dim in CHARACTERISTIC_DIMS.items()}
     category_groups = {t: read(t, "CategoryGroups") for t in ("80072NED", *SURVEY_TABLES)}
     dataprops = {t: read(t, "DataProperties") for t in CHARACTERISTIC_DIMS}
@@ -509,6 +551,7 @@ def build_all(read=read_bronze) -> dict[str, pd.DataFrame]:
         "dim_region": build_dim_region(read("81644NED", "RegioS")),
         "dim_survey_measure": dim_measure,
         "map_characteristic": mapping,
+        "map_sbi2008_sbi2025": build_map_sbi2008_sbi2025(read_ref("sbi2008_sbi2025")),
         "fct_absence_rate": fct_rate,
         "fct_absence_survey": fct_survey,
         "fct_business_count": fct_business,

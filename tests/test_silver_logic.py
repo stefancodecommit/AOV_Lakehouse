@@ -287,6 +287,8 @@ EXPECTED_COLUMNS = {
     "dim_region": {"region_key", "region_name", "region_level"},
     "dim_survey_measure": {"source_table", "measure_key", "measure_name", "unit"},
     "map_characteristic": {"source_table", "characteristic_key", "member_type", "sector_key", "size_key"},
+    "map_sbi2008_sbi2025": {"sbi2008_code", "sbi2025_code", "sbi2008_division", "sbi2025_division",
+                            "link_type", "sbi2025_targets", "sbi2008_sources", "source_version"},
     "fct_absence_rate": {"period_key", "characteristic_key", "absence_pct", "period_status"},
     "fct_absence_survey": {"source_table", "measure_name", "value", "lower_95", "upper_95"},
     "fct_business_count": {"period_key", "sector_key", "breakdown", "count"},

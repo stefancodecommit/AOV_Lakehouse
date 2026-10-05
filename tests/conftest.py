@@ -14,6 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import cbs_bronze  # noqa: E402
 import cbs_silver  # noqa: E402
+import reference_bronze  # noqa: E402
 
 INGESTED_AT = pd.Timestamp("2026-10-05 09:00", tz="UTC")
 MARGES = ["MW00000", "MOG0095", "MBG0095"]
@@ -28,6 +29,10 @@ def isolated_lakehouse(tmp_path, monkeypatch):
     monkeypatch.setattr(cbs_bronze, "PAUSE_SECONDS", 0)
     monkeypatch.setattr(cbs_silver, "BRONZE_ROOT", tmp_path / "bronze")
     monkeypatch.setattr(cbs_silver, "SILVER_ROOT", tmp_path / "silver")
+    ref = tmp_path / "bronze" / "reference"
+    monkeypatch.setattr(reference_bronze, "DATA_TABLE", ref / "sbi2008_sbi2025")
+    monkeypatch.setattr(reference_bronze, "LOG_TABLE", ref / "_batch_log")
+    monkeypatch.setattr(reference_bronze, "DOWNLOAD_DIR", tmp_path / "inbox")
 
 
 # --------------------------------------------------------------------------- builders
@@ -164,6 +169,25 @@ def sample_bronze():
     }
 
 
+# Real v2.0 crosswalk rows (reference_bronze.py), as they sit in bronze
+CROSSWALK = [
+    ["0111", "01", "Teelt van granen, peulvruchten en oliehoudende zaden", "01110", "01",
+     "Teelt van andere granen dan rijst", "Teelt van granen (excl. rijst)"],
+    ["01199", "01", "Teelt van overige eenjarige gewassen (rest)", "01199", "01",
+     "Teelt van overige eenjarige gewassen (rest)", "Teelt van overige eenjarige gewassen"],
+    ["01199", "01", "Teelt van overige eenjarige gewassen (rest)", "01120", "01",
+     "Teelt van rijst", "Teelt van rijst (in principe leeg)"],
+    ["74103", "74", "Interieur- en ruimtelijk ontwerp", "71111", "74",
+     "Activiteiten van architecten", "Ruimtelijk ontwerp"]]
+CROSSWALK_BATCH = "sbi2008_sbi2025_test"
+
+
+def sample_crosswalk():
+    df = pd.DataFrame(CROSSWALK, columns=list(reference_bronze.COLUMNS))
+    return df.assign(_batch_id=CROSSWALK_BATCH, _ingested_at=INGESTED_AT, _source_version="v2.0",
+                     _row_number=range(1, len(df) + 1))
+
+
 @pytest.fixture
 def bronze():
     """Mutable copy of the sample bronze tables, keyed by (table_id, entity)."""
@@ -184,4 +208,4 @@ def fake_read(bronze):
 @pytest.fixture
 def silver(fake_read):
     """All silver tables built from the sample bronze tables."""
-    return cbs_silver.build_all(read=fake_read)
+    return cbs_silver.build_all(read=fake_read, read_ref=lambda dataset: sample_crosswalk())

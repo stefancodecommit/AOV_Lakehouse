@@ -11,7 +11,8 @@ from deltalake import DeltaTable
 
 import cbs_bronze as b
 import cbs_silver as s
-from conftest import sample_bronze
+import reference_bronze as r
+from conftest import CROSSWALK_BATCH, INGESTED_AT, sample_bronze, sample_crosswalk
 from test_bronze_logic import periods
 
 Endpoint = b.Endpoint
@@ -132,7 +133,10 @@ def bronze_delta():
         ep = Endpoint(table_id, entity)
         status = raw._period_status.iloc[0]
         req = b.Request(endpoint=ep, key=f"{table_id}/{entity}", params={}, period_status=status)
-        b.write_bronze(req, [json.loads(r) for r in raw.raw_json])
+        b.write_bronze(req, [json.loads(row) for row in raw.raw_json])
+    ref = sample_crosswalk()
+    r.write_batch(ref[list(r.COLUMNS)], CROSSWALK_BATCH, INGESTED_AT, "v20.xlsx", None, "sha", "v2.0")
+    r.write_log(CROSSWALK_BATCH, INGESTED_AT, "v20.xlsx", None, "sha", "v2.0", len(ref))
 
 
 def silver_table(name):

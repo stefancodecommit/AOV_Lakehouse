@@ -108,6 +108,29 @@ that fails is not written and not logged, so it's retried next run.
 - [ ] Cleanup step for scope changes: remove bronze rows and log entries outside the
       configured start year or for tables no longer configured
 
+### Reference: SBI 2008 -> SBI 2025 crosswalk (done 2026-10-05)
+The CBS tables used here classify sectors with SBI 2008 (CBS publishes SBI 2025 versions
+as separate tables, e.g. 86280NED for the business counts). The KVK file mixes both:
+of 2.55M SBI codes, 1.42M exist only in SBI 2025 and 0.50M only in SBI 2008; 224
+distinct codes are in neither list (mostly 6-digit KVK sub-codes such as 011301).
+Source: CBS "schakelschema SBI 2008 - SBI 2025" v2.0
+(https://www.cbs.nl/-/media/cbs/onze-diensten/methoden/classificaties/documents/2026/schakelschema-sbi2008sbi2025-v20.xlsx).
+- [x] `reference_bronze.py`: download (or `--file`), check, load into
+      `lakehouse/bronze/reference/sbi2008_sbi2025` with a batch log
+- [x] No double loads: the file's SHA-256 is logged and the same file is skipped
+      (whatever its name); one Delta commit per file; rows of a batch that was written
+      but never logged are removed before the next write; a new CBS version is a new batch
+- [x] Checks: expected sheet and columns, codes 4-6 digits, no lost leading zeros, no
+      duplicate (SBI 2008, SBI 2025) pairs. v2.0: 1,564 rows, 934 SBI 2008 and 907
+      SBI 2025 codes, many-to-many (218 codes split, 277 merge). Warning (CBS quirk): in
+      5 rows the SBI 2025 2-digit column was copied from the SBI 2008 side (71111 / 74)
+- [x] Silver `map_sbi2008_sbi2025` from the latest batch only (see Silver CBS)
+- [ ] Check periodically for a newer version of the file on the CBS classifications page
+      and load it with `--url` (Dagster: a manual or monthly reference asset)
+- [ ] Decide how gold/silver KVK uses the many-to-many links: map KVK SBI 2025 codes
+      back to SBI 2008 for the CBS sectors, and handle split codes (e.g. weight, or
+      assign to the main link only)
+
 ### Quarantine
 - [ ] Batches that fail a runtime check go to `lakehouse/quarantine/<source>/<timestamp>/`
       with the check report; not logged as ingested
@@ -123,6 +146,9 @@ that fails is not written and not logged, so it's retried next run.
 
 ### CBS
 - [x] Dimensions, facts and mapping table (`cbs_silver.py`)
+- [x] `map_sbi2008_sbi2025`: crosswalk with division per code (from the code itself),
+      `sbi2025_targets`, `sbi2008_sources` and `link_type` (1:1, split, merge,
+      many-to-many), `source_version`, `batch_id`
 - [ ] Write into a staging folder and replace the live tables only when every table
       succeeded; record the `run_id` on every table
 
@@ -142,6 +168,9 @@ Planned columns:
 - [ ] `start_date` (date), `is_active` (bool from J/N)
 - [ ] `legal_form`, `insolvency_code` (null when empty), `postcode_region`, `member_state`
 - [ ] `sbi_code`, `sbi_section`, `sbi_division` (joinable with `dim_sector`)
+- [ ] `sbi_version` (2008 / 2025 / unknown) per code: the KVK file mixes both; map 2025
+      codes to SBI 2008 with `map_sbi2008_sbi2025` before joining with `dim_sector`.
+      Strip 6-digit KVK sub-codes to 5 digits before the lookup
 - [ ] `is_main_activity`: needed, the CSV lists several activities per company. Explode
       "SBI activiteiten" to one row per company per code, or keep one row per company
       with the main activity only (decide per gold question; several main codes occur)
@@ -208,11 +237,19 @@ higher sickness absence. See `PROJECT.md` for the sub-questions.
       retention)
 - [ ] README: how to configure, start the stack and run the KVK agent
 
+## Known issues
+- [ ] deltalake aborts at interpreter exit ("terminate called without an active
+      exception", exit code 134) in some runs after reading a Delta table: ~50% with
+      `to_pyarrow_table()`, ~5% with `to_pandas()`; seen with deltalake 1.4.2, 1.5.1 and
+      1.6.6. The work is done before it happens, but the exit code is wrong (4 of 20
+      `cbs_bronze.py` runs). Matters for Dagster and CI: find or report the upstream
+      issue in delta-rs; meanwhile, judge a run by its log, not only its exit code.
+
 ## 7. Tests and CI
 
 `tests/test_bronze_logic.py` and `tests/test_silver_logic.py` cover the pure logic;
-`tests/test_kvk_logic.py` the KVK file verification; `tests/test_delta.py` writes real
-Delta tables in `tmp_path` (117 tests, ~6 s). Checked by breaking the code on purpose:
+`tests/test_kvk_logic.py` the KVK file verification; `tests/test_reference.py` the SBI
+crosswalk; `tests/test_delta.py` writes real Delta tables in `tmp_path` (132 tests, ~7 s). Checked by breaking the code on purpose:
 removing the delete-before-write, an empty `done_keys()` and non-UTC silver timestamps
 each make the right tests fail.
 

@@ -89,6 +89,8 @@ lakehouse/
             _ingestion_log/            CBS: one row per API request already ingested
             kvk/basis_bedrijfsgegevens KVK raw CSV rows, one snapshot per batch
             kvk/_batch_log             KVK: one row per uploaded batch
+            reference/sbi2008_sbi2025  CBS SBI 2008 -> SBI 2025 crosswalk, one batch per file version
+            reference/_batch_log       reference files: one row per loaded file (by SHA-256)
   quarantine/                          batches that failed their checks, kept for inspection
   silver/   dim_*, fct_*, map_*        cleaned, typed, conformed tables
   gold/     ...                        tables shaped for the dashboard
@@ -114,7 +116,16 @@ quarters where available, otherwise years.
 
 Anonymised data on all Dutch BVs and NVs: start date, active flag, insolvency, legal form,
 postcode region (2 digits), SBI activities, member state. A zip with one semicolon-separated
-CSV, refreshed every working day. No company names or KVK numbers.
+CSV, refreshed every working day. No company names or KVK numbers. Its SBI codes mix
+SBI 2008 and SBI 2025 (Oct 2026: mostly SBI 2025).
+
+### CBS crosswalk SBI 2008 -> SBI 2025
+
+An xlsx from the CBS classifications page ("schakelschema", v2.0) linking SBI 2008 codes
+to SBI 2025 codes. Many-to-many: a code can be split over several new codes or merged with
+others. Needed to join KVK codes (partly SBI 2025) with the CBS tables (SBI 2008).
+Loaded by `reference_bronze.py`; the same file (by SHA-256) is never loaded twice, and
+silver `map_sbi2008_sbi2025` uses the newest version only.
 
 ## Layers
 
