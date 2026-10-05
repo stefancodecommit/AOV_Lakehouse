@@ -148,14 +148,19 @@ Source: CBS "schakelschema SBI 2008 - SBI 2025" v2.0
       when the file was rejected only because it is already in bronze)
 - [x] Reference files (SBI crosswalk) that fail their checks are quarantined the same way
 - [x] `inspect_lakehouse.py` lists quarantined batches and counts them as problems
-- [ ] Decide when to clean up quarantine (e.g. remove entries whose request was later
-      ingested successfully; part of the monthly maintenance job)
+- [x] Monthly quarantine cleanup (decided 2026-10-05): `python maintenance.py quarantine
+      [--dry-run]` removes entries that are resolved (same CBS table/entity/period, or a
+      newer KVK/reference batch, ingested after the entry) and entries older than
+      `quarantine.retention_days` (90). A problem that persists is quarantined again by
+      the next run. Tested on real data: a corrupted 2026KW02 batch was kept while
+      unresolved and removed after the correct data was ingested
+- [ ] Schedule it monthly in Dagster (section 5, maintenance job)
 
 ### KVK
 - [x] Load the first real file and confirm the CSV header (see "Bronze KVK" above)
 - [x] One row per company, with SBI codes as comma-separated lists (see above)
-- [ ] Move the verification checks into `checks/` (like `checks/cbs.py`) so the agent and
-      Dagster both use them
+- [x] Move the verification checks into `checks/kvk.py` so the agent and Dagster both use
+      them (2026-10-05); the report on the real file is identical before and after
 - [ ] Read uploads from the `inbox/` folder (needed for Docker)
 
 ## 2. Silver
@@ -256,8 +261,9 @@ higher sickness absence. See `PROJECT.md` for the sub-questions.
 - [ ] Freshness checks: CBS quarterly data at most 4 months behind, yearly data at most
       15 months, KVK snapshot within the agreed upload interval
 - [ ] Alerts (email or Slack) for failed runs and failed checks
-- [ ] Monthly maintenance job: KVK retention (latest + one snapshot per month), Delta
-      `optimize` and `vacuum`; never at the same time as an ingestion
+- [ ] Monthly maintenance job: quarantine cleanup (built: `maintenance.py quarantine`),
+      KVK retention (latest + one snapshot per month), Delta `optimize` and `vacuum`;
+      never at the same time as an ingestion
 - [ ] Decide whether quarterly is often enough, given CBS release dates vary
       (a weekly run is cheap if nothing new is published)
 
@@ -283,9 +289,10 @@ higher sickness absence. See `PROJECT.md` for the sub-questions.
 
 `tests/test_bronze_logic.py` and `tests/test_silver_logic.py` cover the pure logic;
 `tests/test_kvk_logic.py` the KVK file verification; `tests/test_reference.py` the SBI
-crosswalk; `tests/test_checks.py` the data checks and quarantine; `tests/test_config.py`
-the configuration; `tests/test_delta.py` writes real Delta tables in `tmp_path` (169
-tests, ~7 s). `conftest.py` fails a test when any module still points at the real
+crosswalk; `tests/test_checks.py` the CBS and KVK checks and quarantine;
+`tests/test_maintenance.py` the quarantine cleanup; `tests/test_config.py` the
+configuration; `tests/test_delta.py` writes real Delta tables in `tmp_path` (186 tests,
+~7 s). `conftest.py` fails a test when any module still points at the real
 lakehouse or inbox. Checked by breaking the code on purpose:
 removing the delete-before-write, an empty `done_keys()` and non-UTC silver timestamps
 each make the right tests fail.

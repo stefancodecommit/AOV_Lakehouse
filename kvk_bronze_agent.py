@@ -6,7 +6,8 @@ Flow
 ----
 1. The agent tells you where to download the zip and asks you to upload it
    (type or drag the file path into the terminal).
-2. verify_dataset() checks the file. The checks run in Python, not in the model:
+2. verify_dataset() checks the file with checks/kvk.py. The checks run in Python,
+   not in the model:
      - a readable zip with a CSV inside (or a CSV directly)
      - SHA-256 not ingested before (the same file is never loaded twice)
      - semicolon-separated header with the expected columns
@@ -39,18 +40,15 @@ Usage
 from __future__ import annotations
 
 import argparse
-import csv
 import getpass
-import hashlib
-import io
 import json
 import re
 import sys
-import zipfile
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
+from checks.kvk import check_file, iter_rows as _iter_rows, sha256 as _sha256
 from config import project_path, settings
 
 # --------------------------------------------------------------------------- config
@@ -64,7 +62,6 @@ DATASET_PAGE = _CFG["dataset_page"]
 DOWNLOAD_URL = _CFG["download_url"]
 LICENSE = "CC BY 4.0 (source: KVK)"
 
-DELIMITER = ";"
 MAX_MALFORMED_SHARE = float(_CFG["max_malformed_share"])  # reject above this share
 BATCH_ROWS = 200_000               # rows per Arrow batch while writing (memory, not commits)
 
@@ -74,10 +71,6 @@ REQUIRED_COLUMNS = {k: set(v) for k, v in _CFG["required_columns"].items()}
 OPTIONAL_COLUMNS = {k: set(v) for k, v in _CFG["optional_columns"].items()}
 OLLAMA_HOST = settings["ollama"]["host"]
 OLLAMA_MODEL = settings["ollama"]["model"]
-
-
-def _norm(name: str) -> str:
-    return re.sub(r"[^a-z0-9]", "", name.lower())
 
 
 # --------------------------------------------------------------------------- state
@@ -102,42 +95,6 @@ def _resolve(file_path: str) -> Path:
     # dragging a file into a terminal often adds quotes or escaped spaces
     cleaned = file_path.strip().strip("'\"").replace("\\ ", " ")
     return Path(cleaned).expanduser().resolve()
-
-
-def _sha256(path: Path) -> str:
-    h = hashlib.sha256()
-    with path.open("rb") as f:
-        for chunk in iter(lambda: f.read(1 << 20), b""):
-            h.update(chunk)
-    return h.hexdigest()
-
-
-def _open_csv_bytes(path: Path, member: str | None):
-    """Binary stream of the CSV, from inside the zip or the file itself."""
-    if member:
-        return zipfile.ZipFile(path).open(member)
-    return path.open("rb")
-
-
-def _detect_encoding(path: Path, member: str | None) -> str:
-    with _open_csv_bytes(path, member) as f:
-        sample = f.read(1 << 20)
-    for enc in ("utf-8-sig", "cp1252"):
-        try:
-            sample.decode(enc)
-            return enc
-        except UnicodeDecodeError:
-            continue
-    return "latin-1"
-
-
-def _iter_rows(path: Path, member: str | None, encoding: str):
-    raw = _open_csv_bytes(path, member)
-    text = io.TextIOWrapper(raw, encoding=encoding, newline="")
-    try:
-        yield from csv.reader(text, delimiter=DELIMITER)
-    finally:
-        text.close()
 
 
 def ingested_hashes() -> dict[str, str]:
@@ -182,94 +139,17 @@ def verify_dataset(file_path: str) -> str:
     Returns:
         str: JSON verification report with status PASSED or FAILED and the reasons.
     """
-    errors, warnings = [], []
     path = _resolve(file_path)
-    result = {"file": str(path)}
-
-    if not path.is_file():
-        return json.dumps({**result, "status": "FAILED", "errors": [f"File not found: {path}"]})
-
-    member = None
-    if zipfile.is_zipfile(path):
-        with zipfile.ZipFile(path) as z:
-            bad = z.testzip()
-            csvs = [i for i in z.infolist() if i.filename.lower().endswith(".csv")]
-            if bad:
-                errors.append(f"Zip is corrupt at member {bad}")
-            elif not csvs:
-                errors.append(f"No CSV in zip; contents: {z.namelist()[:10]}")
-            else:
-                member = max(csvs, key=lambda i: i.file_size).filename
-                if len(csvs) > 1:
-                    warnings.append(f"{len(csvs)} CSVs in zip, using the largest: {member}")
-                result["csv_member"] = member
-                result["csv_size_mb"] = round(max(c.file_size for c in csvs) / 1e6, 1)
-    elif path.suffix.lower() != ".csv":
-        errors.append("File is neither a zip nor a .csv")
-
-    sha = _sha256(path)
-    result["sha256"] = sha
-    already_ingested = ingested_hashes().get(sha)
-    if already_ingested:
-        errors.append(f"This exact file was already ingested as batch {already_ingested}")
-
-    header, rows, encoding = [], 0, None
-    if not errors:
-        encoding = _detect_encoding(path, member)
-        result["encoding"] = encoding
-        reader = _iter_rows(path, member, encoding)
-        header = [h.strip() for h in next(reader, [])]
-        result["columns"] = header
-        if len(header) < 2:
-            errors.append(f"Header doesn't look ';'-separated: {header[:3]}")
-        normed = {_norm(h): i for i, h in enumerate(header)}
-
-        found = {}
-        for logical, aliases in {**REQUIRED_COLUMNS, **OPTIONAL_COLUMNS}.items():
-            idx = next((normed[a] for a in aliases if a in normed), None)
-            if idx is not None:
-                found[logical] = idx
-            elif logical in REQUIRED_COLUMNS:
-                errors.append(f"Required column missing: {logical} (accepted: {sorted(aliases)})")
-        result["recognised_columns"] = {k: header[v] for k, v in found.items()}
-
-        if not errors:
-            malformed, checks = 0, {"active_not_J_N": 0, "legal_form_not_BV_NV": 0,
-                                    "postcode_region_not_2_digits": 0, "start_date_unparsed": 0}
-            for row in reader:
-                rows += 1
-                if len(row) != len(header):
-                    malformed += 1
-                    continue
-                if row[found["active"]].strip().upper() not in {"J", "N"}:
-                    checks["active_not_J_N"] += 1
-                if row[found["legal_form"]].strip().upper() not in {"BV", "NV"}:
-                    checks["legal_form_not_BV_NV"] += 1
-                if not re.fullmatch(r"\d{2}", row[found["postcode_region"]].strip()):
-                    checks["postcode_region_not_2_digits"] += 1
-                d = row[found["start_date"]].strip()
-                if d and not re.fullmatch(r"\d{8}|\d{4}-\d{2}-\d{2}|\d{2}-\d{2}-\d{4}", d):
-                    checks["start_date_unparsed"] += 1
-            result["row_count"] = rows
-            result["malformed_rows"] = malformed
-            if rows == 0:
-                errors.append("CSV has a header but no data rows")
-            elif malformed / rows > MAX_MALFORMED_SHARE:
-                errors.append(f"{malformed} of {rows} rows have the wrong number of fields")
-            for name, n in checks.items():
-                if n:
-                    warnings.append(f"{name}: {n} rows ({n / max(rows, 1):.2%})")
-
-    passed = not errors
-    report = {**result, "status": "PASSED" if passed else "FAILED",
-              "errors": errors, "warnings": warnings}
-    if not passed and not already_ingested:
+    check = check_file(path, REQUIRED_COLUMNS, OPTIONAL_COLUMNS, MAX_MALFORMED_SHARE,
+                       ingested=ingested_hashes())
+    report = check.report()
+    if not check.passed and path.is_file() and "already_ingested" not in check.details:
         # a rejected file is kept with its report; a file that is already in bronze isn't
         from checks.quarantine import quarantine
         folder = quarantine(QUARANTINE_ROOT, "kvk", path.name, report, file=path)
         report["quarantine"] = str(folder) if folder else "already in quarantine"
-    VERIFIED[str(path)] = Verification(str(path), sha, passed, member, encoding,
-                                       header, rows, report)
+    VERIFIED[str(path)] = Verification(str(path), check.sha256, check.passed, check.csv_member,
+                                       check.encoding, check.header, check.row_count, report)
     return json.dumps(report, ensure_ascii=False)
 
 

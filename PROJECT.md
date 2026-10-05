@@ -226,7 +226,9 @@ job of the runtime checks above, which share the same validation functions.
 
 - **Quarantine:** a batch that fails a runtime check is saved to `lakehouse/quarantine/`
   with the check report, instead of being dropped, so it can be inspected. It's not
-  logged as ingested, so a corrected batch can still be loaded.
+  logged as ingested, so a corrected batch can still be loaded. The same content is
+  saved once. A monthly cleanup removes entries that were resolved later or are older
+  than the retention period (90 days); a problem that persists is quarantined again.
 - **Alerting:** Dagster sends a notification (email or Slack) for failed runs and failed
   checks.
 - **Freshness:** a check warns when the newest data is older than expected:
@@ -345,7 +347,9 @@ config.yaml, config.py  all settings, with local and environment overrides
 cbs_bronze.py           CBS API -> bronze
 kvk_bronze_agent.py     KVK zip -> bronze, via the agent
 reference_bronze.py     CBS SBI 2008 -> SBI 2025 crosswalk -> bronze
-checks/                 data checks shared by ingestion, Dagster and pytest; quarantine
+checks/                 data checks (cbs.py, kvk.py) shared by ingestion, Dagster and
+                        pytest; quarantine.py saves failed batches and cleans them up
+maintenance.py          monthly tasks: quarantine cleanup (KVK retention, optimize/vacuum to do)
 cbs_silver.py           bronze CBS -> silver
 kvk_silver.py           bronze KVK -> silver (to do)
 gold/                   silver -> gold (to do)
@@ -374,9 +378,9 @@ TODO.md                 open work
 | Silver CBS | Built, incl. `map_sbi2008_sbi2025`; checked against CBS StatLine |
 | Silver KVK | To do; sector = main activity, edge cases as flags |
 | Data checks before ingestion (CBS) | Built (`checks/cbs.py`) |
-| Quarantine | Built for CBS, KVK and reference files |
+| Quarantine | Built for CBS, KVK and reference files; monthly cleanup in `maintenance.py` |
 | Alerting, freshness checks | To do |
-| pytest | 169 tests incl. real Delta tables in tmp_path; one opt-in live CBS test |
+| pytest | 186 tests incl. real Delta tables in tmp_path; one opt-in live CBS test |
 | Configuration file | Built (`config.yaml` + `config.py`) |
 | Gold | To do; tables proposed around the main question |
 | Streamlit dashboard | To do; pages proposed |

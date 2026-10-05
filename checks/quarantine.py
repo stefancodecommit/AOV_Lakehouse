@@ -5,7 +5,9 @@
         records.json    the records as received (or a copy of the rejected file)
 
 The same content (by SHA-256) is quarantined only once per source and name, so a source
-that keeps failing on every run doesn't fill the folder with copies.
+that keeps failing on every run doesn't fill the folder with copies. cleanup() removes
+entries that are resolved or older than a retention period (run monthly by
+maintenance.py); a problem that still exists is quarantined again by the next run.
 """
 from __future__ import annotations
 
@@ -13,7 +15,7 @@ import hashlib
 import json
 import re
 import shutil
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 
@@ -67,3 +69,26 @@ def quarantine(root: Path, source: str, name: str, report: dict,
     (folder / "report.json").write_text(json.dumps(full, ensure_ascii=False, indent=2,
                                                    default=str), encoding="utf-8")
     return folder
+
+
+def cleanup(root: Path, is_resolved, max_age_days: int, now: datetime | None = None,
+            dry_run: bool = False) -> list[tuple[str, str]]:
+    """Remove quarantine entries that are resolved or older than max_age_days.
+    `is_resolved(entry)` returns a reason (str) when the problem is solved, else None.
+    Returns (folder, reason) for every removed (or, with dry_run, removable) entry."""
+    now = now or datetime.now(timezone.utc)
+    removed = []
+    for entry in list_entries(root):
+        reason = is_resolved(entry)
+        if reason is None:
+            try:
+                age = now - datetime.fromisoformat(entry["quarantined_at"])
+            except (KeyError, TypeError, ValueError):
+                continue                       # unreadable report: leave it for a person
+            if age > timedelta(days=max_age_days):
+                reason = f"older than {max_age_days} days ({age.days} days)"
+        if reason:
+            removed.append((entry["folder"], reason))
+            if not dry_run:
+                shutil.rmtree(entry["folder"])
+    return removed

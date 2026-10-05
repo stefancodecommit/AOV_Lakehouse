@@ -15,6 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import cbs_bronze  # noqa: E402
 import cbs_silver  # noqa: E402
 import kvk_bronze_agent  # noqa: E402
+import maintenance  # noqa: E402
 import reference_bronze  # noqa: E402
 
 INGESTED_AT = pd.Timestamp("2026-10-05 09:00", tz="UTC")
@@ -42,14 +43,22 @@ def isolated_lakehouse(tmp_path, monkeypatch):
     monkeypatch.setattr(kvk_bronze_agent, "DATA_TABLE", tmp_path / "bronze" / "kvk" / "basis_bedrijfsgegevens")
     monkeypatch.setattr(kvk_bronze_agent, "LOG_TABLE", tmp_path / "bronze" / "kvk" / "_batch_log")
     monkeypatch.setattr(kvk_bronze_agent, "QUARANTINE_ROOT", tmp_path / "quarantine")
+    monkeypatch.setattr(maintenance, "LAKEHOUSE", tmp_path)
+    monkeypatch.setattr(maintenance, "QUARANTINE_ROOT", tmp_path / "quarantine")
+    monkeypatch.setattr(maintenance, "BATCH_LOGS", {
+        "cbs": tmp_path / "bronze" / "_ingestion_log",
+        "kvk": tmp_path / "bronze" / "kvk" / "_batch_log",
+        "reference": tmp_path / "bronze" / "reference" / "_batch_log"})
 
     # Safety net: no module-level path may still point into the real lakehouse or inbox
     import config
     real = [config.project_path(config.settings["paths"][k]) for k in ("lakehouse", "inbox")]
-    for mod in (cbs_bronze, cbs_silver, reference_bronze, kvk_bronze_agent):
+    for mod in (cbs_bronze, cbs_silver, reference_bronze, kvk_bronze_agent, maintenance):
         for name, value in vars(mod).items():
-            if isinstance(value, Path) and any(value == r or r in value.parents for r in real):
-                pytest.fail(f"{mod.__name__}.{name} still points at real data: {value}")
+            values = value.values() if isinstance(value, dict) else [value]
+            for v in values:
+                if isinstance(v, Path) and any(v == r or r in v.parents for r in real):
+                    pytest.fail(f"{mod.__name__}.{name} still points at real data: {v}")
 
 
 # --------------------------------------------------------------------------- builders

@@ -5,6 +5,7 @@ import pytest
 
 from checks import all_passed, failures
 from checks.cbs import check_metadata, check_typed_dataset, table_structure
+from checks.kvk import check_file, check_rows, match_columns
 from checks.quarantine import list_entries, quarantine
 
 DP = [{"Type": "Dimension", "Key": "Bedrijfskenmerken"},
@@ -118,3 +119,73 @@ def test_quarantine_a_file(tmp_path):
     folder = quarantine(tmp_path / "q", "kvk", "upload.zip", {"status": "FAILED"}, file=src)
     assert (folder / "upload.zip").read_bytes() == b"not really a zip"
     assert quarantine(tmp_path / "q", "kvk", "upload.zip", {}, file=src) is None
+
+
+# =========================================================================== KVK file checks
+REQUIRED = {"start_date": {"datumaanvang"}, "active": {"actief"},
+            "legal_form": {"rechtsvorm"}, "postcode_region": {"postcoderegio"}}
+OPTIONAL = {"main_activity": {"hoofdactiviteiten"}}
+HEADER = '"Datum aanvang";"Actief";"Rechtsvorm";"Postcode regio";"Hoofdactiviteiten"'
+
+
+def kvk_zip(tmp_path, *rows, name="kvk.zip", member="kvk.csv"):
+    import zipfile
+    path = tmp_path / name
+    with zipfile.ZipFile(path, "w") as z:
+        z.writestr(member, "\r\n".join([HEADER, *rows]) + "\r\n")
+    return path
+
+
+def test_kvk_valid_file_passes(tmp_path):
+    c = check_file(kvk_zip(tmp_path, '"20060721";"J";"BV";"92";"47741"'), REQUIRED, OPTIONAL, 0.001)
+    assert c.passed and c.row_count == 1 and c.csv_member == "kvk.csv"
+    assert c.report()["recognised_columns"]["main_activity"] == "Hoofdactiviteiten"
+
+
+def test_kvk_value_problems_are_warnings_not_errors(tmp_path):
+    c = check_file(kvk_zip(tmp_path, '"2006/07/21";"X";"VOF";"";"47741"'), REQUIRED, OPTIONAL, 0.001)
+    assert c.passed
+    assert [w.split(":")[0] for w in c.warnings] == [
+        "active_not_J_N", "legal_form_not_BV_NV", "postcode_region_not_2_digits",
+        "start_date_unparsed"]
+
+
+def test_kvk_too_many_malformed_rows_fail(tmp_path):
+    c = check_file(kvk_zip(tmp_path, '"20060721";"J";"BV";"92";"47741"', '"too";"few"'),
+                   REQUIRED, OPTIONAL, 0.001)
+    assert c.errors == ["1 of 2 rows have the wrong number of fields"]
+
+
+@pytest.mark.parametrize("make, error", [
+    (lambda p: kvk_zip(p, member="readme.txt"), "No CSV in zip"),
+    (lambda p: (p / "kvk.xlsx").write_bytes(b"x") and p / "kvk.xlsx", "neither a zip nor a .csv"),
+    (lambda p: p / "missing.zip", "File not found"),
+    (lambda p: kvk_zip(p), "CSV has a header but no data rows"),
+])
+def test_kvk_unusable_files_fail(tmp_path, make, error):
+    c = check_file(make(tmp_path), REQUIRED, OPTIONAL, 0.001)
+    assert not c.passed and any(error in e for e in c.errors), c.errors
+
+
+def test_kvk_already_ingested_file_fails_and_says_so(tmp_path):
+    path = kvk_zip(tmp_path, '"20060721";"J";"BV";"92";"47741"')
+    first = check_file(path, REQUIRED, OPTIONAL, 0.001)
+    again = check_file(path, REQUIRED, OPTIONAL, 0.001, ingested={first.sha256: "kvk_batch_1"})
+    assert again.errors == ["This exact file was already ingested as batch kvk_batch_1"]
+    assert again.details["already_ingested"] == "kvk_batch_1"
+
+
+def test_kvk_match_columns_ignores_case_and_punctuation():
+    found, errors = match_columns(["Datum_Aanvang", "ACTIEF", "rechtsvorm", "Postcode-regio"],
+                                  REQUIRED, OPTIONAL)
+    assert found == {"start_date": 0, "active": 1, "legal_form": 2, "postcode_region": 3}
+    assert errors == []
+    _, errors = match_columns(["Actief"], REQUIRED, OPTIONAL)
+    assert len(errors) == 3
+
+
+def test_kvk_check_rows_counts():
+    found = {"start_date": 0, "active": 1, "legal_form": 2, "postcode_region": 3}
+    total, malformed, hits = check_rows(
+        [["20060721", "J", "BV", "92"], ["", "N", "NV", "01"], ["short"]], 4, found)
+    assert (total, malformed) == (3, 1) and not any(hits.values())
