@@ -297,6 +297,7 @@ def test_cleanup_scope_leaves_kvk_and_reference_alone(tmp_path):
 
 # =========================================================================== silver runs and run log
 import inspect_lakehouse  # noqa: E402
+import publish  # noqa: E402
 import runlog  # noqa: E402
 
 
@@ -340,7 +341,7 @@ def test_failed_build_leaves_live_tables_untouched(bronze_delta, monkeypatch):
 def test_empty_required_table_fails_before_anything_is_written(bronze_delta, monkeypatch):
     real = s.build_all
     monkeypatch.setattr(s, "build_all", lambda **kw: {**real(**kw), "dim_region": pd.DataFrame()})
-    with pytest.raises(s.RunFailed, match="required tables came out empty: dim_region"):
+    with pytest.raises(publish.RunFailed, match="required tables came out empty: dim_region"):
         s.run()
     assert not (s.SILVER_ROOT / "fct_absence_rate").exists()
     assert runlog.read_runs(s.RUN_LOG).iloc[0].status == "failed"
@@ -358,15 +359,15 @@ def test_empty_optional_table_is_skipped(bronze_delta, monkeypatch):
 
 def test_staging_failure_leaves_live_tables_untouched(bronze_delta, monkeypatch):
     first = s.run()
-    real = s.write_silver
+    real = publish.write_table
 
-    def fail_on_fifth(name, df, root=None, calls=[]):
-        calls.append(name)
+    def fail_on_fifth(path, df, calls=[]):
+        calls.append(path)
         if len(calls) == 5:
             raise OSError("disk full")
-        real(name, df, root)
+        real(path, df)
 
-    monkeypatch.setattr(s, "write_silver", fail_on_fifth)
+    monkeypatch.setattr(publish, "write_table", fail_on_fifth)
     with pytest.raises(OSError):
         s.run()
     for name in ("dim_period", "fct_absence_rate", "map_sbi2008_sbi2025"):
@@ -376,7 +377,7 @@ def test_staging_failure_leaves_live_tables_untouched(bronze_delta, monkeypatch)
 
 def test_publish_stopping_halfway_is_logged_and_detected(bronze_delta, monkeypatch):
     first = s.run()
-    real = s._overwrite
+    real = publish._overwrite
 
     def fail_on_third(path, table, calls=[]):
         if "_staging" not in str(path):           # count only writes to live tables
@@ -385,8 +386,8 @@ def test_publish_stopping_halfway_is_logged_and_detected(bronze_delta, monkeypat
                 raise OSError("power cut")
         real(path, table)
 
-    monkeypatch.setattr(s, "_overwrite", fail_on_third)
-    with pytest.raises(s.RunFailed, match="publish incomplete after 2 tables"):
+    monkeypatch.setattr(publish, "_overwrite", fail_on_third)
+    with pytest.raises(publish.RunFailed, match="publish incomplete after 2 tables"):
         s.run()
     runs = runlog.read_runs(s.RUN_LOG)
     assert runs.iloc[1].status == "failed" and "power cut" in runs.iloc[1].error
@@ -397,6 +398,6 @@ def test_publish_stopping_halfway_is_logged_and_detected(bronze_delta, monkeypat
     assert len(mixed) == 2                         # the two tables already replaced
     assert first in mixed[0]
 
-    monkeypatch.setattr(s, "_overwrite", real)
+    monkeypatch.setattr(publish, "_overwrite", real)
     s.run()                                        # a clean rerun fixes it
     assert inspect_lakehouse.silver_run_problems(s.LAKEHOUSE)[1] == []

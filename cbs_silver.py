@@ -34,18 +34,16 @@ fct_establishment_count   81644NED  period x sector x region x breakdown -> coun
                           contains other classes of the same table: exclude those when
                           summing to avoid double counting).
 
-Runs, staging and the run log
------------------------------
+Runs, staging and the run log (publish.py)
+------------------------------------------
 Every run gets a run_id (e.g. silver_cbs_20261005T163000123456Z). All tables are first
 built and written to silver/_staging/<run_id>/; only when every table succeeded are the
 live tables replaced, each with a `run_id` column. A run that fails leaves the live
 tables untouched. Each run, successful or not, is a row in lakehouse/_run_log
 (runlog.py): when it ran, status, error, rows per table, and the Delta version of every
-bronze table it read, so silver rows can be joined to the run that made them. Delta
-can't replace several tables in one commit: a crash while publishing could leave tables
-of two runs, which inspect_lakehouse.py reports (all silver tables must share the latest
-successful run_id). A required table that comes out empty fails the run;
-map_sbi2008_sbi2025 is optional (skipped until the crosswalk is loaded).
+bronze table it read, so silver rows can be joined to the run that made them. A
+required table that comes out empty fails the run; map_sbi2008_sbi2025 is optional
+(skipped until the crosswalk is loaded).
 
 Usage
 -----
@@ -586,101 +584,17 @@ def build_all(read=read_bronze, read_ref=read_reference) -> dict[str, pd.DataFra
     }
 
 
-def to_arrow(df: pd.DataFrame):
-    """DataFrame -> Arrow table with the types silver stores (strings, UTC timestamps)."""
-    import pyarrow as pa
-    table = pa.Table.from_pandas(df, preserve_index=False)
-    fields = []
-    for f in table.schema:
-        t = f.type
-        if pa.types.is_null(t) or pa.types.is_large_string(t):
-            t = pa.string()          # all-null columns get a real type
-        elif pa.types.is_timestamp(t):
-            t = pa.timestamp("us", tz="UTC")
-        fields.append(pa.field(f.name, t))
-    return table.cast(pa.schema(fields), safe=False)
-
-
-def _overwrite(path, table) -> None:
-    from deltalake import write_deltalake
-    write_deltalake(str(path), table, mode="overwrite", schema_mode="overwrite")
-
-
-def write_silver(name: str, df: pd.DataFrame, root=None) -> None:
-    _overwrite((root or SILVER_ROOT) / name, to_arrow(df))
-
-
-class RunFailed(RuntimeError):
-    pass
-
-
-def stage_and_publish(run_id: str, tables: dict[str, pd.DataFrame]) -> dict:
-    """Write every table to silver/_staging/<run_id>/, then replace the live tables.
-    Nothing live changes unless all tables were staged. Returns per-table results."""
-    import shutil
-    from deltalake import DeltaTable
-    results: dict[str, dict] = {}
-    empty_required = [n for n, df in tables.items() if df.empty and n not in OPTIONAL_TABLES]
-    if empty_required:
-        raise RunFailed(f"required tables came out empty: {', '.join(empty_required)}")
-
-    staging = SILVER_ROOT / "_staging" / run_id
-    try:
-        for name, df in tables.items():
-            if df.empty:
-                results[name] = {"rows": 0, "status": "skipped"}
-                log.warning("%-26s empty, skipped (optional table)", name)
-                continue
-            write_silver(name, df.assign(run_id=run_id), root=staging)
-            results[name] = {"rows": len(df), "status": "staged"}
-
-        published = 0
-        for name, r in results.items():
-            if r["status"] != "staged":
-                continue
-            # copy the staged table as written, so live gets exactly what was staged
-            _overwrite(SILVER_ROOT / name, DeltaTable(str(staging / name)).to_pyarrow_table())
-            published += 1
-            r["status"] = "published"
-            log.info("%-26s %8d rows -> %s", name, r["rows"], SILVER_ROOT / name)
-    except Exception as e:
-        done = [n for n, r in results.items() if r["status"] == "published"]
-        if done:   # a crash while publishing: say exactly which tables are new
-            raise RunFailed(f"publish incomplete after {len(done)} tables ({', '.join(done)}): "
-                            f"{type(e).__name__}: {e}") from e
-        raise
-    finally:
-        shutil.rmtree(staging, ignore_errors=True)
-        if staging.parent.exists() and not any(staging.parent.iterdir()):
-            staging.parent.rmdir()
-    return results
-
-
 def run() -> str:
-    """Build, stage, publish and log one silver CBS run. Returns the run_id; raises
-    (after logging the failed run) when something went wrong."""
-    from datetime import datetime, timezone
+    """Build, stage, publish and log one silver CBS run (publish.py). Returns the run_id;
+    raises (after logging the failed run) when something went wrong."""
     from functools import partial
-    import runlog
+    from publish import run_pipeline
 
-    started = datetime.now(timezone.utc)
-    run_id = runlog.new_run_id(PIPELINE, started)
-    inputs: dict = {}
-    tables: dict = {}
-    try:
-        built = build_all(read=partial(read_bronze, versions=inputs),
-                          read_ref=partial(read_reference, versions=inputs))
-        tables = {n: {"rows": len(df), "status": "built"} for n, df in built.items()}
-        tables = stage_and_publish(run_id, built)
-    except Exception as e:
-        runlog.write_run(run_id, PIPELINE, started, "failed", tables, inputs,
-                         error=f"{type(e).__name__}: {e}", path=RUN_LOG)
-        log.error("Run %s failed: %s", run_id, e)
-        raise
-    runlog.write_run(run_id, PIPELINE, started, "success", tables, inputs, path=RUN_LOG)
-    log.info("Run %s published %d tables", run_id,
-             sum(r["status"] == "published" for r in tables.values()))
-    return run_id
+    def build(inputs: dict) -> dict:
+        return build_all(read=partial(read_bronze, versions=inputs),
+                         read_ref=partial(read_reference, versions=inputs))
+
+    return run_pipeline(PIPELINE, build, SILVER_ROOT, RUN_LOG, OPTIONAL_TABLES)
 
 
 def main() -> None:

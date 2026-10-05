@@ -192,8 +192,14 @@ Source: CBS "schakelschema SBI 2008 - SBI 2025" v2.0
       git commit. Joinable with every silver table on `run_id`
 - [x] `inspect_lakehouse.py` shows the latest runs and reports a failed latest run or
       silver tables whose run_id isn't the latest successful one
+- [x] Decision (2026-10-05): no SCD type 2 in silver. Silver keeps only current rows (full
+      rebuild, 1.6 MB live); SCD2 would make tables larger, need merge logic and force
+      every gold query to filter on "current". Disk growth comes from Delta keeping old
+      versions after each overwrite (~1.6 MB per run) and is handled by the monthly
+      `vacuum`. CBS revision history (provisional -> final) is not tracked; revisit only
+      if revisions become an analysis question. KVK can't use SCD2: no company key
 
-### KVK (postponed)
+### KVK (built 2026-10-05: `kvk_silver.py`)
 Build one thin table, `lakehouse/silver/kvk_company`, from
 `lakehouse/bronze/kvk/basis_bedrijfsgegevens`. Same staging, `run_id` column and run log
 as silver CBS (pipeline `silver_kvk`).
@@ -206,10 +212,13 @@ Why it's needed:
   with the CBS `dim_sector`.
 
 Planned columns:
-- [ ] `snapshot_date`, `batch_id`, `is_latest` (from `_batch_id` / `_ingested_at`)
-- [ ] `start_date` (date), `is_active` (bool from J/N)
-- [ ] `legal_form`, `insolvency_code` (null when empty), `postcode_region`, `member_state`
-- [ ] `sbi_code`, `sbi_section`, `sbi_division` (joinable with `dim_sector`)
+- [x] `snapshot_date`, `batch_id`, `is_latest` (from `_batch_id` / `_ingested_at`;
+      snapshot_date is the ingest day, the file date isn't in bronze), `source_row_number`
+- [x] `start_date` (date) + `has_invalid_start_date`, `is_active` (bool from J/N, null
+      otherwise)
+- [x] `legal_form`, `insolvency_code`, `postcode_region`, `member_state` (empty -> null)
+- [x] `sbi2008_code`, `sbi2008_section`, `sbi2008_division` (joinable with `dim_sector`
+      on `sbi_code`; every section/division found in the real data exists there)
 - [x] Decision (2026-10-05): a company's sector is its **main activity**
       ("Hoofdactiviteiten"). "SBI activiteiten" (all activities) is not used for the
       sector; keep it in bronze only.
@@ -217,28 +226,37 @@ Planned columns:
       codes stay unchanged; derived columns are filled only where the answer is
       unambiguous, and a flag says why one is missing or uncertain. Gold and the
       dashboard can then filter on the flags.
-- [ ] Keep the original main code list as it is (`main_activity_codes`)
-- [ ] Flags for the edge cases found in the 2026-10-01 file:
+- [x] Keep the original main code list as it is (`main_activity_codes`), plus
+      `main_activity_count`
+- [x] Flags for the edge cases found in the 2026-10-01 file:
       - `has_multiple_main_activities`: 11,433 rows (0.6%) list several main codes
       - `has_no_main_activity`: 167,002 rows (nearly all inactive)
       - `is_kvk_subcode`: 6-digit KVK sub-codes such as 620102 (not in either SBI list)
       - `sbi_version`: `2025`, `2008`, `both` (code exists in both lists, so the number
-        alone doesn't say which) or `unknown`. Active companies with one main code:
+        alone doesn't say which), `unknown`, or `mixed` (several codes of different
+        versions). Active companies with one main code:
         942,484 only-2025, 307,732 both, 64 only-2008, 9 unknown; only-2008 codes occur
         almost only on inactive companies (371,900). So KVK has evidently recoded
         active companies to SBI 2025, but `both` stays `both` rather than being assumed
       - `sbi_mapping`: how the code maps to SBI 2008 for joining `dim_sector`
-        (`1:1`, `merge` = the 2025 code came from several 2008 codes, `none`)
-- [ ] Map SBI 2025 main codes to SBI 2008 with `map_sbi2008_sbi2025` (2025 -> 2008
+        (`sbi2008`, `1:1`, `merge` = the 2025 code came from several 2008 codes,
+        `ambiguous_version`, `unknown_code`, `none`; for several codes the least
+        certain one), and `sbi2008_candidates` (number of possible SBI 2008 codes)
+- [x] Map SBI 2025 main codes to SBI 2008 with `map_sbi2008_sbi2025` (2025 -> 2008
       direction) for the join with the CBS `dim_sector`; fill the SBI 2008
       section/division only when all source codes share it, else leave it null and
       the flags explain why
+- Result on the real file (2026-10-05): 1,277,560 active companies, 90.2% with an SBI
+  2008 section and division, 72.1% with a single SBI 2008 code. Section filled per
+  mapping: 1:1 100%, ambiguous_version 90%, merge 71%. 12 s, ~2.3 GB peak memory
+  (matters for Docker sizing), 23 MB per snapshot in silver
+- [ ] Possible refinement later: 4-digit KVK codes such as 7111 are SBI 2008 class codes
+      without a subclass; they are `unknown_code` now (they are not in the crosswalk)
 
 Notes:
 - There is no KVK number or company ID in the open dataset, so individual companies
   can't be tracked across snapshots; compare snapshots only in aggregate.
-- Until this exists, gold can read the latest batch from bronze directly
-  (filter on the newest `_batch_id` in `_batch_log`).
+- Gold counts companies with `is_latest`; never sum across snapshots.
 
 ## 3. Gold
 Main question: which company characteristics (sector, size class) go together with
@@ -312,8 +330,8 @@ higher sickness absence. See `PROJECT.md` for the sub-questions.
 `tests/test_kvk_logic.py` the KVK file verification; `tests/test_reference.py` the SBI
 crosswalk; `tests/test_checks.py` the CBS and KVK checks and quarantine;
 `tests/test_maintenance.py` the quarantine cleanup; `tests/test_config.py` the
-configuration; `tests/test_delta.py` writes real Delta tables in `tmp_path` (209 tests,
-~10 s). `conftest.py` fails a test when any module still points at the real
+configuration; `tests/test_kvk_silver.py` silver KVK; `tests/test_delta.py` writes real
+Delta tables in `tmp_path` (225 tests, ~11 s). `conftest.py` fails a test when any module still points at the real
 lakehouse or inbox. Checked by breaking the code on purpose:
 removing the delete-before-write, an empty `done_keys()` and non-UTC silver timestamps
 each make the right tests fail.

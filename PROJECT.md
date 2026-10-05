@@ -163,13 +163,15 @@ Rebuilt from bronze on every run.
 - **Facts:** `fct_absence_rate`, `fct_absence_survey` (long format, value plus 95% bounds,
   the two survey tables kept apart), `fct_business_count`, `fct_establishment_count`.
 
-### Silver KVK (to do)
+### Silver KVK — `kvk_silver.py` (built)
 
 One table, `kvk_company`: typed columns, snapshot date and latest-snapshot flag, and the
 company's sector. The sector is the main activity ("Hoofdactiviteiten"), not the full list
-of activities. Main codes of active companies are SBI 2025; they are mapped to SBI 2008
-with `map_sbi2008_sbi2025` and to section and division, so KVK joins with `dim_sector`.
-See `TODO.md`.
+of activities. Main codes are mapped to SBI 2008 with `map_sbi2008_sbi2025` and to section
+and division, so KVK joins with `dim_sector`. Edge cases (several or no main activities,
+KVK sub-codes, codes in both SBI lists, codes that came from several SBI 2008 codes) are
+marked with flag columns; derived sector columns are filled only when unambiguous (90% of
+active companies). Built by `kvk_silver.py`; see its docstring for every column.
 
 ### Gold (to do)
 
@@ -363,7 +365,8 @@ checks/                 data checks (cbs.py, kvk.py) shared by ingestion, Dagste
                         pytest; quarantine.py saves failed batches and cleans them up
 maintenance.py          monthly tasks: quarantine cleanup (KVK retention, optimize/vacuum to do)
 cbs_silver.py           bronze CBS -> silver
-kvk_silver.py           bronze KVK -> silver (to do)
+kvk_silver.py           bronze KVK -> silver kvk_company
+publish.py, runlog.py   staging, publishing and the run log, shared by the silver pipelines
 gold/                   silver -> gold (to do)
 dashboard/              Streamlit app (to do)
 orchestration/          Dagster definitions: assets, schedules, checks, maintenance (to do)
@@ -389,11 +392,11 @@ TODO.md                 open work
 | Bronze KVK + agent | Built and run on the real file (1.92M rows) with Ollama; reads `inbox/kvk/` |
 | Reference: SBI 2008 -> 2025 crosswalk | Built; loaded v2.0 |
 | Silver CBS | Built, incl. `map_sbi2008_sbi2025`; checked against CBS StatLine; staging, `run_id`, run log |
-| Silver KVK | To do; sector = main activity, edge cases as flags |
+| Silver KVK | Built (`kvk_company`): sector = main activity, edge cases as flags; 90% of active companies get an SBI 2008 section |
 | Data checks before ingestion (CBS) | Built (`checks/cbs.py`) |
 | Quarantine | Built for CBS, KVK and reference files; monthly cleanup in `maintenance.py` |
 | Alerting, freshness checks | To do |
-| pytest | 209 tests incl. real Delta tables in tmp_path; one opt-in live CBS test |
+| pytest | 225 tests incl. real Delta tables in tmp_path; one opt-in live CBS test |
 | Configuration file | Built (`config.yaml` + `config.py`) |
 | Gold | To do; tables proposed around the main question |
 | Streamlit dashboard | To do; pages proposed |

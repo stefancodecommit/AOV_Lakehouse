@@ -15,6 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import cbs_bronze  # noqa: E402
 import cbs_silver  # noqa: E402
 import kvk_bronze_agent  # noqa: E402
+import kvk_silver  # noqa: E402
 import maintenance  # noqa: E402
 import runlog  # noqa: E402
 import reference_bronze  # noqa: E402
@@ -36,6 +37,10 @@ def isolated_lakehouse(tmp_path, monkeypatch):
     monkeypatch.setattr(cbs_silver, "LAKEHOUSE", tmp_path)
     monkeypatch.setattr(cbs_silver, "RUN_LOG", tmp_path / "_run_log")
     monkeypatch.setattr(runlog, "RUN_LOG", tmp_path / "_run_log")
+    monkeypatch.setattr(kvk_silver, "LAKEHOUSE", tmp_path)
+    monkeypatch.setattr(kvk_silver, "KVK_BRONZE", tmp_path / "bronze" / "kvk")
+    monkeypatch.setattr(kvk_silver, "SILVER_ROOT", tmp_path / "silver")
+    monkeypatch.setattr(kvk_silver, "RUN_LOG", tmp_path / "_run_log")
     ref = tmp_path / "bronze" / "reference"
     monkeypatch.setattr(reference_bronze, "REF_ROOT", ref)
     monkeypatch.setattr(reference_bronze, "DATA_TABLE", ref / "sbi2008_sbi2025")
@@ -57,7 +62,8 @@ def isolated_lakehouse(tmp_path, monkeypatch):
     # Safety net: no module-level path may still point into the real lakehouse or inbox
     import config
     real = [config.project_path(config.settings["paths"][k]) for k in ("lakehouse", "inbox")]
-    for mod in (cbs_bronze, cbs_silver, reference_bronze, kvk_bronze_agent, maintenance, runlog):
+    for mod in (cbs_bronze, cbs_silver, reference_bronze, kvk_bronze_agent, maintenance, runlog,
+                kvk_silver):
         for name, value in vars(mod).items():
             values = value.values() if isinstance(value, dict) else [value]
             for v in values:

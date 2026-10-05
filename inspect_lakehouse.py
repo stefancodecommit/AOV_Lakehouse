@@ -11,8 +11,8 @@ Problems reported:
   - silver fact rows whose company characteristic is unknown in the code list
   - batches or files in quarantine (failed their checks; see report.json in each folder)
 
-  - silver tables whose run_id isn't the latest successful silver_cbs run (a publish
-    that stopped halfway), or a latest silver run that failed
+  - silver tables whose run_id isn't the latest successful run of their pipeline
+    (silver_cbs, silver_kvk; a publish that stopped halfway), or a latest run that failed
 
 Warnings (shown, but not counted as problems): CBS tables that CBS has stopped or hasn't
 modified for longer than their frequency allows, from the newest TableInfos in bronze.
@@ -36,7 +36,7 @@ INGEST_COLUMNS = ("ingested_at", "_ingested_at")
 EXPECTED_SILVER = [
     "dim_period", "dim_sector", "dim_company_size", "dim_region", "dim_survey_measure",
     "map_characteristic", "map_sbi2008_sbi2025", "fct_absence_rate", "fct_absence_survey",
-    "fct_business_count", "fct_establishment_count",
+    "fct_business_count", "fct_establishment_count", "kvk_company",
 ]
 
 
@@ -218,11 +218,14 @@ def main() -> int:
                             f"(see {e['folder']}/report.json)")
 
     if not args.layer or args.layer == "silver":
-        lines, run_problems = silver_run_problems(root)
-        print("\n=== silver runs (latest 5, from _run_log)")
-        for line in lines:
-            print(f"  {line}")
-        problems += run_problems
+        import runlog
+        pipelines = sorted(set(runlog.read_runs(root / "_run_log")["pipeline"])) or ["silver_cbs"]
+        for pipeline in pipelines:
+            lines, run_problems = silver_run_problems(root, pipeline)
+            print(f"\n=== {pipeline} runs (latest 5, from _run_log)")
+            for line in lines:
+                print(f"  {line}")
+            problems += run_problems
 
     if not args.layer or args.layer == "bronze":
         found = lifecycle_warnings(root / "bronze")
