@@ -163,8 +163,11 @@ Rebuilt from bronze on every run.
 
 ### Silver KVK (to do)
 
-One table, `kvk_company`: typed columns, snapshot date and latest-snapshot flag, and SBI
-codes mapped to section and division so KVK joins with `dim_sector`. See `TODO.md`.
+One table, `kvk_company`: typed columns, snapshot date and latest-snapshot flag, and the
+company's sector. The sector is the main activity ("Hoofdactiviteiten"), not the full list
+of activities. Main codes of active companies are SBI 2025; they are mapped to SBI 2008
+with `map_sbi2008_sbi2025` and to section and division, so KVK joins with `dim_sector`.
+See `TODO.md`.
 
 ### Gold (to do)
 

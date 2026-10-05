@@ -127,9 +127,8 @@ Source: CBS "schakelschema SBI 2008 - SBI 2025" v2.0
 - [x] Silver `map_sbi2008_sbi2025` from the latest batch only (see Silver CBS)
 - [ ] Check periodically for a newer version of the file on the CBS classifications page
       and load it with `--url` (Dagster: a manual or monthly reference asset)
-- [ ] Decide how gold/silver KVK uses the many-to-many links: map KVK SBI 2025 codes
-      back to SBI 2008 for the CBS sectors, and handle split codes (e.g. weight, or
-      assign to the main link only)
+- [ ] Decide how silver KVK handles SBI 2025 main codes that came from several SBI 2008
+      codes (see Silver KVK below)
 
 ### Quarantine
 - [ ] Batches that fail a runtime check go to `lakehouse/quarantine/<source>/<timestamp>/`
@@ -168,12 +167,22 @@ Planned columns:
 - [ ] `start_date` (date), `is_active` (bool from J/N)
 - [ ] `legal_form`, `insolvency_code` (null when empty), `postcode_region`, `member_state`
 - [ ] `sbi_code`, `sbi_section`, `sbi_division` (joinable with `dim_sector`)
-- [ ] `sbi_version` (2008 / 2025 / unknown) per code: the KVK file mixes both; map 2025
-      codes to SBI 2008 with `map_sbi2008_sbi2025` before joining with `dim_sector`.
-      Strip 6-digit KVK sub-codes to 5 digits before the lookup
-- [ ] `is_main_activity`: needed, the CSV lists several activities per company. Explode
-      "SBI activiteiten" to one row per company per code, or keep one row per company
-      with the main activity only (decide per gold question; several main codes occur)
+- [x] Decision (2026-10-05): a company's sector is its **main activity**
+      ("Hoofdactiviteiten"). "SBI activiteiten" (all activities) is not used for the
+      sector; keep it in bronze only.
+- [ ] Companies with several main codes (11,433 rows, 0.6%): take the first listed and
+      set `has_multiple_main_activities`; companies without one (167,002 rows, nearly
+      all inactive) get a null sector
+- [ ] `sbi_version` of the main code. Profile of the 2026-10-01 file, active companies
+      with one main code: 942,484 SBI 2025 only, 307,732 in both lists, 64 SBI 2008
+      only, 9 unknown. So KVK has recoded active companies to SBI 2025: treat main codes
+      of active companies as SBI 2025 (also when the code exists in both lists); SBI
+      2008-only codes occur almost only on inactive companies (371,900)
+- [ ] Map SBI 2025 main codes to SBI 2008 with `map_sbi2008_sbi2025` (2025 -> 2008
+      direction) before joining with the CBS `dim_sector`; codes that came from several
+      SBI 2008 codes (`sbi2008_sources` > 1) need a rule, e.g. use the section/division
+      when all sources share it, otherwise flag as ambiguous. Strip 6-digit KVK sub-codes
+      (e.g. 620102) to 5 digits before the lookup
 
 Notes:
 - There is no KVK number or company ID in the open dataset, so individual companies
