@@ -58,8 +58,14 @@ Further points to keep in mind:
 
 ### Audience
 
-To be decided (see `TODO.md`). This affects the level of explanation in the dashboard and
-whether it must be shareable outside this machine.
+Personal use, for an educational project; the dashboard runs on this machine. Privacy
+rules such as the KVK small-group rule are applied as flags that hide by default.
+
+### Provisional figures
+
+CBS publishes recent periods as provisional (voorlopig, nader voorlopig) and revises them
+later. The dashboard shows them by default, clearly marked, with a switch "final figures
+only"; comparisons that mix provisional and final figures are flagged.
 
 ## Goals
 

@@ -180,6 +180,9 @@ Source: CBS "schakelschema SBI 2008 - SBI 2025" v2.0
 
 ### CBS
 - [x] Dimensions, facts and mapping table (`cbs_silver.py`)
+- [x] Fixed 2026-10-05: "942/9420 Werknemersorganisaties" (sectors: trade unions) were
+      parsed as size classes because their name contains "werknemer"; size words now
+      have to be whole words. Checked over all 1,678 titles: only these two changed
 - [x] `map_sbi2008_sbi2025`: crosswalk with division per code (from the code itself),
       `sbi2025_targets`, `sbi2008_sources` and `link_type` (1:1, split, merge,
       many-to-many), `source_version`, `batch_id`
@@ -275,7 +278,9 @@ higher sickness absence. See `PROJECT.md` for the sub-questions.
 - [ ] Mark groups with fewer than 10 companies (KVK re-identification rule) with a flag;
       the dashboard hides them by default (personal use, so marking is enough)
 - [ ] Same staging-and-swap publishing, `run_id` and run log (`runlog.py`) as silver
-- [ ] Decide whether provisional figures are shown by default
+- [x] Decision (2026-10-05): provisional figures are shown by default, clearly marked
+      (`period_status`, `is_provisional`), with a dashboard switch "final figures only".
+      Comparisons that mix provisional and final figures are flagged
 
 ## 4. Streamlit dashboard
 - [ ] App in `dashboard/` that reads gold tables only
@@ -284,7 +289,10 @@ higher sickness absence. See `PROJECT.md` for the sub-questions.
 - [ ] Pages: Overview, Sectors, Size classes, Behind the numbers, Context
 - [ ] Filters for period, sector and size class; seasonally fair comparisons (same
       quarter last year, rolling four-quarter average)
-- [ ] Show data freshness and provisional/final status on every page
+- [ ] Show data freshness and provisional/final status on every page; provisional
+      points drawn differently (e.g. dashed line or hollow markers) with a footnote
+- [ ] Switch "final figures only" (default off), and a note when a comparison mixes
+      provisional and final figures
 - [ ] Credit CBS and KVK (CC BY 4.0) on every page
 - [ ] Data dictionary page, generated from CBS metadata
 

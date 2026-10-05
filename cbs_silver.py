@@ -158,9 +158,10 @@ def parse_size(title: str) -> tuple[str, int, int | None] | None:
     """'10 tot 20 werknemers' -> ('WN', 10, 20); '100 of meer ...' -> (.., 100, None);
     '2 werkzame personen' -> ('WP', 2, 3). Upper bound is exclusive."""
     t = " ".join(str(title).lower().split())
-    if "werknemer" in t:
+    # whole words only: "942 Werknemersorganisaties" is a sector (trade unions), not a size
+    if re.search(r"\bwerknemers?\b", t):
         unit = "WN"   # employees
-    elif "werkza" in t:
+    elif re.search(r"\bwerkza(?:am|me) perso(?:on|nen)\b", t):
         unit = "WP"   # persons employed (incl. owners)
     else:
         return None
@@ -168,7 +169,7 @@ def parse_size(title: str) -> tuple[str, int, int | None] | None:
         return unit, _int(m[1]), _int(m[2])
     if m := re.match(rf"^{_NUM}\b.*\bof meer\b", t):
         return unit, _int(m[1]), None
-    if m := re.match(rf"^{_NUM} (werkzame|werkzaam|werknemer)", t):
+    if m := re.match(rf"^{_NUM} (?:werkza(?:am|me) perso(?:on|nen)|werknemers?)\b", t):
         return unit, _int(m[1]), _int(m[1]) + 1
     return None
 

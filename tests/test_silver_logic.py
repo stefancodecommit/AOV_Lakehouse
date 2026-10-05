@@ -23,6 +23,8 @@ from conftest import INGESTED_AT, raw
     ("A Landbouw, bosbouw en visserij", None),
     ("10-12 Voedings-, genotmiddelenindustrie", None),
     ("1 tot 5 werkdagen", None),                           # duration, not a size class
+    ("942 Werknemersorganisaties", None),                  # a sector (trade unions)
+    ("9420 Werknemersorganisaties", None),
 ])
 def test_parse_size(title, expected):
     assert s.parse_size(title) == expected
