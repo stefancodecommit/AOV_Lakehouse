@@ -68,7 +68,11 @@ log = logging.getLogger("gold")
 def read_silver(names: list[str], inputs: dict | None = None,
                 optional: set[str] = frozenset()) -> dict[str, pd.DataFrame]:
     """Silver tables by name. Records version and run_id in `inputs`; raises when the
-    silver CBS tables come from different runs."""
+    silver CBS tables come from different runs.
+
+    Different run_ids mean a silver publish stopped halfway (see publish.py): some
+    tables are new and some old. Combining them could pair, for example, a new fact
+    table with an old dimension, so gold refuses and asks for a silver rerun."""
     from deltalake import DeltaTable
     from publish import RunFailed
     out, run_ids = {}, {}
@@ -96,10 +100,12 @@ def read_silver(names: list[str], inputs: dict | None = None,
 
 # =========================================================================== helpers
 def _status_cols(status: pd.Series) -> pd.DataFrame:
+    """period_status as given, plus is_provisional (anything but 'Definitief')."""
     return pd.DataFrame({"period_status": status, "is_provisional": status != FINAL})
 
 
 def _periods(dim_period: pd.DataFrame) -> pd.DataFrame:
+    """The period columns gold adds to every row (label, year, quarter, start date)."""
     p = dim_period[["period_key", "period_label", "year", "quarter", "start_date"]].copy()
     p["year"] = p["year"].astype("int64")
     return p
@@ -110,7 +116,18 @@ def add_comparisons(df: pd.DataFrame, group: list[str], value: str, *, quarterly
                     rank_mask: pd.Series | None = None) -> pd.DataFrame:
     """Add national value and difference, rank, same period last year and (quarterly)
     a rolling four-quarter average. `df` needs period_key, year, quarter (quarterly),
-    period_status and the `group` columns."""
+    period_status and the `group` columns.
+
+    Shared by the sector and size tables so both get exactly the same comparisons.
+    Absence is seasonal (higher in winter), which is why the comparison is with the
+    same quarter a year earlier and with a four-quarter average, never with the
+    previous quarter. Every comparison also says whether it mixes provisional and
+    final figures (yoy_mixes_status, rolling_4q_has_provisional).
+
+    group:       columns that identify one series (e.g. sector_key)
+    rank_within: extra columns that define who is ranked together (e.g. sbi_level)
+    national:    period_key -> national_value, for the difference from the total
+    rank_mask:   rows that take part in the ranking (e.g. not the total itself)"""
     df = df.copy()
     if national is not None:
         df = df.merge(national, on="period_key", how="left")
@@ -123,7 +140,7 @@ def add_comparisons(df: pd.DataFrame, group: list[str], value: str, *, quarterly
         ascending=False, method="min").astype("Int64")
     df["rank_of"] = ranked.groupby(["period_key", *rank_within])[value].transform("size").astype("Int64")
 
-    # same period one year earlier
+    # same period one year earlier: shift every row one year forward and join it back
     prev = df[[*group, "year", *(["quarter"] if quarterly else []), value, "period_status"]].copy()
     prev["year"] = prev["year"] + 1
     prev = prev.rename(columns={value: "last_year_value", "period_status": "last_year_status"})
@@ -133,7 +150,10 @@ def add_comparisons(df: pd.DataFrame, group: list[str], value: str, *, quarterly
         (df["period_status"] == FINAL) != (df["last_year_status"] == FINAL))
 
     if quarterly:
-        # rolling four-quarter average: only when all four consecutive quarters exist
+        # rolling four-quarter average: only when all four consecutive quarters exist.
+        # _q numbers quarters consecutively (2025 Q4 -> 2026 Q1 is +1); reindexing to the
+        # full range turns a missing quarter into an empty row, so a window across a gap
+        # has fewer than 4 values and gives no average instead of a misleading one.
         df["_q"] = df["year"] * 4 + df["quarter"] - 1
         df = df.sort_values([*group, "_q"])
         parts = []
@@ -152,6 +172,12 @@ def add_comparisons(df: pd.DataFrame, group: list[str], value: str, *, quarterly
 
 # =========================================================================== tables
 def build_absence_by_sector(t: dict) -> pd.DataFrame:
+    """gold_absence_by_sector: 80072NED absence % per sector and quarter, compared with
+    the national total, last year and a rolling four-quarter average.
+
+    All CBS sector levels are kept (section C, division 47, section group B-F, ...);
+    ranks are only within one level, because comparing a section with one of its own
+    divisions makes no sense. The dashboard shows sections by default."""
     rate, sectors = t["fct_absence_rate"], t["dim_sector"]
     df = rate[rate["member_type"].isin(["sector", "total"])].merge(
         sectors[["sector_key", "sbi_code", "sbi_level", "sector_name"]], on="sector_key", how="left")
@@ -174,6 +200,8 @@ def build_absence_by_sector(t: dict) -> pd.DataFrame:
 
 
 def _survey_headline(t: dict) -> str:
+    """Key of the 86009NED measure used per size class: the share of employees who were
+    absent at least once in the year (the survey has no absence percentage)."""
     m = t["dim_survey_measure"]
     m = m[(m["source_table"] == "86009NED") & (m["measure_name"] == "aandeel_werknemers_die_hebben_verzuimd")]
     if m.empty:
@@ -182,6 +210,13 @@ def _survey_headline(t: dict) -> str:
 
 
 def build_absence_by_size(t: dict) -> pd.DataFrame:
+    """gold_absence_by_size: absence per size class from two sources, side by side.
+
+    - 80072NED, quarterly: absence % per class of persons employed (1-9, 10-99, 100+)
+    - 86009NED, yearly: share of employees absent per class of employees, with 95% bounds
+    The units and measures differ, so the rows are never mixed: `source_table` and
+    `measure` say which is which. Survey classes that contain others (1-9 contains 1-4
+    and 5-9) are kept but not ranked."""
     sizes, periods = t["dim_company_size"], _periods(t["dim_period"])
     size_cols = ["size_key", "size_range", "size_unit", "lower_bound", "size_band"]
 
@@ -196,6 +231,7 @@ def build_absence_by_size(t: dict) -> pd.DataFrame:
     s = t["fct_absence_survey"]
     s = s[(s["source_table"] == "86009NED") & (s["measure_key"] == _survey_headline(t))
           & s["member_type"].isin(["size", "total"])].copy()
+    # empty for the total row; the total is not a size class, so not an aggregate
     s["size_is_aggregate"] = s["size_is_aggregate"].astype("boolean").fillna(False).astype(bool)
     s["measure"] = "share_employees_absent"
 
@@ -204,6 +240,7 @@ def build_absence_by_size(t: dict) -> pd.DataFrame:
         part = part.merge(periods, on="period_key", how="left")
         national = (part[part["member_type"] == "total"][["period_key", "value"]]
                     .rename(columns={"value": "national_value"}))
+        # the total has no size_key; give it one so it forms its own series
         part = part.assign(group_key=part["size_key"].fillna("total"))
         part = add_comparisons(part, ["group_key"], "value", quarterly=quarterly,
                                rank_within=[], national=national,
@@ -227,6 +264,13 @@ def build_absence_by_size(t: dict) -> pd.DataFrame:
 
 
 def build_absence_profile(t: dict) -> pd.DataFrame:
+    """gold_absence_profile: every 86009NED survey measure per sector and size class.
+
+    For each value: its 95% interval, the national value, and differs_from_national.
+    That flag is only set when the whole interval lies above or below the national
+    value; a point estimate that differs but whose interval includes the national
+    value may be sampling noise (question 5 in PROJECT.md). rank_in_topic ranks the
+    measures inside one topic group, e.g. which complaint is most common."""
     s = t["fct_absence_survey"]
     s = s[s["source_table"] == "86009NED"].copy()
     m = t["dim_survey_measure"]
@@ -264,6 +308,12 @@ def build_absence_profile(t: dict) -> pd.DataFrame:
 
 
 def build_business_context(t: dict) -> pd.DataFrame:
+    """gold_business_context: number of businesses (81589NED) per sector, quarter and
+    size band, plus the CBS total as band 'all'.
+
+    Bands are sums of the detailed size classes; aggregate classes (0-50, 0-250) are
+    left out so no business is counted twice. If one class of a band is missing the
+    band is left empty rather than undercounted."""
     b = t["fct_business_count"]
     total = b[b["breakdown"] == "total"].assign(size_band="all")
     sized = b[(b["breakdown"] == "size") & (b["size_is_aggregate"] == False)]  # noqa: E712
@@ -283,12 +333,20 @@ def build_business_context(t: dict) -> pd.DataFrame:
 
 
 def build_kvk_context(t: dict) -> pd.DataFrame:
+    """gold_kvk_context: from the latest KVK snapshot, active companies per SBI 2008
+    section and legal form ('all' = BV and NV together), with median company age.
+
+    Companies whose section couldn't be determined are kept as section 'unknown', so the
+    totals still add up. is_small_group marks groups under 10 companies (the KVK
+    re-identification rule); the dashboard hides them by default."""
     k = t.get("kvk_company", pd.DataFrame())
     if k.empty:
         return pd.DataFrame()
+    # latest snapshot only: summing snapshots would count each company once per upload
     k = k[k["is_latest"] & (k["is_active"] == True)].copy()  # noqa: E712
     snap = pd.to_datetime(k["snapshot_date"])
     start = pd.to_datetime(k["start_date"])
+    # age on the snapshot day; companies without a valid start date get no age
     k["age_years"] = ((snap - start).dt.days / 365.25).where(start.notna())
     k["section"] = k["sbi2008_section"].fillna("unknown")
     rows = []
@@ -314,6 +372,7 @@ def build_kvk_context(t: dict) -> pd.DataFrame:
 
 
 def build_all(t: dict) -> dict[str, pd.DataFrame]:
+    """Build all gold tables from the silver tables in `t` (as read by read_inputs)."""
     return {
         "gold_absence_by_sector": build_absence_by_sector(t),
         "gold_absence_by_size": build_absence_by_size(t),
@@ -324,16 +383,19 @@ def build_all(t: dict) -> dict[str, pd.DataFrame]:
 
 
 def read_inputs(inputs: dict | None = None) -> dict:
+    """Read every silver table gold needs; kvk_company is optional (empty without silver KVK)."""
     return read_silver([*SILVER_CBS_TABLES, "kvk_company"], inputs, optional={"kvk_company"})
 
 
 def run() -> str:
+    """Build, stage, publish and log one gold run (publish.py). Returns the run_id."""
     from publish import run_pipeline
     return run_pipeline(PIPELINE, lambda inputs: build_all(read_inputs(inputs)),
                         GOLD_ROOT, RUN_LOG, OPTIONAL_TABLES)
 
 
 def main() -> None:
+    """Command line: build and publish gold, or only summarise with --preview."""
     ap = argparse.ArgumentParser(description="Build the gold tables from silver.")
     ap.add_argument("--preview", action="store_true", help="build and summarise, write nothing")
     args = ap.parse_args()

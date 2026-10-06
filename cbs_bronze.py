@@ -71,6 +71,7 @@ BRONZE_ROOT = project_path(settings["paths"]["lakehouse"]) / "bronze"
 LOG_TABLE = BRONZE_ROOT / "_ingestion_log"
 QUARANTINE_ROOT = project_path(settings["paths"]["lakehouse"]) / "quarantine"
 PAGE_SIZE = 10_000          # CBS ODataApi returns at most 10,000 records per response
+# (when a page comes back full without a nextLink, fetch_all continues with $skip)
 PAUSE_SECONDS = float(_CFG["pause_seconds"])
 
 log = logging.getLogger("cbs_bronze")
@@ -94,13 +95,16 @@ class Endpoint:
 
     @property
     def name(self) -> str:
+        """Bronze folder name, e.g. '86009ned_typeddataset' ('_root' for the service root)."""
         return f"{self.table_id}_{self.entity or 'root'}".lower()
 
     @property
     def url(self) -> str:
+        """OData URL of the endpoint, without query parameters."""
         return f"{BASE_URL}/{self.table_id}" + (f"/{self.entity}" if self.entity else "")
 
     def odata_filter(self) -> str | None:
+        """OData $filter for a fixed period selection, e.g. "Perioden ge '2025JJ00'"."""
         if self.period_op:
             return f"Perioden {self.period_op} '{self.period_value}'"
         return None
@@ -127,6 +131,10 @@ ENDPOINTS: list[Endpoint] = endpoints_from_config(_CFG)
 # pyarrow/deltalake are imported where Delta is read or written, so the planning and
 # HTTP logic (and its tests, and --dry-run) work without them.
 def bronze_schema():
+    """Columns of every CBS bronze table: lineage columns (_...) plus the raw record.
+
+    The record is kept as JSON text, untouched; typing happens in silver. Because every
+    endpoint has this same schema, a change in a CBS table never breaks a bronze write."""
     import pyarrow as pa
     return pa.schema([
         ("_request_key", pa.string()),
@@ -142,6 +150,7 @@ def bronze_schema():
 
 
 def log_schema():
+    """Columns of bronze/_ingestion_log: one row per request whose data is in bronze."""
     import pyarrow as pa
     return pa.schema([
         ("request_key", pa.string()),
@@ -166,6 +175,7 @@ class Request:
 
     @property
     def display_url(self) -> str:
+        """Full URL including the query, as stored in bronze for lineage."""
         return f"{self.endpoint.url}?{urlencode(self.params)}" if self.params else self.endpoint.url
 
 
@@ -186,6 +196,12 @@ def select_periods(periods: list[dict], start_year: int,
 
 
 def plan_requests(session: requests.Session, ep: Endpoint) -> list[Request]:
+    """The requests needed for one endpoint, each with its request key.
+
+    For a data table (split_by_period) this first asks CBS which periods exist, keeps
+    the configured ones, and makes one request per period. The period's status is in
+    the key: when CBS revises 'Voorlopig' to 'Definitief' the key changes, so run()
+    fetches that period again. Other endpoints are one request with a fixed key."""
     if ep.split_by_period:
         periods, _ = fetch_all(session, f"{BASE_URL}/{ep.table_id}/Perioden", {})
         reqs = []
@@ -194,6 +210,7 @@ def plan_requests(session: requests.Session, ep: Endpoint) -> list[Request]:
             log.info("%-40s %d periods: %s .. %s", ep.name, len(selected),
                      selected[0]["Key"].strip(), selected[-1]["Key"].strip())
         for p in selected:
+            # CBS pads period keys with spaces ('2024KW03 '); the status is part of the key
             key_val, status = p["Key"].strip(), (p.get("Status") or "").strip()
             reqs.append(Request(
                 endpoint=ep,
@@ -215,6 +232,8 @@ def plan_requests(session: requests.Session, ep: Endpoint) -> list[Request]:
 
 # --------------------------------------------------------------------------- http
 def make_session() -> requests.Session:
+    """HTTP session that retries up to 5 times, with increasing waits, on rate limits
+    (429) and server errors (5xx), so a short CBS hiccup doesn't fail a run."""
     s = requests.Session()
     retry = Retry(total=5, backoff_factor=2, status_forcelist=(429, 500, 502, 503, 504),
                   allowed_methods=("GET",))
@@ -252,6 +271,7 @@ def fetch_all(session: requests.Session, url: str, params: dict) -> tuple[list[d
 
 # --------------------------------------------------------------------------- delta io
 def done_keys() -> set[str]:
+    """Request keys already in bronze (from bronze/_ingestion_log); run() skips these."""
     if not (LOG_TABLE / "_delta_log").exists():
         return set()
     from deltalake import DeltaTable
@@ -260,6 +280,11 @@ def done_keys() -> set[str]:
 
 
 def write_bronze(req: Request, records: list[dict]) -> None:
+    """Write the records of one request to its bronze table.
+
+    First deletes earlier rows of the same period (or the same request key), then
+    appends. That makes the write repeatable: a revised period replaces its old rows,
+    and a retry after a crash can't create duplicates."""
     import pyarrow as pa
     from deltalake import DeltaTable, write_deltalake
     ep = req.endpoint
@@ -291,6 +316,11 @@ def write_bronze(req: Request, records: list[dict]) -> None:
 
 
 def log_success(req: Request, row_count: int, pages: int) -> None:
+    """Record a request in bronze/_ingestion_log, after its data was written.
+
+    The order matters: data first, log second. If the run stops in between, the request
+    isn't logged, so the next run fetches and writes it again (replacing, see
+    write_bronze)."""
     import pyarrow as pa
     from deltalake import write_deltalake
     ep = req.endpoint
@@ -317,6 +347,8 @@ def check_records(session, req: Request, records: list[dict], dataprops_cache: d
 
 
 def table_infos_request(table_id: str, info: dict) -> Request:
+    """Request for a table's TableInfos whose key contains CBS's modification dates, so a
+    new snapshot is only stored when CBS changed the table description."""
     ep = Endpoint(table_id, "TableInfos")
     key = (f"{table_id}/TableInfos#modified={info.get('Modified')}"
            f"#metadata={info.get('MetaDataModified')}")
@@ -357,6 +389,8 @@ def ingest_table_infos(session, table_ids: list[str], already: set[str],
 
 
 def quarantine_batch(req: Request, records: list[dict], results: list, pages: int):
+    """Save a batch that failed its checks to lakehouse/quarantine/cbs/ with a report
+    (request, source URL, every check result) and the records as received."""
     from checks.quarantine import quarantine
     report = {"request_key": req.key, "table_id": req.endpoint.table_id,
               "entity": req.endpoint.entity or "root", "period": req.period,
@@ -385,6 +419,7 @@ def out_of_scope_periods(ep: Endpoint, present: set[str], cbs_periods: list[dict
 
 
 def _sql_list(values) -> str:
+    """Values as a quoted SQL list for a Delta delete predicate: 'a', 'b'."""
     return ", ".join("'" + str(v).replace("'", "''") + "'" for v in sorted(values))
 
 
@@ -438,12 +473,20 @@ def cleanup_scope(session=None, dry_run: bool = True) -> list[str]:
 
 # --------------------------------------------------------------------------- main
 def run(only: str | None, force: bool, dry_run: bool) -> None:
+    """Ingest everything new for the configured endpoints.
+
+    Per request: skip it when its key is already logged; otherwise fetch every page,
+    check the records, and either quarantine them or write them to bronze and log the
+    key. A failing request doesn't stop the run; it is retried next time. `only`
+    limits the run to endpoints whose name contains that text; `force` ignores the log
+    (rows are replaced, not duplicated); `dry_run` only lists the requests."""
     from checks import failures
     session = make_session()
     already = set() if force else done_keys()
     fetched = skipped = failed = quarantined = 0
     dataprops_cache: dict[str, list[dict]] = {}
 
+    # 1. lifecycle: warn about stopped or stale tables, store changed TableInfos
     data_tables = list(dict.fromkeys(e.table_id for e in ENDPOINTS if e.split_by_period))
     data_tables = [t for t in data_tables
                    if not only or only.lower() in f"{t}_tableinfos".lower()]
@@ -451,6 +494,7 @@ def run(only: str | None, force: bool, dry_run: bool) -> None:
                                                              dry_run)
     failed += infos_failed
 
+    # 2. data and code lists, one request at a time
     for ep in ENDPOINTS:
         if only and only.lower() not in ep.name:
             continue
@@ -462,7 +506,7 @@ def run(only: str | None, force: bool, dry_run: bool) -> None:
             continue
 
         for req in requests_:
-            if req.key in already:
+            if req.key in already:          # "ask only once": already in bronze
                 skipped += 1
                 continue
             if dry_run:
