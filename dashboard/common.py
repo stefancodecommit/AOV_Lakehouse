@@ -70,6 +70,17 @@ def stop_if_empty(df: pd.DataFrame) -> None:
         st.stop()
 
 
+def branding() -> None:
+    """Logo (if the configured file exists) and the project note, in the sidebar."""
+    from config import project_path, settings
+    cfg = settings.get("dashboard", {})
+    logo = cfg.get("logo")
+    if logo and project_path(logo).is_file():
+        st.logo(str(project_path(logo)), size="large")
+    if cfg.get("project_note"):
+        st.sidebar.caption(cfg["project_note"])
+
+
 def credits() -> None:
     """Source credits (CC BY 4.0 asks for attribution). Shown in the sidebar, which is
     drawn before the page runs, so they appear on every page, also one that stops early."""

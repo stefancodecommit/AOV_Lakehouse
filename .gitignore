@@ -24,6 +24,10 @@ htmlcov/
 .mypy_cache/
 .ruff_cache/
 
+# --- Dashboard: logo files (trademarks; add your own locally) ---------------------
+dashboard/assets/*
+!dashboard/assets/README.md
+
 # --- Secrets and local settings ---------------------------------------------------
 .env
 .env.*

@@ -108,3 +108,23 @@ def test_pages_warn_when_gold_tables_come_from_different_runs(gold_lakehouse):
     publish.write_table(data.GOLD_ROOT / "gold_absence_by_sector", sector.assign(run_id="gold_old"))
     at = run_page("overview")
     assert any("different gold runs" in w.value for w in at.warning)
+
+
+def test_project_note_always_and_logo_only_when_the_file_exists(tmp_path, monkeypatch):
+    """st.logo isn't part of the page tree AppTest inspects, so calls to it are recorded."""
+    import base64
+
+    import config
+    import streamlit
+    calls = []
+    monkeypatch.setattr(streamlit, "logo", lambda image, **kw: calls.append(image))
+    monkeypatch.setitem(config.settings, "dashboard",
+                        {"project_note": "Educational project", "logo": str(tmp_path / "logo.png")})
+    at = run_page("overview")
+    assert any(c.value == "Educational project" for c in at.sidebar.caption)
+    assert calls == []                               # configured, but no file yet
+
+    (tmp_path / "logo.png").write_bytes(base64.b64decode(   # a 1x1 pixel PNG
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="))
+    at = run_page("overview")
+    assert calls == [str(tmp_path / "logo.png")] and not at.exception
