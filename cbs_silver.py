@@ -128,6 +128,12 @@ def read_reference(dataset: str, versions: dict | None = None) -> pd.DataFrame:
 
 
 def parse_raw(raw: pd.DataFrame, drop_id: bool = True) -> pd.DataFrame:
+    """Turn bronze rows (one JSON record per row) into a DataFrame with one column per
+    CBS field, plus the period status and ingest time from bronze's lineage columns.
+
+    CBS pads keys with spaces ('301000 ', 'NL01  '); they are stripped here once, so
+    every later join can compare keys directly. `drop_id`: in data rows the ID column is
+    only a running number and is dropped; in code lists it is a real key and is kept."""
     if raw.empty:
         return pd.DataFrame()
     df = pd.DataFrame([json.loads(s) for s in raw["raw_json"]])
@@ -140,17 +146,22 @@ def parse_raw(raw: pd.DataFrame, drop_id: bool = True) -> pd.DataFrame:
 
 
 def latest(df: pd.DataFrame, keys: list[str]) -> pd.DataFrame:
-    """Keep the most recently ingested row per key (safety net against duplicates)."""
+    """Keep the most recently ingested row per key (safety net against duplicates).
+
+    Bronze already replaces a revised period instead of appending it, so normally there
+    is one row per key; this guarantees it even if bronze ever held two versions."""
     if df.empty or "_ingested_at" not in df:
         return df
     return df.sort_values("_ingested_at").drop_duplicates(keys, keep="last")
 
 
 # =========================================================================== parsers
+# A number as CBS writes it in titles: '20', or with a space as thousands separator '1 000'
 _NUM = r"(\d{1,3}(?: \d{3})+|\d+)"
 
 
 def _int(s: str) -> int:
+    """'1 000' -> 1000: CBS writes thousands with a space in titles."""
     return int(s.replace(" ", ""))
 
 
@@ -165,20 +176,27 @@ def parse_size(title: str) -> tuple[str, int, int | None] | None:
         unit = "WP"   # persons employed (incl. owners)
     else:
         return None
-    if m := re.match(rf"^{_NUM} tot {_NUM}\b", t):
+    if m := re.match(rf"^{_NUM} tot {_NUM}\b", t):              # '10 tot 20 ...'
         return unit, _int(m[1]), _int(m[2])
-    if m := re.match(rf"^{_NUM}\b.*\bof meer\b", t):
+    if m := re.match(rf"^{_NUM}\b.*\bof meer\b", t):              # '100 ... of meer'
         return unit, _int(m[1]), None
+    # a single number: '2 werkzame personen' is the class [2, 3)
     if m := re.match(rf"^{_NUM} (?:werkza(?:am|me) perso(?:on|nen)|werknemers?)\b", t):
         return unit, _int(m[1]), _int(m[1]) + 1
     return None
 
 
 def size_key(unit: str, lo: int, hi: int | None) -> str:
+    """Stable key for a size class: ('WN', 10, 20) -> 'WN_10_20', open-ended -> 'WN_100_plus'.
+
+    WN = employees (werknemers), WP = persons employed (werkzame personen); the two
+    units are never mixed, so the unit is part of the key."""
     return f"{unit}_{lo}_{'plus' if hi is None else hi}"
 
 
 def size_range(lo: int, hi: int | None) -> str:
+    """Readable range from an exclusive upper bound:
+    (10, 20) -> '10-19', (2, 3) -> '2', (100, None) -> '100+'."""
     if hi is None:
         return f"{lo}+"
     return str(lo) if hi == lo + 1 else f"{lo}-{hi - 1}"
@@ -193,7 +211,11 @@ def size_band(lo: int, hi: int | None) -> str | None:
 
 
 def aggregate_flags(classes: list[tuple[int, int | None]]) -> list[bool]:
-    """True for a class that strictly contains another class of the same set."""
+    """True for a class that strictly contains another class of the same set.
+
+    CBS lists both detailed classes (1-4, 5-9) and their sum (1-9). Summing all
+    classes would count those companies twice, so aggregates are flagged and excluded
+    whenever classes are added up."""
     def contains(a, b):
         (alo, ahi), (blo, bhi) = a, b
         a_hi = float("inf") if ahi is None else ahi
@@ -202,6 +224,8 @@ def aggregate_flags(classes: list[tuple[int, int | None]]) -> list[bool]:
     return [any(contains(a, b) for b in classes) for a in classes]
 
 
+# A sector title starts with its SBI code, then the name: 'C Industrie', '10-12 Voedings-,
+# genotmiddelenindustrie', '24-30, 33 Metaal-elektro industrie', '4711 Supermarkten'
 _SECTOR_RE = re.compile(
     r"^([A-U](?:-[A-U])?|\d{2,5}(?:-\d{2,5})?(?:,\s*\d{2,5}(?:-\d{2,5})?)*)\s+(.+)$")
 
@@ -226,10 +250,15 @@ def parse_sector(title: str) -> tuple[str | None, str, str]:
     return code, name, level
 
 
+# CBS period keys: 4-digit year, kind (JJ year, KW quarter, MM month, HJ half year), number
 _PERIOD_RE = re.compile(r"^(\d{4})(JJ|KW|MM|HJ)(\d{2})$")
 
 
 def parse_period(key: str) -> dict:
+    """CBS period key -> type, year, quarter/month, first and last day, and a label.
+
+    '2025KW03' -> quarter 3 of 2025, 2025-07-01 .. 2025-09-30, '2025 Q3'. JJ = year,
+    KW = quarter, HJ = half year, MM = month. Unknown formats get period_type 'other'."""
     m = _PERIOD_RE.match(key)
     if not m:
         return {"period_type": "other"}
@@ -261,13 +290,19 @@ def snake(key: str) -> str:
 
 
 def region_level(key: str) -> str:
+    """Level of a CBS region key, from its prefix: NL01 = country, PV20 = province,
+    GM0014 = municipality, ..."""
     return {"NL": "country", "LD": "landsdeel", "PV": "province", "CR": "corop",
             "GM": "municipality"}.get(key[:2], "other")
 
 
 # =========================================================================== metadata
 def topics(dataprops: pd.DataFrame) -> pd.DataFrame:
-    """Topic (measure) rows of DataProperties with their topic-group path."""
+    """Topic (measure) rows of DataProperties with their topic-group path.
+
+    DataProperties is a tree: a Topic (measure) hangs under TopicGroups via ParentID.
+    The path of group titles ('Werknemers met verzuim / Duur meest recente verzuimgeval')
+    says what a measure belongs to; it is used to sort measures into breakdowns."""
     if dataprops.empty:
         return pd.DataFrame(columns=["measure_key", "title", "unit", "topic_group"])
     by_id = dataprops.set_index("ID") if "ID" in dataprops else None
@@ -285,7 +320,11 @@ def topics(dataprops: pd.DataFrame) -> pd.DataFrame:
 # =========================================================================== dimensions
 def build_map_characteristic(code_lists: dict[str, pd.DataFrame],
                              category_groups: dict[str, pd.DataFrame]) -> pd.DataFrame:
-    """One row per (source_table, key) of every company-characteristic dimension."""
+    """One row per (source_table, key) of every company-characteristic dimension.
+
+    CBS puts sectors, size classes and the total in one list per table. This table
+    says what each key is (member_type sector / size / total), so facts can be split
+    into sector rows and size rows. Size classes are recognised from their title."""
     rows = []
     for table_id, members in code_lists.items():
         if members.empty:
@@ -299,7 +338,7 @@ def build_map_characteristic(code_lists: dict[str, pd.DataFrame],
                    "characteristic_key": key, "title": title,
                    "category_group": group_title.get(m.get("CategoryGroupID")),
                    "member_type": "sector", "sector_key": None, "size_key": None}
-            if parsed := parse_size(title):
+            if parsed := parse_size(title):          # a title like '10 tot 100 werknemers'
                 row.update(member_type="size", size_key=size_key(*parsed))
                 sizes.append((len(rows), parsed[1], parsed[2]))
             elif key == TOTAL_KEY or parse_sector(title)[2] == "total":
@@ -314,6 +353,11 @@ def build_map_characteristic(code_lists: dict[str, pd.DataFrame],
 
 
 def build_dim_sector(code_lists: dict[str, pd.DataFrame], mapping: pd.DataFrame) -> pd.DataFrame:
+    """One row per sector key (and the national total), with its SBI code, name and level.
+
+    CBS uses the same keys for the same sector in every table (301000 = A Landbouw), so
+    the dimension is shared ('conformed') across all fact tables. `sbi_level` (section,
+    division, ...) lets gold and the dashboard pick one level and avoid double counting."""
     sector_keys = set(mapping.loc[mapping["member_type"].isin(["sector", "total"]),
                                   "characteristic_key"])
     titles = pd.concat([m[["Key", "Title"]] for m in code_lists.values() if not m.empty])
@@ -330,6 +374,10 @@ def build_dim_sector(code_lists: dict[str, pd.DataFrame], mapping: pd.DataFrame)
 
 
 def build_dim_company_size(titles: list[str]) -> pd.DataFrame:
+    """One row per size class found in any table, with numeric bounds and a coarse band.
+
+    The tables use different classes and units (employees in the survey, persons
+    employed elsewhere); the band (<10, 10-99, 100+) is the common level for comparing them."""
     rows = {}
     for title in titles:
         if parsed := parse_size(title):
@@ -349,6 +397,8 @@ def build_dim_company_size(titles: list[str]) -> pd.DataFrame:
 
 
 def build_dim_region(regions: pd.DataFrame) -> pd.DataFrame:
+    """Regions of 81644NED with their level (country, province, ...); the suffix
+    '(PV)', '(GM)' etc. is removed from the name."""
     if regions.empty:
         return pd.DataFrame(columns=["region_key", "region_name", "region_level", "description"])
     return pd.DataFrame({
@@ -360,6 +410,7 @@ def build_dim_region(regions: pd.DataFrame) -> pd.DataFrame:
 
 
 def build_dim_period(period_keys: set[str]) -> pd.DataFrame:
+    """One row per period key that occurs in any fact table, with its dates and label."""
     rows = [{"period_key": k, **parse_period(k)} for k in sorted(period_keys)]
     df = pd.DataFrame(rows)
     for col in ("year", "quarter", "month"):
@@ -372,6 +423,11 @@ def build_dim_period(period_keys: set[str]) -> pd.DataFrame:
 def attach_characteristic(df: pd.DataFrame, table_id: str, mapping: pd.DataFrame,
                           cols=("member_type", "sector_key", "size_key", "size_is_aggregate")
                           ) -> pd.DataFrame:
+    """Rename a table's company-characteristic column to `characteristic_key` and add
+    what each key is (sector, size class or total) from `map_characteristic`.
+
+    Keys missing from the code list are kept with member_type 'unknown' and logged, so a
+    new CBS key is visible instead of silently dropped."""
     dim = CHARACTERISTIC_DIMS[table_id]
     m = mapping[mapping["source_table"] == table_id][["characteristic_key", *cols]]
     out = df.rename(columns={dim: "characteristic_key"}).merge(m, on="characteristic_key", how="left")
@@ -384,10 +440,13 @@ def attach_characteristic(df: pd.DataFrame, table_id: str, mapping: pd.DataFrame
 
 
 def build_fct_absence_rate(data: pd.DataFrame, mapping: pd.DataFrame) -> pd.DataFrame:
+    """80072NED: one row per quarter x sector or size class with the absence percentage
+    (sick days as % of available working days)."""
     if data.empty:
         return pd.DataFrame()
     dim = CHARACTERISTIC_DIMS["80072NED"]
     data = latest(data, [dim, "Perioden"])
+    # the measure's key ends in a position number ('_1'); find it by its stable prefix
     measure = next(c for c in data.columns if c.startswith("Ziekteverzuimpercentage"))
     df = attach_characteristic(data, "80072NED", mapping)
     return pd.DataFrame({
@@ -403,10 +462,14 @@ _MARGIN_COLS = {"MW": "value", "MOG": "lower_95", "MBG": "upper_95"}
 
 
 def _margin_col(key: str) -> str:
+    """CBS margin key -> column: MW00000 -> value, MOG0095 -> lower_95,
+    MBG0095 -> upper_95."""
     return next((v for p, v in _MARGIN_COLS.items() if key.startswith(p)), key.lower())
 
 
 def build_dim_survey_measure(dataprops: dict[str, pd.DataFrame]) -> pd.DataFrame:
+    """One row per survey measure (86009NED, 83130NED): key, snake_case name, CBS title,
+    topic group and unit, taken from DataProperties."""
     frames = []
     for table_id in SURVEY_TABLES:
         t = topics(dataprops.get(table_id, pd.DataFrame()))
@@ -430,6 +493,12 @@ def build_dim_survey_measure(dataprops: dict[str, pd.DataFrame]) -> pd.DataFrame
 
 def build_fct_absence_survey(data: dict[str, pd.DataFrame], dim_measure: pd.DataFrame,
                              mapping: pd.DataFrame) -> pd.DataFrame:
+    """86009NED and 83130NED in long format: one row per period x characteristic x
+    measure, with the estimate and its 95% bounds side by side.
+
+    In the source the bounds are separate rows (dimension 'Marges'); they are pivoted
+    into columns so a value and its interval stay together. The two tables measure
+    similar things over different populations, so `source_table` keeps them apart."""
     frames = []
     for table_id in SURVEY_TABLES:
         df = data.get(table_id, pd.DataFrame())
@@ -440,6 +509,8 @@ def build_fct_absence_survey(data: dict[str, pd.DataFrame], dim_measure: pd.Data
         measures = dim_measure.loc[dim_measure["source_table"] == table_id, "measure_key"]
         measures = [m for m in measures if m in df.columns] or [
             c for c in df.columns if c not in {dim, "Marges", "Perioden", *META_COLS}]
+        # wide (one column per measure) -> long (one row per measure), then the three
+        # margin rows per measure (estimate, lower, upper) -> three columns
         long = df.melt(id_vars=[dim, "Marges", "Perioden", *META_COLS], value_vars=measures,
                        var_name="measure_key", value_name="v")
         long["margin"] = long["Marges"].map(_margin_col)
@@ -477,7 +548,12 @@ def build_fct_absence_survey(data: dict[str, pd.DataFrame], dim_measure: pd.Data
 def build_fct_counts(table_id: str, data: pd.DataFrame, dataprops: pd.DataFrame,
                      mapping: pd.DataFrame, extra_dims: dict[str, str] | None = None
                      ) -> pd.DataFrame:
-    """Long count table: one row per period x sector (x region) x measure."""
+    """Long count table: one row per period x sector (x region) x measure.
+
+    Used for 81589NED (businesses) and 81644NED (establishments). Their measures are
+    a total, counts per size class and counts per legal form; DataProperties' topic
+    groups say which is which ('breakdown'). Size measures get a size key, band and
+    aggregate flag, so gold can add up classes without double counting."""
     if data.empty:
         return pd.DataFrame()
     extra_dims = extra_dims or {}
@@ -487,6 +563,7 @@ def build_fct_counts(table_id: str, data: pd.DataFrame, dataprops: pd.DataFrame,
         raise RuntimeError(f"{table_id}: DataProperties missing in bronze; run cbs_bronze.py")
     t = t[t["measure_key"].isin(data.columns)].copy()
     grp = t["topic_group"].fillna("").str.lower()
+    # which breakdown a measure belongs to, from its topic group's Dutch title
     t["breakdown"] = "total"
     t.loc[grp.str.contains("grootte"), "breakdown"] = "size"
     t.loc[grp.str.contains("rechtsvorm"), "breakdown"] = "legal_form"
@@ -516,6 +593,7 @@ def build_fct_counts(table_id: str, data: pd.DataFrame, dataprops: pd.DataFrame,
         "breakdown": long["breakdown"], "measure_key": long["measure_key"],
         "size_key": long["size_key"], "size_band": long["size_band"],
         "size_is_aggregate": long["size_is_aggregate"], "legal_form": long["legal_form"],
+        # Int64 (nullable): a count is a whole number, but CBS leaves some cells empty
         "count": pd.to_numeric(long["count"], errors="coerce").round().astype("Int64"),
         "period_status": long["_period_status"], "ingested_at": long["_ingested_at"],
     })
@@ -525,6 +603,10 @@ def build_fct_counts(table_id: str, data: pd.DataFrame, dataprops: pd.DataFrame,
 
 # =========================================================================== orchestration
 def build_map_sbi2008_sbi2025(ref: pd.DataFrame) -> pd.DataFrame:
+    """The SBI 2008 -> SBI 2025 crosswalk (latest file version) with, per link, how many
+    codes each side has: `link_type` is 1:1, split (one 2008 code -> several 2025 codes),
+    merge (several 2008 codes -> one 2025 code) or many-to-many. kvk_silver.py uses it to
+    translate KVK's SBI 2025 codes back to the SBI 2008 sectors of the CBS tables."""
     if ref.empty:
         return pd.DataFrame()
     df = pd.DataFrame({
@@ -547,6 +629,10 @@ def build_map_sbi2008_sbi2025(ref: pd.DataFrame) -> pd.DataFrame:
 
 
 def build_all(read=read_bronze, read_ref=read_reference) -> dict[str, pd.DataFrame]:
+    """Build every silver CBS table from bronze; returns {table name: DataFrame}.
+
+    `read` and `read_ref` are passed in (instead of reading Delta directly) so the tests
+    can feed sample data, and run() can record which bronze versions were read."""
     code_lists = {t: read(t, dim) for t, dim in CHARACTERISTIC_DIMS.items()}
     category_groups = {t: read(t, "CategoryGroups") for t in ("80072NED", *SURVEY_TABLES)}
     dataprops = {t: read(t, "DataProperties") for t in CHARACTERISTIC_DIMS}
@@ -564,6 +650,8 @@ def build_all(read=read_bronze, read_ref=read_reference) -> dict[str, pd.DataFra
 
     facts = [fct_rate, fct_survey, fct_business, fct_estab]
     period_keys = set().union(*[set(f["period_key"]) for f in facts if not f.empty])
+    # size classes come from two places: members of the characteristic list (absence
+    # tables) and measure titles in the count tables ('2 werkzame personen')
     size_titles = list(mapping.loc[mapping["member_type"] == "size", "title"])
     for t in ("81589NED", "81644NED"):
         tp = topics(dataprops[t])
@@ -599,6 +687,7 @@ def run() -> str:
 
 
 def main() -> None:
+    """Command line: build and publish silver CBS, or only summarise with --preview."""
     ap = argparse.ArgumentParser(description="Build the silver layer from bronze CBS tables.")
     ap.add_argument("--preview", action="store_true", help="build and summarise, write nothing")
     args = ap.parse_args()
