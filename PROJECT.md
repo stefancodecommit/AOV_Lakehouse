@@ -224,9 +224,10 @@ Every page shows the data's freshness and credits CBS and KVK as sources.
 Two kinds of checks, for two different purposes:
 
 1. **Data checks at runtime** decide whether a batch may be written. They run inside the
-   pipeline on every ingestion, before writing. KVK has these already. CBS bronze still
-   needs them (expected columns from DataProperties, the period in the data matches the
-   period requested, numeric measures, known dimension keys).
+   pipeline on every ingestion, before writing (`checks/`): for CBS the expected columns
+   from DataProperties, the period in the data matches the period requested, numeric
+   measures, unique dimension keys, not empty; for KVK and the SBI crosswalk the file's
+   structure and values.
 2. **Checks after ingestion** cover anything that can only be judged once the data is in:
    row counts per period, no duplicate keys, keys present in their dimension, no sudden
    drops between snapshots. These run as Dagster asset checks after each layer; a failing
@@ -376,7 +377,7 @@ checks/                 data checks (cbs.py, kvk.py) shared by ingestion, Dagste
 maintenance.py          monthly tasks: quarantine cleanup (KVK retention, optimize/vacuum to do)
 cbs_silver.py           bronze CBS -> silver
 kvk_silver.py           bronze KVK -> silver kvk_company
-publish.py, runlog.py   staging, publishing and the run log, shared by the silver pipelines
+publish.py, runlog.py   staging, publishing and the run log, shared by silver and gold
 gold.py                 silver -> gold
 dashboard/              Streamlit app (to do)
 orchestration/          Dagster definitions: assets, schedules, checks, maintenance (to do)
@@ -389,6 +390,7 @@ Dockerfile              (to do)
 .github/workflows/      CI: tests.yml runs pytest on every push
 requirements.txt
 requirements-dev.txt
+README.md               entry point: how the scripts fit together and how to run them
 PROJECT.md              this file
 TODO.md                 open work
 ```
