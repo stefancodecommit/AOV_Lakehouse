@@ -56,6 +56,9 @@ def _env_overrides(environ: Mapping[str, str]) -> dict:
 
 
 def load(config_file: Path | None = None, environ: Mapping[str, str] | None = None) -> dict:
+    """All settings: config.yaml (or LAKEHOUSE_CONFIG), then config.local.yaml next to
+    it, then LAKEHOUSE__* environment variables; later sources win. `environ` can be
+    passed in so the tests don't depend on the real environment."""
     environ = os.environ if environ is None else environ
     config_file = Path(config_file or environ.get("LAKEHOUSE_CONFIG") or PROJECT_DIR / "config.yaml")
     with config_file.open(encoding="utf-8") as f:

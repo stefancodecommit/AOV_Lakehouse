@@ -31,6 +31,7 @@ RUN_LOG = project_path(settings["paths"]["lakehouse"]) / "_run_log"
 
 
 def new_run_id(pipeline: str, now: datetime | None = None) -> str:
+    """Unique, sortable run id: '<pipeline>_<UTC time to the microsecond>'."""
     now = now or datetime.now(timezone.utc)
     return f"{pipeline}_{now:%Y%m%dT%H%M%S%fZ}"
 
@@ -48,6 +49,7 @@ def code_version() -> str | None:
 
 
 def schema():
+    """Arrow schema of the run log table (see the module docstring)."""
     import pyarrow as pa
     return pa.schema([
         ("run_id", pa.string()), ("pipeline", pa.string()),
@@ -59,6 +61,9 @@ def schema():
 def write_run(run_id: str, pipeline: str, started_at: datetime, status: str,
               tables: dict | None = None, inputs: dict | None = None,
               error: str | None = None, path: Path | None = None) -> None:
+    """Append one run to the run log: its status, the per-table results, the input
+    versions it read, any error, and the code version. Called by publish.run_pipeline
+    for successful and failed runs alike."""
     import pyarrow as pa
     from deltalake import write_deltalake
     row = pa.table({

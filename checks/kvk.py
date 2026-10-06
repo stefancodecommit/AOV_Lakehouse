@@ -38,9 +38,12 @@ class FileCheck:
 
     @property
     def passed(self) -> bool:
+        """True when there are no errors (warnings don't block a file)."""
         return not self.errors
 
     def report(self) -> dict:
+        """The check result as a dict: the JSON report shown to the agent and saved in
+        quarantine."""
         return {"file": str(self.path), **self.details, "sha256": self.sha256,
                 "status": "PASSED" if self.passed else "FAILED",
                 "errors": self.errors, "warnings": self.warnings}
@@ -53,6 +56,7 @@ def norm(name: str) -> str:
 
 
 def sha256(path: Path) -> str:
+    """SHA-256 of a file: its fingerprint, used to recognise a file that was already loaded."""
     h = hashlib.sha256()
     with Path(path).open("rb") as f:
         for chunk in iter(lambda: f.read(1 << 20), b""):
@@ -68,6 +72,8 @@ def open_csv_bytes(path: Path, member: str | None):
 
 
 def detect_encoding(path: Path, member: str | None) -> str:
+    """The CSV's text encoding, guessed from its first megabyte: UTF-8 if it decodes,
+    else Windows-1252 (common for Dutch exports), else Latin-1 (never fails)."""
     with open_csv_bytes(path, member) as f:
         sample = f.read(1 << 20)
     for enc in ("utf-8-sig", "cp1252"):
@@ -80,6 +86,7 @@ def detect_encoding(path: Path, member: str | None) -> str:
 
 
 def iter_rows(path: Path, member: str | None, encoding: str):
+    """Yield the CSV rows (header first) as lists of strings, reading the file as a stream."""
     raw = open_csv_bytes(path, member)
     text = io.TextIOWrapper(raw, encoding=encoding, newline="")
     try:

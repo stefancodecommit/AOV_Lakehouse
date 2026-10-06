@@ -33,6 +33,7 @@ def table_structure(dataprops: list[dict]) -> tuple[list[str], dict[str, str | N
 
 
 def _strip(v):
+    """Remove CBS's padding spaces from text values; other values unchanged."""
     return v.strip() if isinstance(v, str) else v
 
 

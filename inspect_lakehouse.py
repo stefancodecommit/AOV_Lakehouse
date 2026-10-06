@@ -51,6 +51,7 @@ def find_tables(root: Path) -> list[Path]:
 
 
 def _min_max(dataset, column):
+    """Smallest and largest non-empty value of one column, e.g. the first and last period."""
     import pyarrow.compute as pc
     col = dataset.to_table(columns=[column]).column(column).drop_null()
     if len(col) == 0:
@@ -64,6 +65,9 @@ def _min_max(dataset, column):
 
 
 def summarize(path: Path) -> dict:
+    """Facts about one Delta table for the overview: rows, version, first/last period,
+    latest ingest, and notes (batches, unknown keys, provisional rows). It reads only
+    the columns it needs, so even the 1.9M-row KVK table is quick."""
     from deltalake import DeltaTable
     import pyarrow.compute as pc
 
@@ -96,6 +100,7 @@ def summarize(path: Path) -> dict:
 
 
 def _fmt(value) -> str:
+    """Value for the overview table: '-' for none, timestamps to the minute."""
     if value is None:
         return "-"
     if hasattr(value, "strftime"):
@@ -104,6 +109,7 @@ def _fmt(value) -> str:
 
 
 def expected_bronze_names() -> list[str]:
+    """Bronze table names the configuration should produce (to spot missing tables)."""
     try:
         import cbs_bronze
         return sorted({e.name for e in cbs_bronze.ENDPOINTS})
@@ -112,6 +118,7 @@ def expected_bronze_names() -> list[str]:
 
 
 def pipeline_layer(pipeline: str) -> str:
+    """Layer a pipeline publishes to: 'gold' for gold, 'silver' for silver_cbs/silver_kvk."""
     return "gold" if pipeline.startswith("gold") else "silver"
 
 
@@ -166,6 +173,8 @@ def lifecycle_warnings(bronze: Path) -> list[str]:
 
 
 def main() -> int:
+    """Print the overview per layer, quarantine, runs, warnings and problems.
+    Returns 1 when there are problems, so scripts (and later Dagster) can react."""
     ap = argparse.ArgumentParser(description="Overview of the lakehouse Delta tables.")
     from config import project_path, settings
     ap.add_argument("--root", default=str(project_path(settings["paths"]["lakehouse"])),

@@ -40,6 +40,7 @@ log = logging.getLogger("maintenance")
 
 
 def _read_log(path) -> pd.DataFrame:
+    """A batch or ingestion log as a DataFrame (successful rows only); empty if missing."""
     if not (path / "_delta_log").exists():
         return pd.DataFrame()
     from deltalake import DeltaTable
@@ -54,6 +55,7 @@ def make_resolver(logs: dict | None = None):
     logs = {src: _read_log(path) for src, path in BATCH_LOGS.items()} if logs is None else logs
 
     def is_resolved(entry: dict) -> str | None:
+        """Reason why this quarantine entry is resolved, or None if it isn't."""
         df = logs.get(entry.get("source"), pd.DataFrame())
         if df.empty or "quarantined_at" not in entry:
             return None
@@ -75,6 +77,7 @@ def make_resolver(logs: dict | None = None):
 
 
 def clean_quarantine(dry_run: bool = False) -> list[tuple[str, str]]:
+    """Run the quarantine cleanup with the configured retention; returns (folder, reason) pairs."""
     days = int(settings["quarantine"]["retention_days"])
     return cleanup(QUARANTINE_ROOT, make_resolver(), days, dry_run=dry_run)
 

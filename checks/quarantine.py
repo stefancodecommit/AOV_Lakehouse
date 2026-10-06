@@ -20,10 +20,13 @@ from pathlib import Path
 
 
 def _safe(name: str) -> str:
+    """A name that is safe as part of a folder name (no slashes or spaces, max 120 characters)."""
     return re.sub(r"[^0-9A-Za-z_.-]+", "_", name).strip("_")[:120]
 
 
 def content_sha256(records: list[dict] | None = None, file: Path | None = None) -> str:
+    """Fingerprint of a batch (its records as JSON) or a file, to quarantine the same
+    content only once."""
     h = hashlib.sha256()
     if file is not None:
         with Path(file).open("rb") as f:

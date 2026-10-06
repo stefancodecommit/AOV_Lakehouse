@@ -17,10 +17,12 @@ class CheckResult:
     severity: str = "error"                          # "error" stops a batch, "warning" doesn't
 
     def as_dict(self) -> dict:
+        """The result as a plain dict, for JSON reports (quarantine)."""
         return asdict(self)
 
 
 def all_passed(results: list[CheckResult]) -> bool:
+    """True when every check passed, warnings included."""
     return all(r.passed for r in results)
 
 
