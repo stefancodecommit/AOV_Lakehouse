@@ -204,10 +204,10 @@ the newest data behind it; comparisons that mix provisional and final figures ar
 flagged. Gold is published like silver (staging, `run_id`, run log) and refuses to build
 from silver tables of different runs.
 
-### Streamlit dashboard (to do)
+### Streamlit dashboard — `dashboard/` (built)
 
 Reads only gold tables. Caches data per gold table version, so it shows new data as soon
-as gold is rebuilt without needing a restart. Proposed pages:
+as gold is rebuilt without needing a restart. Pages (details in the README):
 
 1. **Overview:** national absence trend, plus the sectors and size classes furthest above
    and below average in the latest quarter.
@@ -215,9 +215,12 @@ as gold is rebuilt without needing a restart. Proposed pages:
 3. **Size classes:** absence per size class over time.
 4. **Behind the numbers:** survey profile (frequency, duration, work-relatedness, causes)
    for a selected sector or size class, with confidence intervals.
-5. **Context:** number of businesses per sector and size band.
+5. **Context:** number of businesses per sector and size band (CBS), active BVs/NVs and
+   median company age per sector (KVK).
+6. **Data dictionary:** every gold table and column, and the survey measures.
 
-Every page shows the data's freshness and credits CBS and KVK as sources.
+Every page shows the data's freshness and provisional status, offers the numbers as a
+table, and credits CBS and KVK as sources. A sidebar switch shows final figures only.
 
 ## Data quality
 
@@ -379,7 +382,7 @@ cbs_silver.py           bronze CBS -> silver
 kvk_silver.py           bronze KVK -> silver kvk_company
 publish.py, runlog.py   staging, publishing and the run log, shared by silver and gold
 gold.py                 silver -> gold
-dashboard/              Streamlit app (to do)
+dashboard/              Streamlit app: app.py, views/ (pages), charts.py, data.py
 orchestration/          Dagster definitions: assets, schedules, checks, maintenance (to do)
 tests/                  pytest
 inspect_lakehouse.py    overview of all Delta tables and problems after a run
@@ -408,10 +411,10 @@ TODO.md                 open work
 | Data checks before ingestion (CBS) | Built (`checks/cbs.py`) |
 | Quarantine | Built for CBS, KVK and reference files; monthly cleanup in `maintenance.py` |
 | Alerting, freshness checks | To do |
-| pytest | 240 tests incl. real Delta tables in tmp_path; one opt-in live CBS test |
+| pytest | 261 tests incl. real Delta tables and the dashboard pages; one opt-in live CBS test |
 | Configuration file | Built (`config.yaml` + `config.py`) |
 | Gold | Built: 5 tables; provisional figures marked |
-| Streamlit dashboard | To do; pages proposed |
+| Streamlit dashboard | Built: 6 pages incl. data dictionary; provisional marked, "final only" switch |
 | Dagster orchestration and maintenance | To do |
 | Docker Compose | To do |
 | CI | Stage 1 built: pytest on every push; Docker build step to do |

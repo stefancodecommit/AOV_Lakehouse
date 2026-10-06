@@ -22,13 +22,14 @@ as [Delta Lake](https://delta.io) tables in the folder `lakehouse/`.
 2. [How the scripts fit together](#how-the-scripts-fit-together)
 3. [Setup](#setup)
 4. [Running the pipeline](#running-the-pipeline)
-5. [The scripts one by one](#the-scripts-one-by-one)
-6. [What ends up in `lakehouse/`](#what-ends-up-in-lakehouse)
-7. [Configuration](#configuration)
-8. [Data quality: checks, quarantine and the run log](#data-quality-checks-quarantine-and-the-run-log)
-9. [Tests](#tests)
-10. [Status and known limitations](#status-and-known-limitations)
-11. [Sources and licence](#sources-and-licence)
+5. [The dashboard](#the-dashboard)
+6. [The scripts one by one](#the-scripts-one-by-one)
+7. [What ends up in `lakehouse/`](#what-ends-up-in-lakehouse)
+8. [Configuration](#configuration)
+9. [Data quality: checks, quarantine and the run log](#data-quality-checks-quarantine-and-the-run-log)
+10. [Tests](#tests)
+11. [Status and known limitations](#status-and-known-limitations)
+12. [Sources and licence](#sources-and-licence)
 
 ## Concepts in two minutes
 
@@ -62,8 +63,8 @@ it next time (details per script below).
  CBS OData API ──────► cbs_bronze.py ──────────┐
  (5 tables + code lists)  lakehouse/bronze/    ├──► cbs_silver.py ─────┐
                                                │    11 tables           │
- CBS crosswalk xlsx ──► reference_bronze.py ───┘    (dims, facts,      ├──► gold.py ──► (dashboard,
- (SBI 2008 -> 2025)       bronze/reference/          SBI crosswalk) ───┤    5 tables     to do)
+ CBS crosswalk xlsx ──► reference_bronze.py ───┘    (dims, facts,      ├──► gold.py ──► dashboard/
+ (SBI 2008 -> 2025)       bronze/reference/          SBI crosswalk) ───┤    5 tables     (Streamlit)
                                                           │             │
  KVK zip in inbox/kvk ► kvk_bronze_agent.py ──────► kvk_silver.py ──────┘
  (1.9M companies)         bronze/kvk/               kvk_company
@@ -75,6 +76,7 @@ it next time (details per script below).
    publish.py + runlog.py    silver/gold: staging, publishing, and the run log
    inspect_lakehouse.py      overview of every table, warnings and problems
    maintenance.py            monthly tasks (quarantine cleanup)
+   dashboard/                the Streamlit app; reads the gold tables only
 ```
 
 Reading the diagram:
@@ -121,6 +123,7 @@ work when something is new.
 .venv/bin/python kvk_silver.py                 # 5. bronze KVK -> silver (needs step 4)
 .venv/bin/python gold.py                       # 6. silver -> gold
 .venv/bin/python inspect_lakehouse.py          # 7. check the result
+.venv/bin/streamlit run dashboard/app.py       # 8. open the dashboard in the browser
 ```
 
 For step 3, first download the zip from
@@ -139,6 +142,38 @@ Useful options:
 | `cbs_silver.py --preview`, `kvk_silver.py --preview`, `gold.py --preview` | Build and summarise, write nothing |
 | `inspect_lakehouse.py --layer silver` | Overview of one layer |
 | `maintenance.py quarantine --dry-run` | Show which quarantine entries the monthly cleanup would remove |
+
+## The dashboard
+
+```bash
+.venv/bin/streamlit run dashboard/app.py         # opens http://localhost:8501
+```
+
+It reads only the gold tables. A new gold run shows up on the next page load (the cache is
+keyed on each table's Delta version); no restart needed.
+
+| Page | Answers |
+|---|---|
+| Overview | National absence trend; the highest and lowest sectors; small vs large companies |
+| Sectors | Sectors ranked against the national figure (per SBI level), one sector over time; this quarter or the 4-quarter average |
+| Size classes | Absence per size class over time; survey share absent per size class with 95% intervals |
+| Behind the numbers | For one sector or size class: which survey measures (frequency, duration, work-relatedness, complaints) differ from national beyond the margin of error |
+| Context | Businesses per sector and size band (CBS); active BVs/NVs and median company age per sector (KVK) |
+| Data dictionary | Every gold table and column (read from the tables), and every survey measure |
+
+On every page: the latest period and whether it is provisional, the data date and gold
+run, a table view of the numbers, and the source credits (sidebar). The sidebar switch
+**Final figures only** hides provisional CBS figures on all pages; provisional points are
+drawn hollow, and comparisons that mix provisional and final figures are flagged. KVK
+groups under 10 companies are hidden by default. A warning appears when the gold tables
+come from different gold runs.
+
+Chart design (`dashboard/charts.py`): colour only where it carries meaning - one blue
+series with the national figure in grey, red/blue for above/below the national figure,
+at most three categorical colours (the first three slots of a palette validated for
+colour-blind readers, with its own dark-mode steps); thin marks, hairline grid, tooltips,
+and direct labels on lines. The palette values were taken as published (a validated
+set); the validator script itself was not re-run, because Node.js isn't installed here.
 
 ## The scripts one by one
 
@@ -195,6 +230,12 @@ sector is only filled in when there is exactly one answer (90% of active compani
 
 Provisional CBS figures are kept but marked (`is_provisional`), so the dashboard can show
 "final figures only".
+
+### Dashboard
+
+**`dashboard/`** — `app.py` (entry point and navigation), `views/` (one file per page),
+`common.py` (the frame every page shares), `charts.py` (chart styles), `data.py` (reading
+gold, caching, the run check, the "final only" filter).
 
 ### Shared modules
 
@@ -256,7 +297,7 @@ A misspelled setting name stops the script with an error instead of being ignore
 ## Tests
 
 ```bash
-.venv/bin/pytest              # 240 tests, ~15 s, no internet needed
+.venv/bin/pytest              # 261 tests, ~30 s, no internet needed
 .venv/bin/pytest -m live      # one extra test against the real CBS API
 ```
 
@@ -275,11 +316,12 @@ at the real `lakehouse/`. GitHub Actions runs the tests on every push
 | `test_reference.py` | The SBI crosswalk: loading, rejecting, no duplicates |
 | `test_gold.py` | Gold comparisons and tables, end to end from bronze to gold |
 | `test_config.py`, `test_maintenance.py` | Configuration overrides, quarantine cleanup |
+| `test_dashboard.py` | Dashboard helpers, and every page run headless (both switch states) on gold built from sample data |
 
 ## Status and known limitations
 
 Built and run on real data: bronze, silver and gold, with checks, quarantine and the run
-log. Still to do (see [`TODO.md`](TODO.md)): the Streamlit dashboard, Dagster
+log, and the Streamlit dashboard. Still to do (see [`TODO.md`](TODO.md)): Dagster
 orchestration, Docker Compose.
 
 Limitations worth knowing when reading the results:

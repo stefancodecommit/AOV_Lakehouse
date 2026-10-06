@@ -8,12 +8,11 @@ next layer on top of it.
 ## Where to continue (status 2026-10-05)
 
 Built and run on real data: bronze (CBS, KVK, SBI crosswalk) with checks and quarantine,
-silver (CBS, KVK), gold (5 tables), config, run log, 240 tests. All committed.
+silver (CBS, KVK), gold (5 tables), the Streamlit dashboard, config, run log, 261 tests.
+All committed.
 
-**Next step: 4. Streamlit dashboard** (reads gold only). Decisions already made for it:
-personal/educational use; provisional figures shown by default, marked, with a switch
-"final figures only"; KVK groups under 10 companies hidden by default (`is_small_group`);
-sections are the default sector level (`sbi_level`).
+**Next step: 5. Orchestration (Dagster).** The dashboard (section 4) is built and runs
+with `.venv/bin/streamlit run dashboard/app.py`.
 
 Run order (from the project folder, with the virtualenv):
 
@@ -24,6 +23,7 @@ Run order (from the project folder, with the virtualenv):
     .venv/bin/python kvk_silver.py                 # needs silver CBS (crosswalk)
     .venv/bin/python gold.py
     .venv/bin/python inspect_lakehouse.py          # overview, warnings, problems
+    .venv/bin/streamlit run dashboard/app.py       # the dashboard
     .venv/bin/pytest                               # tests (live CBS test: -m live)
 
 Local setup: `.venv/` holds the Python packages (`pip install -r requirements-dev.txt`).
@@ -319,19 +319,28 @@ higher sickness absence. See `PROJECT.md` for the sub-questions.
       (`period_status`, `is_provisional`), with a dashboard switch "final figures only".
       Comparisons that mix provisional and final figures are flagged
 
-## 4. Streamlit dashboard
-- [ ] App in `dashboard/` that reads gold tables only
-- [ ] Cache per gold Delta table version, so new data shows without a restart
-- [ ] Check that the gold tables shown come from the same `run_id`
-- [ ] Pages: Overview, Sectors, Size classes, Behind the numbers, Context
-- [ ] Filters for period, sector and size class; seasonally fair comparisons (same
-      quarter last year, rolling four-quarter average)
-- [ ] Show data freshness and provisional/final status on every page; provisional
-      points drawn differently (e.g. dashed line or hollow markers) with a footnote
-- [ ] Switch "final figures only" (default off), and a note when a comparison mixes
-      provisional and final figures
-- [ ] Credit CBS and KVK (CC BY 4.0) on every page
-- [ ] Data dictionary page, generated from CBS metadata
+## 4. Streamlit dashboard (built 2026-10-06: `dashboard/`)
+Run: `.venv/bin/streamlit run dashboard/app.py`
+- [x] App in `dashboard/` that reads gold tables only
+- [x] Cache per gold Delta table version (and folder), so new data shows without a restart
+- [x] Check that the gold tables shown come from the same `run_id` (warning per page)
+- [x] Pages: Overview, Sectors, Size classes, Behind the numbers, Context
+- [x] Filters for period, sector level, sector and size class; seasonally fair
+      comparisons (same quarter last year, rolling four-quarter average)
+- [x] Show data freshness and provisional/final status on every page; provisional
+      points drawn hollow, with a footnote
+- [x] Switch "final figures only" (default off, kept across pages), a note when a
+      comparison mixes provisional and final figures, and an explanation when nothing
+      final is left to show
+- [x] Credit CBS and KVK (CC BY 4.0) on every page (sidebar)
+- [x] Data dictionary page: columns and types read from the gold tables, survey measures
+      from CBS metadata
+- [x] Table view on every page; KVK groups under 10 hidden by default
+- Checked on real data: every page renders in both switch states (AppTest); charts
+  rendered to images and reviewed (diverging bars: colour marks the side only; single
+  series without a legend; direct labels on the size lines)
+- [ ] Optional: re-run the palette validator once Node.js is available (the values are
+      the guidance's published, validated set)
 
 ## 5. Orchestration (Dagster)
 - [ ] Assets: bronze CBS, bronze KVK, silver CBS, silver KVK, gold
@@ -376,7 +385,8 @@ higher sickness absence. See `PROJECT.md` for the sub-questions.
 crosswalk; `tests/test_checks.py` the CBS and KVK checks and quarantine;
 `tests/test_maintenance.py` the quarantine cleanup; `tests/test_config.py` the
 configuration; `tests/test_kvk_silver.py` silver KVK; `tests/test_gold.py` gold;
-`tests/test_delta.py` writes real Delta tables in `tmp_path` (240 tests, ~14 s). `conftest.py` fails a test when any module still points at the real
+`tests/test_dashboard.py` the dashboard (every page headless); `tests/test_delta.py`
+writes real Delta tables in `tmp_path` (261 tests, ~30 s). `conftest.py` fails a test when any module still points at the real
 lakehouse or inbox. Checked by breaking the code on purpose:
 removing the delete-before-write, an empty `done_keys()` and non-UTC silver timestamps
 each make the right tests fail.

@@ -16,6 +16,8 @@ import cbs_bronze  # noqa: E402
 import cbs_silver  # noqa: E402
 import kvk_bronze_agent  # noqa: E402
 import gold  # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "dashboard"))
+import data as dashboard_data  # noqa: E402  (dashboard/data.py)
 import kvk_silver  # noqa: E402
 import maintenance  # noqa: E402
 import runlog  # noqa: E402
@@ -46,6 +48,7 @@ def isolated_lakehouse(tmp_path, monkeypatch):
     monkeypatch.setattr(gold, "SILVER_ROOT", tmp_path / "silver")
     monkeypatch.setattr(gold, "GOLD_ROOT", tmp_path / "gold")
     monkeypatch.setattr(gold, "RUN_LOG", tmp_path / "_run_log")
+    monkeypatch.setattr(dashboard_data, "GOLD_ROOT", tmp_path / "gold")
     ref = tmp_path / "bronze" / "reference"
     monkeypatch.setattr(reference_bronze, "REF_ROOT", ref)
     monkeypatch.setattr(reference_bronze, "DATA_TABLE", ref / "sbi2008_sbi2025")
@@ -68,7 +71,7 @@ def isolated_lakehouse(tmp_path, monkeypatch):
     import config
     real = [config.project_path(config.settings["paths"][k]) for k in ("lakehouse", "inbox")]
     for mod in (cbs_bronze, cbs_silver, reference_bronze, kvk_bronze_agent, maintenance, runlog,
-                kvk_silver, gold):
+                kvk_silver, gold, dashboard_data):
         for name, value in vars(mod).items():
             values = value.values() if isinstance(value, dict) else [value]
             for v in values:
