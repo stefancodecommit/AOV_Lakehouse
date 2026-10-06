@@ -93,6 +93,8 @@ def read_kvk_bronze(versions: dict | None = None) -> pd.DataFrame:
 
 
 def read_crosswalk(versions: dict | None = None) -> pd.DataFrame:
+    """The SBI 2008 <-> 2025 crosswalk from silver (map_sbi2008_sbi2025), only the two
+    code columns. Without it every code becomes 'unknown', so run cbs_silver.py first."""
     from deltalake import DeltaTable
     path = SILVER_ROOT / "map_sbi2008_sbi2025"
     if not (path / "_delta_log").exists():
@@ -109,13 +111,18 @@ def read_crosswalk(versions: dict | None = None) -> pd.DataFrame:
 def classify_main_activities(values, crosswalk: pd.DataFrame) -> pd.DataFrame:
     """One row per distinct "Hoofdactiviteiten" value with its SBI columns and flags."""
     in2008, in2025 = set(crosswalk["sbi2008_code"]), set(crosswalk["sbi2025_code"])
+    # SBI 2025 code -> the SBI 2008 codes it came from (several for a merge)
     sources = crosswalk.groupby("sbi2025_code")["sbi2008_code"].agg(set).to_dict()
     rows = []
     for value in values:
         codes = [c.strip() for c in str(value or "").split(",") if c.strip()]
+        # per code: which classification it belongs to, how it maps, and which SBI 2008
+        # codes it could stand for (the candidates of all main codes are combined)
         versions, mappings, candidates = [], [], set()
         for c in codes:
             if c in in2008 and c in in2025:
+                # the same number exists in both lists: we can't tell which one KVK meant,
+                # so both readings stay candidates
                 versions.append("both")
                 mappings.append("ambiguous_version")
                 candidates |= {c} | sources.get(c, set())
@@ -130,6 +137,8 @@ def classify_main_activities(values, crosswalk: pd.DataFrame) -> pd.DataFrame:
             else:
                 versions.append("unknown")
                 mappings.append("unknown_code")
+        # derived columns only when unambiguous: one candidate code, or (for division and
+        # section) all candidates in one division; never when a code is unknown
         unknown = "unknown" in versions
         divisions = {c[:2] for c in candidates}
         division = divisions.pop() if len(divisions) == 1 and not unknown else None
@@ -152,11 +161,18 @@ def classify_main_activities(values, crosswalk: pd.DataFrame) -> pd.DataFrame:
 
 # =========================================================================== build
 def _blank_to_null(s: pd.Series) -> pd.Series:
+    """Text column with surrounding spaces removed and empty strings as null."""
     s = s.astype("string").str.strip()
     return s.mask(s == "")
 
 
 def build_kvk_company(bronze: pd.DataFrame, crosswalk: pd.DataFrame) -> pd.DataFrame:
+    """kvk_company from the bronze rows: typed columns plus the SBI columns and flags.
+
+    Columns are found by name through the same accepted spellings as the KVK file
+    checks (config.yaml), so a renamed header in a future KVK file only needs a config
+    change. The SBI logic runs once per distinct main-activity value (about 8,400 for
+    1.9 million rows) and is joined back, which keeps the run at seconds."""
     if bronze.empty:
         return pd.DataFrame()
     found, missing = match_columns(list(bronze.columns), REQUIRED_COLUMNS, OPTIONAL_COLUMNS)
@@ -189,6 +205,7 @@ def build_kvk_company(bronze: pd.DataFrame, crosswalk: pd.DataFrame) -> pd.DataF
     # SBI logic once per distinct value, then joined back
     sbi = classify_main_activities(out["main_activity_codes"].dropna().unique(), crosswalk)
     out = out.merge(sbi, on="main_activity_codes", how="left")
+    # companies without any main activity aren't in `sbi` (nothing to classify)
     none = out["main_activity_codes"].isna()
     out.loc[none, ["main_activity_count", "has_multiple_main_activities", "has_no_main_activity",
                    "is_kvk_subcode", "sbi_mapping", "sbi2008_candidates"]] = \
@@ -201,16 +218,19 @@ def build_kvk_company(bronze: pd.DataFrame, crosswalk: pd.DataFrame) -> pd.DataF
 
 
 def build_all(read_bronze=read_kvk_bronze, read_map=read_crosswalk, inputs=None) -> dict:
+    """Build kvk_company; `inputs` (optional) collects the Delta versions read, for the run log."""
     kw = {} if inputs is None else {"versions": inputs}
     return {"kvk_company": build_kvk_company(read_bronze(**kw), read_map(**kw))}
 
 
 def run() -> str:
+    """Build, stage, publish and log one silver KVK run (publish.py). Returns the run_id."""
     from publish import run_pipeline
     return run_pipeline(PIPELINE, lambda inputs: build_all(inputs=inputs), SILVER_ROOT, RUN_LOG)
 
 
 def main() -> None:
+    """Command line: build and publish kvk_company, or only summarise with --preview."""
     ap = argparse.ArgumentParser(description="Build silver kvk_company from bronze KVK.")
     ap.add_argument("--preview", action="store_true", help="build and summarise, write nothing")
     args = ap.parse_args()

@@ -86,10 +86,13 @@ log = logging.getLogger("reference_bronze")
 
 
 def _norm(name: str) -> str:
+    """Compare headers without case or punctuation:
+    'SBI2025 titel dd 20260101' -> 'sbi2025titeldd20260101'."""
     return re.sub(r"[^a-z0-9]", "", str(name).lower())
 
 
 def _sha256(path: Path) -> str:
+    """SHA-256 of a file: its fingerprint, used to recognise a file that was already loaded."""
     h = hashlib.sha256()
     with path.open("rb") as f:
         for chunk in iter(lambda: f.read(1 << 20), b""):
@@ -176,6 +179,10 @@ def remove_orphan_rows() -> None:
 
 def write_batch(df: pd.DataFrame, batch_id: str, now: datetime, source_file: str,
                 source_url: str | None, sha: str, version: str) -> int:
+    """Write the crosswalk rows as one batch in ONE Delta commit; returns the row count.
+
+    Rows of a batch that was written earlier but never logged (a crash in between) are
+    removed first, so retrying can't double them."""
     import pyarrow as pa
     from deltalake import write_deltalake
 
@@ -197,6 +204,7 @@ def write_batch(df: pd.DataFrame, batch_id: str, now: datetime, source_file: str
 
 def write_log(batch_id: str, now: datetime, source_file: str, source_url: str | None,
               sha: str, version: str, rows: int) -> None:
+    """Record a written batch in bronze/reference/_batch_log (after the data)."""
     import pyarrow as pa
     from deltalake import write_deltalake
     table = pa.table({
@@ -240,6 +248,7 @@ def ingest(path: Path, source_url: str | None = None) -> dict:
 
 
 def download(url: str, dest_dir: Path = DOWNLOAD_DIR) -> Path:
+    """Download the file at `url` into `dest_dir` (inbox/reference/) and return its path."""
     import requests
     dest_dir.mkdir(parents=True, exist_ok=True)
     dest = dest_dir / url.rstrip("/").rsplit("/", 1)[-1]

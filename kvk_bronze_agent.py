@@ -96,6 +96,8 @@ VERIFIED: dict[str, Verification] = {}   # resolved file path -> latest verifica
 # --------------------------------------------------------------------------- file helpers
 def _resolve(file_path: str) -> Path:
     # dragging a file into a terminal often adds quotes or escaped spaces
+    """A file path as typed or dragged into the terminal -> an absolute Path.
+    A bare file name that doesn't exist here is looked up in the inbox."""
     cleaned = file_path.strip().strip("'\"").replace("\\ ", " ")
     path = Path(cleaned).expanduser()
     if not path.exists() and path.name == cleaned and (INBOX / cleaned).exists():
@@ -265,6 +267,7 @@ def list_batches() -> str:
 
 # --------------------------------------------------------------------------- delta writes
 def _clean_name(name: str, seen: set[str]) -> str:
+    """CSV header -> a valid, unique Delta column name: 'Datum aanvang' -> 'Datum_aanvang'."""
     base = re.sub(r"[^0-9A-Za-z_]", "_", name.strip()) or "column"
     out, i = base, 2
     while out in seen:
@@ -302,6 +305,7 @@ def write_batch(v: Verification, batch_id: str, now: datetime) -> int:
     written = 0
 
     def batches():
+        """Yield the CSV rows as Arrow batches of BATCH_ROWS rows (keeps memory flat)."""
         nonlocal written
         reader = _iter_rows(Path(v.path), v.csv_member, v.encoding)
         next(reader)  # header
@@ -317,6 +321,7 @@ def write_batch(v: Verification, batch_id: str, now: datetime) -> int:
             yield _to_batch(buf)
 
     def _to_batch(buf):
+        """Rows of text -> one Arrow record batch with the lineage columns added."""
         nonlocal written
         n = len(buf)
         arrays = [pa.array([r[i] for r in buf], pa.string()) for i in range(len(cols))]
@@ -341,6 +346,9 @@ def write_batch(v: Verification, batch_id: str, now: datetime) -> int:
 
 
 def write_log(v: Verification, batch_id: str, now: datetime, rows: int) -> None:
+    """Record a written batch in bronze/kvk/_batch_log, with its hash and verification
+    report. Written after the data, so an unlogged batch is recognisable as unfinished
+    (remove_orphan_rows deletes it before the next write)."""
     import pyarrow as pa
     from deltalake import write_deltalake
 
@@ -384,6 +392,11 @@ invent file paths or batch ids. Keep replies short."""
 
 
 def run_agent(model: str) -> None:
+    """Chat loop: the model talks to the user and calls the tools (TOOLS).
+
+    The model only decides *which* tool to call; checking, confirming and writing all
+    happen in the Python tools. The final YES is read from the keyboard by _confirm(),
+    so the model can never approve a write on its own."""
     try:
         from ollama import Client
     except ImportError:
@@ -429,6 +442,7 @@ def run_agent(model: str) -> None:
 
 
 def newest_new_inbox_file() -> str | None:
+    """Name of the newest file in the inbox that isn't ingested yet, or None."""
     return next((f["file"] for f in inbox_files() if not f["already_ingested_as"]), None)
 
 
