@@ -83,12 +83,13 @@ ollama:
   model: qwen2.5:7b               # any model that supports tool calling
 
 dashboard:
-  # Shown in the sidebar of every page.
-  project_note: Educational project – Erasmus University Rotterdam
-  # Optional logo at the top of the sidebar (png, jpg or svg). Shown only when the file
-  # exists. Logo files are not in git (see .gitignore): a university logo is a trademark,
-  # so check the brand guidelines before using or publishing it.
-  logo: dashboard/assets/logo.png
+  # Logo at the top of the sidebar (png, jpg or svg), with a variant for dark mode.
+  # Shown only when the file exists; otherwise project_note is shown as text. Logo files
+  # are not in git (see .gitignore): a university logo is a trademark, so check the
+  # brand guidelines before publishing it.
+  logo: dashboard/assets/eur_logo.svg
+  logo_dark: dashboard/assets/eur_logo_dark.svg
+  project_note: Erasmus University Rotterdam
 
 quarantine:
   # maintenance.py (monthly) removes entries that are resolved (ingested later) and

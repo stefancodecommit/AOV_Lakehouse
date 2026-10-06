@@ -110,21 +110,35 @@ def test_pages_warn_when_gold_tables_come_from_different_runs(gold_lakehouse):
     assert any("different gold runs" in w.value for w in at.warning)
 
 
-def test_project_note_always_and_logo_only_when_the_file_exists(tmp_path, monkeypatch):
+def test_logo_when_the_file_exists_otherwise_the_note(tmp_path, monkeypatch):
     """st.logo isn't part of the page tree AppTest inspects, so calls to it are recorded."""
-    import base64
-
     import config
     import streamlit
     calls = []
     monkeypatch.setattr(streamlit, "logo", lambda image, **kw: calls.append(image))
-    monkeypatch.setitem(config.settings, "dashboard",
-                        {"project_note": "Educational project", "logo": str(tmp_path / "logo.png")})
+    monkeypatch.setitem(config.settings, "dashboard", {
+        "project_note": "Erasmus University Rotterdam", "logo": str(tmp_path / "logo.svg"),
+        "logo_dark": str(tmp_path / "logo_dark.svg")})
     at = run_page("overview")
-    assert any(c.value == "Educational project" for c in at.sidebar.caption)
     assert calls == []                               # configured, but no file yet
+    assert any(c.value == "Erasmus University Rotterdam" for c in at.sidebar.caption)
 
-    (tmp_path / "logo.png").write_bytes(base64.b64decode(   # a 1x1 pixel PNG
-        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="))
+    (tmp_path / "logo.svg").write_text('<svg xmlns="http://www.w3.org/2000/svg"/>')
     at = run_page("overview")
-    assert calls == [str(tmp_path / "logo.png")] and not at.exception
+    assert calls == [str(tmp_path / "logo.svg")] and not at.exception
+    assert not any(c.value == "Erasmus University Rotterdam" for c in at.sidebar.caption)
+
+
+def test_dark_logo_in_dark_mode(tmp_path, monkeypatch):
+    import charts
+    import config
+    import streamlit
+    calls = []
+    monkeypatch.setattr(streamlit, "logo", lambda image, **kw: calls.append(image))
+    monkeypatch.setattr(charts, "theme_mode", lambda: "dark")
+    for name in ("logo.svg", "logo_dark.svg"):
+        (tmp_path / name).write_text('<svg xmlns="http://www.w3.org/2000/svg"/>')
+    monkeypatch.setitem(config.settings, "dashboard", {
+        "logo": str(tmp_path / "logo.svg"), "logo_dark": str(tmp_path / "logo_dark.svg")})
+    run_page("overview")
+    assert calls == [str(tmp_path / "logo_dark.svg")]

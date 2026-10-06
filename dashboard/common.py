@@ -71,13 +71,16 @@ def stop_if_empty(df: pd.DataFrame) -> None:
 
 
 def branding() -> None:
-    """Logo (if the configured file exists) and the project note, in the sidebar."""
+    """The logo at the top of the sidebar, in its dark-mode variant when the viewer uses
+    a dark theme. Without a logo file, the project note is shown as text instead."""
+    import charts
     from config import project_path, settings
     cfg = settings.get("dashboard", {})
-    logo = cfg.get("logo")
+    logo = cfg.get("logo_dark") if charts.theme_mode() == "dark" else None
+    logo = logo if logo and project_path(logo).is_file() else cfg.get("logo")
     if logo and project_path(logo).is_file():
         st.logo(str(project_path(logo)), size="large")
-    if cfg.get("project_note"):
+    elif cfg.get("project_note"):
         st.sidebar.caption(cfg["project_note"])
 
 
