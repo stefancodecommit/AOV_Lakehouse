@@ -93,7 +93,8 @@ def summarize(path: Path) -> dict:
             info["extra"].append(f"{unknown} unknown key rows")
     if "period_status" in columns and info["rows"]:
         st = ds.to_table(columns=["period_status"]).column("period_status")
-        provisional = pc.sum(pc.equal(st, "Voorlopig")).as_py() or 0
+        # anything with a status other than final: Voorlopig and NaderVoorlopig
+        provisional = pc.sum(pc.not_equal(st.drop_null(), "Definitief")).as_py() or 0
         if provisional:
             info["extra"].append(f"{provisional} provisional rows")
     return info

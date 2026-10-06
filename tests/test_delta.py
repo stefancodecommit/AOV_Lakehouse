@@ -401,3 +401,13 @@ def test_publish_stopping_halfway_is_logged_and_detected(bronze_delta, monkeypat
     monkeypatch.setattr(publish, "_overwrite", real)
     s.run()                                        # a clean rerun fixes it
     assert inspect_lakehouse.silver_run_problems(s.LAKEHOUSE)[1] == []
+
+
+# =========================================================================== inspect_lakehouse
+def test_inspect_counts_every_provisional_status(tmp_path):
+    """Both Voorlopig and NaderVoorlopig are provisional; only Definitief is final."""
+    publish.write_table(tmp_path / "t", pd.DataFrame({
+        "period_key": ["2025KW01", "2025KW02", "2025KW03", "2025KW04"],
+        "period_status": ["Definitief", "NaderVoorlopig", "Voorlopig", None]}))
+    info = inspect_lakehouse.summarize(tmp_path / "t")
+    assert "2 provisional rows" in info["extra"]
