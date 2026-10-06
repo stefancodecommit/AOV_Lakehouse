@@ -13,7 +13,8 @@ config, run log, 283 tests.
 All committed.
 
 **Next step: 6. Deployment (Docker Compose).** Sections 4 (dashboard) and 5 (Dagster)
-are built; see the README for how to start them.
+are built; see the README for how to start them. One open question for the dashboard:
+limit it to this machine (see section 4).
 
 Run order (from the project folder, with the virtualenv):
 
@@ -344,6 +345,10 @@ Run: `.venv/bin/streamlit run dashboard/app.py`
   series without a legend; direct labels on the size lines)
 - [ ] Optional: re-run the palette validator once Node.js is available (the values are
       the guidance's published, validated set)
+- [ ] Open question (2026-10-06): limit the dashboard to this machine? Streamlit also
+      listens on the network address by default (Dagster already listens on 127.0.0.1
+      only). Fix: `.streamlit/config.toml` with `[server] address = "localhost"`; for
+      Docker (section 6) the port mapping decides instead
 
 ## 5. Orchestration (Dagster) (built 2026-10-06: `orchestration/`)
 Run: `DAGSTER_HOME=$PWD/orchestration .venv/bin/dagster dev -f orchestration/definitions.py`
