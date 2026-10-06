@@ -107,3 +107,26 @@ def test_bare_file_name_is_looked_up_in_the_inbox(tmp_path, monkeypatch):
     assert k._resolve("kvk.zip") == path.resolve()
     assert json.loads(k.verify_dataset("kvk.zip"))["status"] == "PASSED"
     assert k._resolve("'/somewhere/else.zip'") == Path("/somewhere/else.zip")
+
+
+
+# =========================================================================== Dagster entry point
+def test_dagster_ingest_needs_the_exact_file_name_as_confirmation():
+    inbox_zip("kvk.zip")
+    wrong = k.ingest_confirmed_file("kvk.zip", "yes", confirmed_by="dagster:test")
+    assert wrong["status"] == "CANCELLED" and not k.DATA_TABLE.exists()
+
+    ok = k.ingest_confirmed_file("kvk.zip", "kvk.zip", confirmed_by="dagster:test")
+    assert ok["status"] == "INGESTED" and ok["rows"] == 3
+    from deltalake import DeltaTable
+    log = DeltaTable(str(k.LOG_TABLE)).to_pandas()
+    assert list(log["confirmed_by"]) == ["dagster:test"]
+    again = k.ingest_confirmed_file("kvk.zip", "kvk.zip", confirmed_by="dagster:test")
+    assert again["status"] == "FAILED"                # already ingested
+
+
+def test_dagster_entry_point_is_not_an_agent_tool():
+    """The model must never be able to skip the human confirmation."""
+    assert "ingest_confirmed_file" not in k.TOOLS and "_ingest" not in k.TOOLS
+    assert set(k.TOOLS) == {"get_dataset_info", "list_inbox", "verify_dataset",
+                            "ingest_verified_dataset", "list_batches"}

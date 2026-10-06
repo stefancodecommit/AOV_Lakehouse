@@ -247,8 +247,8 @@ job of the runtime checks above, which share the same validation functions.
   logged as ingested, so a corrected batch can still be loaded. The same content is
   saved once. A monthly cleanup removes entries that were resolved later or are older
   than the retention period (90 days); a problem that persists is quarantined again.
-- **Alerting:** Dagster sends a notification (email or Slack) for failed runs and failed
-  checks.
+- **Alerting:** failed runs and failed checks are shown in the Dagster UI (decided
+  2026-10-06 for personal use; email or Slack can be added with a run failure sensor).
 - **Freshness:** a check warns when the newest data is older than expected:
   CBS quarterly data more than 4 months behind the current quarter, yearly data more than
   15 months, the latest KVK snapshot older than the agreed upload interval. This catches a
@@ -323,11 +323,12 @@ then runs locally, in Docker, or on another machine with only the configuration 
   than 10 companies are hidden.
 - **No secrets needed:** all sources are open data without API keys.
 
-## Orchestration — Dagster (to do)
+## Orchestration — Dagster (`orchestration/`, built)
 
 - Each layer is a Dagster asset: bronze CBS, bronze KVK, silver CBS, silver KVK, gold.
-- **Bronze CBS runs every quarter.** It only produces a new materialisation when it
-  ingested new rows, so an empty run stops the chain there.
+- **Bronze CBS runs every month** (decided 2026-10-06; CBS release dates vary). It only
+  produces a new materialisation when it ingested new rows, so an empty run stops the
+  chain there.
 - **Silver, gold and the dashboard refresh run only when new data arrived upstream**,
   using Dagster's automation conditions on the upstream materialisation.
 - **Bronze KVK is triggered by a person**, because the agent needs a user to upload and
@@ -335,6 +336,9 @@ then runs locally, in Docker, or on another machine with only the configuration 
 - Asset checks (see Data quality) run after each asset and block downstream work when
   they fail.
 - A separate monthly maintenance job (see Storage and maintenance).
+- Failures are shown in the Dagster UI; no email or Slack alerts (personal use).
+- First time on a lakehouse filled by hand: the job `register_existing_data` records the
+  existing bronze data, so automatic rebuilds can start. Details in the README.
 
 Note on timing: CBS publishes quarterly figures some weeks after a quarter ends, and dates
 vary. A single run per quarter can therefore miss a release by a few days. Because runs
@@ -383,7 +387,7 @@ kvk_silver.py           bronze KVK -> silver kvk_company
 publish.py, runlog.py   staging, publishing and the run log, shared by silver and gold
 gold.py                 silver -> gold
 dashboard/              Streamlit app: app.py, views/ (pages), charts.py, data.py
-orchestration/          Dagster definitions: assets, schedules, checks, maintenance (to do)
+orchestration/          Dagster definitions (assets, checks, schedules, maintenance job) and dagster.yaml
 tests/                  pytest
 inspect_lakehouse.py    overview of all Delta tables and problems after a run
 inbox/                  kvk/: KVK zip uploads for the agent; reference/: downloaded
@@ -411,10 +415,10 @@ TODO.md                 open work
 | Data checks before ingestion (CBS) | Built (`checks/cbs.py`) |
 | Quarantine | Built for CBS, KVK and reference files; monthly cleanup in `maintenance.py` |
 | Alerting, freshness checks | To do |
-| pytest | 261 tests incl. real Delta tables and the dashboard pages; one opt-in live CBS test |
+| pytest | 283 tests incl. real Delta tables, the dashboard pages and Dagster; one opt-in live CBS test |
 | Configuration file | Built (`config.yaml` + `config.py`) |
 | Gold | Built: 5 tables; provisional figures marked |
 | Streamlit dashboard | Built: 6 pages incl. data dictionary; provisional marked, "final only" switch |
-| Dagster orchestration and maintenance | To do |
+| Dagster orchestration and maintenance | Built: monthly CBS, automatic rebuilds after blocking checks, freshness, maintenance |
 | Docker Compose | To do |
 | CI | Stage 1 built: pytest on every push; Docker build step to do |

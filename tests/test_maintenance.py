@@ -114,3 +114,64 @@ def test_quarantined_period_is_cleaned_up_after_cbs_fixes_it(monkeypatch):
     removed = m.clean_quarantine()
     assert len(removed) == 1 and removed[0][1].startswith("resolved: 80072NED/TypedDataSet")
     assert list_entries(m.QUARANTINE_ROOT) == []
+
+
+
+# =========================================================================== KVK retention
+def kvk_batches(days):
+    """KVK bronze with one tiny batch per ingest day, all logged as success."""
+    import pyarrow as pa
+    from deltalake import write_deltalake
+    for i, day in enumerate(days):
+        ts = pd.Timestamp(day, tz="UTC")
+        write_deltalake(str(m.KVK_ROOT / "basis_bedrijfsgegevens"), pa.table({
+            "Actief": ["J", "N"], "_batch_id": [f"b{i}"] * 2,
+            "_ingested_at": pa.array([ts] * 2, pa.timestamp("us", tz="UTC"))}), mode="append")
+        write_deltalake(str(m.KVK_ROOT / "_batch_log"), pa.table({
+            "batch_id": [f"b{i}"], "status": ["success"], "file_sha256": [f"sha{i}"],
+            "ingested_at": pa.array([ts], pa.timestamp("us", tz="UTC"))}), mode="append")
+
+
+def test_kvk_retention_keeps_newest_and_first_of_each_month():
+    from deltalake import DeltaTable
+    kvk_batches(["2026-08-03", "2026-08-20", "2026-09-01", "2026-09-15", "2026-10-02"])
+    assert m.kvk_retention(dry_run=True) == ["b1", "b3"]
+    assert len(DeltaTable(str(m.KVK_ROOT / "basis_bedrijfsgegevens")).to_pandas()) == 10
+
+    assert m.kvk_retention() == ["b1", "b3"]
+    rows = DeltaTable(str(m.KVK_ROOT / "basis_bedrijfsgegevens")).to_pandas()
+    assert sorted(rows["_batch_id"].unique()) == ["b0", "b2", "b4"]
+    log = DeltaTable(str(m.KVK_ROOT / "_batch_log")).to_pandas().set_index("batch_id")
+    assert log.loc["b1", "status"] == "retired" and log.loc["b4", "status"] == "success"
+    assert m.kvk_retention() == []                   # nothing left to do
+
+
+def test_kvk_retention_keeps_the_newest_even_when_it_is_not_first_in_its_month():
+    kvk_batches(["2026-10-01", "2026-10-20"])
+    assert m.kvk_retention(dry_run=True) == []
+
+
+def test_kvk_retention_without_kvk_data():
+    assert m.kvk_retention() == []
+
+
+# =========================================================================== Delta maintenance
+def test_optimize_and_vacuum_removes_files_old_versions_no_longer_need(monkeypatch):
+    import pyarrow as pa
+    from deltalake import DeltaTable, write_deltalake
+    monkeypatch.setitem(m.settings, "delta", {"vacuum_retention_hours": 0})
+    path = m.LAKEHOUSE / "silver" / "t"
+    for i in range(3):                               # three overwrites: two stale files
+        write_deltalake(str(path), pa.table({"v": [i]}), mode="overwrite")
+    assert m.optimize_and_vacuum(dry_run=True) == {"silver/t": 2}
+    assert m.optimize_and_vacuum() == {"silver/t": 2}
+    assert DeltaTable(str(path)).to_pandas()["v"].tolist() == [2]   # current data intact
+    assert m.optimize_and_vacuum(dry_run=True) == {"silver/t": 0}
+
+
+def test_delta_tables_skips_staging():
+    import pyarrow as pa
+    from deltalake import write_deltalake
+    write_deltalake(str(m.LAKEHOUSE / "silver" / "a"), pa.table({"v": [1]}))
+    write_deltalake(str(m.LAKEHOUSE / "silver" / "_staging" / "run" / "b"), pa.table({"v": [1]}))
+    assert [p.name for p in m.delta_tables()] == ["a"]

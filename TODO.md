@@ -8,11 +8,12 @@ next layer on top of it.
 ## Where to continue (status 2026-10-05)
 
 Built and run on real data: bronze (CBS, KVK, SBI crosswalk) with checks and quarantine,
-silver (CBS, KVK), gold (5 tables), the Streamlit dashboard, config, run log, 261 tests.
+silver (CBS, KVK), gold (5 tables), the Streamlit dashboard, Dagster orchestration,
+config, run log, 283 tests.
 All committed.
 
-**Next step: 5. Orchestration (Dagster).** The dashboard (section 4) is built and runs
-with `.venv/bin/streamlit run dashboard/app.py`.
+**Next step: 6. Deployment (Docker Compose).** Sections 4 (dashboard) and 5 (Dagster)
+are built; see the README for how to start them.
 
 Run order (from the project folder, with the virtualenv):
 
@@ -24,6 +25,8 @@ Run order (from the project folder, with the virtualenv):
     .venv/bin/python gold.py
     .venv/bin/python inspect_lakehouse.py          # overview, warnings, problems
     .venv/bin/streamlit run dashboard/app.py       # the dashboard
+    DAGSTER_HOME=$PWD/orchestration .venv/bin/dagster dev -f orchestration/definitions.py
+                                                   # Dagster UI: http://localhost:3000
     .venv/bin/pytest                               # tests (live CBS test: -m live)
 
 Local setup: `.venv/` holds the Python packages (`pip install -r requirements-dev.txt`).
@@ -342,23 +345,39 @@ Run: `.venv/bin/streamlit run dashboard/app.py`
 - [ ] Optional: re-run the palette validator once Node.js is available (the values are
       the guidance's published, validated set)
 
-## 5. Orchestration (Dagster)
-- [ ] Assets: bronze CBS, bronze KVK, silver CBS, silver KVK, gold
-- [ ] Quarterly schedule for bronze CBS
-- [ ] Bronze CBS only materialises when it ingested new rows (so an empty run stops there)
-- [ ] Silver, gold and dashboard refresh triggered only by new upstream data
-- [ ] Bronze KVK started by a person (agent needs upload and confirmation); a new batch
-      triggers silver KVK and gold
-- [ ] Asset checks after each layer: row counts, no duplicate keys, keys present in
-      dimensions; a failing check blocks downstream assets
-- [ ] Freshness checks: CBS quarterly data at most 4 months behind, yearly data at most
-      15 months, KVK snapshot within the agreed upload interval
-- [ ] Alerts (email or Slack) for failed runs and failed checks
-- [ ] Monthly maintenance job: quarantine cleanup (built: `maintenance.py quarantine`),
-      KVK retention (latest + one snapshot per month), Delta `optimize` and `vacuum`;
-      never at the same time as an ingestion
-- [ ] Decide whether quarterly is often enough, given CBS release dates vary
-      (a weekly run is cheap if nothing new is published)
+## 5. Orchestration (Dagster) (built 2026-10-06: `orchestration/`)
+Run: `DAGSTER_HOME=$PWD/orchestration .venv/bin/dagster dev -f orchestration/definitions.py`
+- [x] Assets: cbs_bronze, sbi_crosswalk, kvk_bronze, silver_cbs, silver_kvk, gold
+- [x] Decision (2026-10-06): CBS is checked **monthly** (1st, 06:00), not quarterly: CBS
+      release dates vary, and a run without new data costs a few small requests
+- [x] Bronze CBS (and the crosswalk) only materialise when something new was loaded
+      (`skippable`); an empty run stops there
+- [x] Silver and gold rebuild only after new upstream data (eager automation condition)
+      and only when the upstream blocking checks passed; the dashboard needs no trigger
+      (it reads gold by Delta version)
+- [x] Bronze KVK started by a person in the UI, with the file name typed as confirmation
+      (`ingest_confirmed_file`, deliberately not an agent tool); a new batch triggers
+      silver KVK and gold
+- [x] Asset checks after each layer (`checks/layers.py`): tables filled, one run_id,
+      unique keys, keys present in dimensions; blocking. Checked on real data: all pass
+- [x] Freshness checks (`checks/freshness.py`, warnings): CBS quarterly <= 4 months
+      behind, yearly <= 15 months (stopped tables skipped), KVK snapshot <= 45 days
+      (`kvk.max_snapshot_age_days`); own monthly job, because checks on a skipped asset
+      don't run
+- [x] Decision (2026-10-06): failures are shown in the Dagster UI; no email/Slack alerts
+- [x] Monthly maintenance job (15th, 03:00): quarantine cleanup, KVK retention (latest +
+      first snapshot of each month; removed batches marked "retired" in the batch log),
+      Delta optimize and vacuum (`delta.vacuum_retention_hours`, 7 days); at most one
+      writing run at a time (`orchestration/dagster.yaml`)
+- [x] First-time setup job `register_existing_data`: records bronze loaded before Dagster
+      as materialized; without it automatic rebuilds never start (found while testing)
+- Real runs (2026-10-06): monthly CBS ingest skipped (nothing new), silver + gold built
+  with all 12 checks passing, freshness and maintenance jobs succeeded
+- Found while testing: Dagster runs steps in their own process and drops the project
+  folder from the import path there, so modules the scripts import late failed
+  ("No module named 'publish'"); definitions.py now imports them up front, and a test
+  runs the real `dagster` command to catch this
+- [ ] Optional later: email or Slack alerts (a run failure sensor)
 
 ## 6. Deployment (Docker Compose)
 - [ ] `Dockerfile` for the Python code
@@ -385,8 +404,8 @@ Run: `.venv/bin/streamlit run dashboard/app.py`
 crosswalk; `tests/test_checks.py` the CBS and KVK checks and quarantine;
 `tests/test_maintenance.py` the quarantine cleanup; `tests/test_config.py` the
 configuration; `tests/test_kvk_silver.py` silver KVK; `tests/test_gold.py` gold;
-`tests/test_dashboard.py` the dashboard (every page headless); `tests/test_delta.py`
-writes real Delta tables in `tmp_path` (261 tests, ~30 s). `conftest.py` fails a test when any module still points at the real
+`tests/test_dashboard.py` the dashboard (every page headless); `tests/test_orchestration.py`
+Dagster; `tests/test_delta.py` writes real Delta tables in `tmp_path` (283 tests, ~50 s). `conftest.py` fails a test when any module still points at the real
 lakehouse or inbox. Checked by breaking the code on purpose:
 removing the delete-before-write, an empty `done_keys()` and non-UTC silver timestamps
 each make the right tests fail.

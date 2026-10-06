@@ -223,29 +223,52 @@ def ingest_verified_dataset(file_path: str) -> str:
     Returns:
         str: JSON with the result: batch_id and row count, or why nothing was written.
     """
-    path = _resolve(file_path)
+    return json.dumps(_ingest(_resolve(file_path), _confirm, getpass.getuser()))
+
+
+def ingest_confirmed_file(file_name: str, typed_confirmation: str, confirmed_by: str) -> dict:
+    """Verify and ingest one file without a keyboard, for Dagster (orchestration/).
+
+    The person launching the run must type the exact file name as `typed_confirmation`;
+    that plays the role of typing YES. This function is deliberately NOT in TOOLS, so the
+    language model can never call it (a test checks that)."""
+    path = _resolve(file_name)
+    report = json.loads(verify_dataset(str(path)))
+    if report["status"] != "PASSED":
+        return {"status": "FAILED", "report": report}
+    if typed_confirmation.strip() != path.name:
+        VERIFIED.pop(str(path), None)
+        return {"status": "CANCELLED",
+                "reason": f"Confirmation {typed_confirmation!r} is not the file name {path.name!r}. "
+                          "Nothing written."}
+    return _ingest(path, lambda v, batch_id: True, confirmed_by)
+
+
+def _ingest(path: Path, confirm, confirmed_by: str) -> dict:
+    """Write a verified file to bronze after `confirm(verification, batch_id)` says yes.
+    Shared by the agent tool (keyboard YES) and ingest_confirmed_file (Dagster)."""
     v = VERIFIED.get(str(path))
     if v is None:
-        return json.dumps({"status": "REFUSED", "reason": "File was not verified. Run verify_dataset first."})
+        return {"status": "REFUSED", "reason": "File was not verified. Run verify_dataset first."}
     if not v.passed:
-        return json.dumps({"status": "REFUSED", "reason": "Verification FAILED for this file.",
-                           "errors": v.report["errors"]})
+        return {"status": "REFUSED", "reason": "Verification FAILED for this file.",
+                "errors": v.report["errors"]}
     if _sha256(path) != v.sha256:
         VERIFIED.pop(str(path))
-        return json.dumps({"status": "REFUSED", "reason": "File changed since verification. Verify again."})
+        return {"status": "REFUSED", "reason": "File changed since verification. Verify again."}
     if (batch := ingested_hashes().get(v.sha256)):
-        return json.dumps({"status": "REFUSED", "reason": f"Already ingested as batch {batch}"})
+        return {"status": "REFUSED", "reason": f"Already ingested as batch {batch}"}
 
     now = datetime.now(timezone.utc)
     batch_id = f"kvk_{now:%Y%m%dT%H%M%SZ}_{v.sha256[:8]}"
-    if not _confirm(v, batch_id):
-        return json.dumps({"status": "CANCELLED", "reason": "User did not type YES. Nothing written."})
+    if not confirm(v, batch_id):
+        return {"status": "CANCELLED", "reason": "User did not type YES. Nothing written."}
 
     rows = write_batch(v, batch_id, now)
-    write_log(v, batch_id, now, rows)
+    write_log(v, batch_id, now, rows, confirmed_by)
     VERIFIED.pop(str(path))
-    return json.dumps({"status": "INGESTED", "batch_id": batch_id, "rows": rows,
-                       "ingested_at": now.isoformat(), "table": str(DATA_TABLE)})
+    return {"status": "INGESTED", "batch_id": batch_id, "rows": rows,
+            "ingested_at": now.isoformat(), "table": str(DATA_TABLE)}
 
 
 def list_batches() -> str:
@@ -345,7 +368,8 @@ def write_batch(v: Verification, batch_id: str, now: datetime) -> int:
     return written
 
 
-def write_log(v: Verification, batch_id: str, now: datetime, rows: int) -> None:
+def write_log(v: Verification, batch_id: str, now: datetime, rows: int,
+              confirmed_by: str | None = None) -> None:
     """Record a written batch in bronze/kvk/_batch_log, with its hash and verification
     report. Written after the data, so an unlogged batch is recognisable as unfinished
     (remove_orphan_rows deletes it before the next write)."""
@@ -357,7 +381,7 @@ def write_log(v: Verification, batch_id: str, now: datetime, rows: int) -> None:
         "file_sha256": [v.sha256], "csv_member": [v.csv_member], "row_count": [rows],
         "column_count": [len(v.header)], "verified_at": [v.verified_at],
         "verification_report": [json.dumps(v.report, ensure_ascii=False)],
-        "confirmed_by": [getpass.getuser()], "status": ["success"],
+        "confirmed_by": [confirmed_by or getpass.getuser()], "status": ["success"],
     }, schema=pa.schema([
         ("batch_id", pa.string()), ("ingested_at", pa.timestamp("us", tz="UTC")),
         ("source_file", pa.string()), ("file_sha256", pa.string()), ("csv_member", pa.string()),

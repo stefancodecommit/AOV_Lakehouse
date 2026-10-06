@@ -22,14 +22,15 @@ as [Delta Lake](https://delta.io) tables in the folder `lakehouse/`.
 2. [How the scripts fit together](#how-the-scripts-fit-together)
 3. [Setup](#setup)
 4. [Running the pipeline](#running-the-pipeline)
-5. [The dashboard](#the-dashboard)
-6. [The scripts one by one](#the-scripts-one-by-one)
-7. [What ends up in `lakehouse/`](#what-ends-up-in-lakehouse)
-8. [Configuration](#configuration)
-9. [Data quality: checks, quarantine and the run log](#data-quality-checks-quarantine-and-the-run-log)
-10. [Tests](#tests)
-11. [Status and known limitations](#status-and-known-limitations)
-12. [Sources and licence](#sources-and-licence)
+5. [Running it automatically: Dagster](#running-it-automatically-dagster)
+6. [The dashboard](#the-dashboard)
+7. [The scripts one by one](#the-scripts-one-by-one)
+8. [What ends up in `lakehouse/`](#what-ends-up-in-lakehouse)
+9. [Configuration](#configuration)
+10. [Data quality: checks, quarantine and the run log](#data-quality-checks-quarantine-and-the-run-log)
+11. [Tests](#tests)
+12. [Status and known limitations](#status-and-known-limitations)
+13. [Sources and licence](#sources-and-licence)
 
 ## Concepts in two minutes
 
@@ -75,7 +76,8 @@ it next time (details per script below).
    checks/                   data checks before writing (cbs.py, kvk.py) and quarantine
    publish.py + runlog.py    silver/gold: staging, publishing, and the run log
    inspect_lakehouse.py      overview of every table, warnings and problems
-   maintenance.py            monthly tasks (quarantine cleanup)
+   maintenance.py            monthly tasks (quarantine, KVK retention, Delta vacuum)
+   orchestration/            Dagster: schedules, automatic rebuilds, layer checks
    dashboard/                the Streamlit app; reads the gold tables only
 ```
 
@@ -86,8 +88,8 @@ Reading the diagram:
   why they have to run in order (see [Running the pipeline](#running-the-pipeline)).
 - `kvk_silver.py` needs the SBI crosswalk from silver CBS, because KVK codes companies in
   a newer classification (SBI 2025) than CBS (SBI 2008).
-- Later, Dagster will run these steps on a schedule and only when new data arrived (see
-  `TODO.md`, section 5). Until then they are run by hand.
+- They can be run by hand (below), or by Dagster, which runs them on a schedule and
+  only when new data arrived (see [Dagster](#running-it-automatically-dagster)).
 
 ## Setup
 
@@ -142,6 +144,49 @@ Useful options:
 | `cbs_silver.py --preview`, `kvk_silver.py --preview`, `gold.py --preview` | Build and summarise, write nothing |
 | `inspect_lakehouse.py --layer silver` | Overview of one layer |
 | `maintenance.py quarantine --dry-run` | Show which quarantine entries the monthly cleanup would remove |
+
+## Running it automatically: Dagster
+
+[Dagster](https://dagster.io) runs the same scripts on a schedule, rebuilds a layer only
+when new data arrived upstream, and checks every layer before the next one is built on it.
+
+```bash
+export DAGSTER_HOME=$PWD/orchestration          # Dagster's settings and run history
+.venv/bin/dagster dev -f orchestration/definitions.py
+```
+
+Then open <http://localhost:3000>. Dagster only acts while this command runs.
+
+```
+ schedule: 1st of the month 06:00          the person, in the Dagster UI
+        │                                          │ (types the file name to confirm)
+   cbs_bronze    sbi_crosswalk                kvk_bronze
+        └──────┬──────┘                            │
+           silver_cbs ──── blocking checks ────────┤
+               │                              silver_kvk ── blocking checks
+               └──────────────┬────────────────────┘
+                            gold ── blocking checks ──► dashboard (reads gold)
+```
+
+- **cbs_bronze and sbi_crosswalk** run monthly (1st, 06:00). When CBS has nothing new
+  they are *skipped*, and nothing downstream runs.
+- **kvk_bronze** is never scheduled: select it in the UI, click *Materialize*, and type
+  the file name in `confirm_file_name` (the Dagster version of typing YES).
+- **silver_cbs, silver_kvk, gold** rebuild automatically after new upstream data, but
+  only when the upstream *blocking checks* passed (tables filled, one run_id, unique
+  keys, keys present in their dimension; `checks/layers.py`).
+- **Freshness** warnings (1st, 09:00): CBS quarterly data more than 4 months old,
+  yearly data more than 15 months, the KVK snapshot more than 45 days.
+- **Maintenance** (15th, 03:00): quarantine cleanup, KVK retention (latest snapshot plus
+  the first of each month), Delta optimize and vacuum.
+- At most one run that writes to the lakehouse at a time (`orchestration/dagster.yaml`).
+- Failed runs and failed checks are shown in the Dagster UI (no email or Slack).
+
+**First time** on a lakehouse that was filled by hand: run the job
+`register_existing_data` once (Jobs in the UI, or
+`.venv/bin/dagster job execute -f orchestration/definitions.py -j register_existing_data`).
+Dagster only rebuilds a layer automatically when every input was materialized in Dagster
+at least once; this records the existing bronze data as such.
 
 ## The dashboard
 
@@ -237,17 +282,24 @@ Provisional CBS figures are kept but marked (`is_provisional`), so the dashboard
 `common.py` (the frame every page shares), `charts.py` (chart styles), `data.py` (reading
 gold, caching, the run check, the "final only" filter).
 
+### Orchestration
+
+**`orchestration/definitions.py`** — the Dagster assets, checks, jobs and schedules; it
+calls the scripts above and contains no data logic of its own. `dagster.yaml` holds the
+instance settings (one writing run at a time).
+
 ### Shared modules
 
 | Module | Role |
 |---|---|
 | `config.py`, `config.yaml` | Every setting in one file, see [Configuration](#configuration) |
-| `checks/cbs.py`, `checks/kvk.py` | Data checks, written once and used by the scripts, the tests and (later) Dagster |
+| `checks/cbs.py`, `checks/kvk.py` | Data checks before writing, used by the scripts, the tests and Dagster |
+| `checks/layers.py`, `checks/freshness.py` | Checks on a published layer, and freshness; run by Dagster after each layer |
 | `checks/quarantine.py` | Saves failed batches with a report; monthly cleanup |
 | `publish.py` | Silver and gold: write all tables to a staging folder first, replace the live tables only when all succeeded |
 | `runlog.py` | One row per silver/gold run in `lakehouse/_run_log`: when, what, status, which inputs |
 | `inspect_lakehouse.py` | One-screen overview: rows, periods, freshness per table; warnings; problems (exit code 1) |
-| `maintenance.py` | Monthly maintenance; for now the quarantine cleanup |
+| `maintenance.py` | Monthly maintenance: quarantine cleanup, KVK retention, Delta optimize/vacuum |
 
 ## What ends up in `lakehouse/`
 
@@ -297,7 +349,7 @@ A misspelled setting name stops the script with an error instead of being ignore
 ## Tests
 
 ```bash
-.venv/bin/pytest              # 261 tests, ~30 s, no internet needed
+.venv/bin/pytest              # 283 tests, ~50 s, no internet needed
 .venv/bin/pytest -m live      # one extra test against the real CBS API
 ```
 
@@ -317,12 +369,13 @@ at the real `lakehouse/`. GitHub Actions runs the tests on every push
 | `test_gold.py` | Gold comparisons and tables, end to end from bronze to gold |
 | `test_config.py`, `test_maintenance.py` | Configuration overrides, quarantine cleanup |
 | `test_dashboard.py` | Dashboard helpers, and every page run headless (both switch states) on gold built from sample data |
+| `test_orchestration.py` | Dagster: the graph and schedules, skipping when nothing is new, the KVK confirmation, blocking checks stopping the next layer, automatic rebuilds, and one run of the real `dagster` command |
 
 ## Status and known limitations
 
 Built and run on real data: bronze, silver and gold, with checks, quarantine and the run
-log, and the Streamlit dashboard. Still to do (see [`TODO.md`](TODO.md)): Dagster
-orchestration, Docker Compose.
+log, the Streamlit dashboard, and Dagster orchestration. Still to do (see
+[`TODO.md`](TODO.md)): Docker Compose.
 
 Limitations worth knowing when reading the results:
 

@@ -1,0 +1,16 @@
+# Dagster instance settings. Use with DAGSTER_HOME set to this folder (see
+# orchestration/definitions.py); Dagster then keeps its run history and schedule state
+# here too (those folders are in .gitignore).
+
+concurrency:
+  runs:
+    # At most one run that writes to the lakehouse at a time (runs tagged
+    # lakehouse=write), so monthly maintenance never overlaps an ingestion and two
+    # pipelines never publish at once. Other runs (the freshness checks) are not limited.
+    tag_concurrency_limits:
+      - key: lakehouse
+        value: write
+        limit: 1
+
+telemetry:
+  enabled: false

@@ -472,14 +472,16 @@ def cleanup_scope(session=None, dry_run: bool = True) -> list[str]:
 
 
 # --------------------------------------------------------------------------- main
-def run(only: str | None, force: bool, dry_run: bool) -> None:
+def run(only: str | None, force: bool, dry_run: bool) -> dict:
     """Ingest everything new for the configured endpoints.
 
     Per request: skip it when its key is already logged; otherwise fetch every page,
     check the records, and either quarantine them or write them to bronze and log the
     key. A failing request doesn't stop the run; it is retried next time. `only`
     limits the run to endpoints whose name contains that text; `force` ignores the log
-    (rows are replaced, not duplicated); `dry_run` only lists the requests."""
+    (rows are replaced, not duplicated); `dry_run` only lists the requests. Returns the
+    counts (fetched, skipped, failed, ...), which Dagster uses to decide whether
+    anything new arrived."""
     from checks import failures
     session = make_session()
     already = set() if force else done_keys()
@@ -532,9 +534,12 @@ def run(only: str | None, force: bool, dry_run: bool) -> None:
                 failed += 1
                 log.error("Failed %s: %s", req.display_url, e)
 
+    summary = {"fetched": fetched, "skipped": skipped, "failed": failed,
+               "quarantined": quarantined, "tableinfos_changed": infos_written,
+               "lifecycle_warnings": warned}
     log.info("Done. fetched=%d skipped(already in bronze)=%d failed=%d quarantined=%d "
-             "tableinfos_changed=%d lifecycle_warnings=%d",
-             fetched, skipped, failed, quarantined, infos_written, warned)
+             "tableinfos_changed=%d lifecycle_warnings=%d", *summary.values())
+    return summary          # for Dagster: did this run bring new data?
 
 
 if __name__ == "__main__":

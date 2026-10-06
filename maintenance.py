@@ -1,6 +1,6 @@
 """
-Maintenance tasks, meant to run monthly (later as a Dagster job, never at the same time
-as an ingestion).
+Maintenance tasks, run monthly by Dagster (orchestration/, never at the same time as an
+ingestion) or by hand.
 
 Quarantine cleanup
 ------------------
@@ -10,18 +10,33 @@ Removes quarantine entries that are no longer needed:
   * older than quarantine.retention_days (config.yaml). If the problem still exists,
     the next ingestion run quarantines the batch again, so nothing goes unnoticed.
 
-Still to add (TODO.md): KVK retention, Delta optimize and vacuum.
+KVK retention
+-------------
+Each KVK upload is a full snapshot (~22 MB). Kept: the newest snapshot, plus the first
+snapshot of every calendar month (so trends over time stay possible). The rows of other
+batches are deleted from bronze; their batch-log entry stays, marked "retired", so the
+history of what was loaded remains. Silver reads only "success" batches.
+
+Delta optimize and vacuum
+-------------------------
+Every overwrite or delete leaves the old Parquet files on disk (Delta keeps them for
+"time travel"). `optimize` merges small files into larger ones; `vacuum` deletes files
+that no version newer than delta.vacuum_retention_hours still needs.
 
 Usage
 -----
     python maintenance.py quarantine --dry-run   # list what would be removed
     python maintenance.py quarantine             # remove it
+    python maintenance.py kvk-retention [--dry-run]
+    python maintenance.py delta [--dry-run]      # optimize + vacuum every Delta table
+    python maintenance.py all [--dry-run]        # all of the above (the monthly job)
 """
 from __future__ import annotations
 
 import argparse
 import logging
 from datetime import datetime
+from pathlib import Path
 
 import pandas as pd
 
@@ -30,6 +45,7 @@ from config import project_path, settings
 
 LAKEHOUSE = project_path(settings["paths"]["lakehouse"])
 QUARANTINE_ROOT = LAKEHOUSE / "quarantine"
+KVK_ROOT = LAKEHOUSE / "bronze" / "kvk"
 BATCH_LOGS = {                                   # source -> its log of successful loads
     "cbs": LAKEHOUSE / "bronze" / "_ingestion_log",
     "kvk": LAKEHOUSE / "bronze" / "kvk" / "_batch_log",
@@ -76,6 +92,57 @@ def make_resolver(logs: dict | None = None):
     return is_resolved
 
 
+def kvk_retention(dry_run: bool = False, path: Path | None = None) -> list[str]:
+    """Delete the rows of KVK batches that are neither the newest nor the first of their
+    month, and mark them "retired" in the batch log. Returns the retired batch_ids."""
+    from deltalake import DeltaTable
+    root = path or KVK_ROOT
+    data, batch_log = root / "basis_bedrijfsgegevens", root / "_batch_log"
+    if not (batch_log / "_delta_log").exists():
+        return []
+    batches = _read_log(batch_log).sort_values("ingested_at")
+    if batches.empty:
+        return []
+    month = batches["ingested_at"].dt.strftime("%Y-%m")
+    keep = set(batches.groupby(month)["batch_id"].first()) | {batches["batch_id"].iloc[-1]}
+    retire = [b for b in batches["batch_id"] if b not in keep]
+    if retire and not dry_run:
+        ids = ", ".join(f"'{b}'" for b in retire)
+        if (data / "_delta_log").exists():
+            DeltaTable(str(data)).delete(f"_batch_id IN ({ids})")
+        DeltaTable(str(batch_log)).update(new_values={"status": "retired"},
+                                          predicate=f"batch_id IN ({ids})")
+    return retire
+
+
+def delta_tables(root: Path | None = None) -> list[Path]:
+    """Every Delta table in the lakehouse (folders with a _delta_log), staging excluded."""
+    root = root or LAKEHOUSE
+    return sorted(p.parent for p in root.rglob("_delta_log")
+                  if p.is_dir() and "_staging" not in p.parts)
+
+
+def optimize_and_vacuum(dry_run: bool = False, root: Path | None = None) -> dict[str, int]:
+    """Compact small files and remove files older versions no longer need, per table.
+    Returns {table: number of files vacuumed (or, with dry_run, that would be)}."""
+    from deltalake import DeltaTable
+    hours = int(settings["delta"]["vacuum_retention_hours"])
+    out = {}
+    for path in delta_tables(root):
+        dt = DeltaTable(str(path))
+        if not dry_run:
+            dt.optimize.compact()
+        # vacuum lists every file the log marks as removed, also ones already deleted
+        # by an earlier vacuum; count only the files that are still on disk
+        stale = [f for f in dt.vacuum(retention_hours=hours, dry_run=True,
+                                      enforce_retention_duration=False)
+                 if (path / f).exists()]
+        if stale and not dry_run:
+            dt.vacuum(retention_hours=hours, dry_run=False, enforce_retention_duration=False)
+        out[str(path.relative_to(root or LAKEHOUSE))] = len(stale)
+    return out
+
+
 def clean_quarantine(dry_run: bool = False) -> list[tuple[str, str]]:
     """Run the quarantine cleanup with the configured retention; returns (folder, reason) pairs."""
     days = int(settings["quarantine"]["retention_days"])
@@ -84,14 +151,21 @@ def clean_quarantine(dry_run: bool = False) -> list[tuple[str, str]]:
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(description="Lakehouse maintenance tasks.")
-    sub = ap.add_subparsers(dest="task", required=True)
-    q = sub.add_parser("quarantine", help="remove resolved and old quarantine entries")
-    q.add_argument("--dry-run", action="store_true", help="only list what would be removed")
+    ap.add_argument("task", choices=["quarantine", "kvk-retention", "delta", "all"])
+    ap.add_argument("--dry-run", action="store_true", help="only list what would be done")
     args = ap.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    verb = "Would" if args.dry_run else "Did"
 
-    removed = clean_quarantine(dry_run=args.dry_run)
-    verb = "Would remove" if args.dry_run else "Removed"
-    for folder, reason in removed:
-        log.info("%s %s (%s)", verb, folder, reason)
-    log.info("%s %d quarantine entries", verb, len(removed))
+    if args.task in ("quarantine", "all"):
+        removed = clean_quarantine(dry_run=args.dry_run)
+        for folder, reason in removed:
+            log.info("%s remove %s (%s)", verb, folder, reason)
+        log.info("Quarantine: %s remove %d entries", verb.lower(), len(removed))
+    if args.task in ("kvk-retention", "all"):
+        retired = kvk_retention(dry_run=args.dry_run)
+        log.info("KVK retention: %s retire %d batches %s", verb.lower(), len(retired), retired)
+    if args.task in ("delta", "all"):
+        files = optimize_and_vacuum(dry_run=args.dry_run)
+        log.info("Delta: %s vacuum %d old files in %d tables", verb.lower(),
+                 sum(files.values()), len(files))

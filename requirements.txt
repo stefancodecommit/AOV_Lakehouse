@@ -6,3 +6,5 @@ openpyxl>=3.1             # read the SBI crosswalk xlsx
 pyyaml>=6.0               # config.yaml
 ollama>=0.4
 streamlit>=1.40           # dashboard (includes Altair for the charts)
+dagster>=1.9              # orchestration (orchestration/definitions.py)
+dagster-webserver>=1.9    # the Dagster UI (dagster dev)

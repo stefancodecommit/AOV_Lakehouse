@@ -62,6 +62,7 @@ def isolated_lakehouse(tmp_path, monkeypatch):
     monkeypatch.setattr(kvk_bronze_agent, "INBOX", tmp_path / "inbox" / "kvk")
     monkeypatch.setattr(maintenance, "LAKEHOUSE", tmp_path)
     monkeypatch.setattr(maintenance, "QUARANTINE_ROOT", tmp_path / "quarantine")
+    monkeypatch.setattr(maintenance, "KVK_ROOT", tmp_path / "bronze" / "kvk")
     monkeypatch.setattr(maintenance, "BATCH_LOGS", {
         "cbs": tmp_path / "bronze" / "_ingestion_log",
         "kvk": tmp_path / "bronze" / "kvk" / "_batch_log",

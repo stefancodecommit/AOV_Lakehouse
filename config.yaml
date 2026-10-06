@@ -58,6 +58,7 @@ kvk:
   dataset_page: https://www.kvk.nl/producten-bestellen/kvk-handelsregister-open-data-set/
   download_url: https://www.kvk.nl/download/kvk-open-dataset-basis-bedrijfsgegevens.zip
   max_malformed_share: 0.001      # reject a file when more rows have a wrong field count
+  max_snapshot_age_days: 45       # freshness warning when the newest KVK upload is older
   # Logical column -> accepted header spellings, compared after lower-casing and removing
   # everything that isn't a letter or digit ("Datum aanvang" == "datumaanvang").
   required_columns:
@@ -90,6 +91,11 @@ dashboard:
   logo: dashboard/assets/eur_logo.svg
   logo_dark: dashboard/assets/eur_logo_dark.svg
   project_note: Erasmus University Rotterdam
+
+delta:
+  # maintenance.py (monthly) deletes Parquet files that no table version younger than
+  # this still needs; older versions can't be read ("time travel") after that.
+  vacuum_retention_hours: 168     # 7 days
 
 quarantine:
   # maintenance.py (monthly) removes entries that are resolved (ingested later) and
