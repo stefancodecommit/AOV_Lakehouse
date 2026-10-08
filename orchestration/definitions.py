@@ -158,7 +158,8 @@ def _published(pipeline_run) -> dg.MaterializeResult:
     return dg.MaterializeResult(metadata={"run_id": run_id})
 
 
-# Column lineage (lineage.py): shown in the UI per asset, tab "Column lineage"
+# Column lineage (lineage.py): in the free Dagster UI visible as the asset's column list
+# (each description starts with "From <bronze field>"); the lineage graph is Dagster+ only
 CBS_SILVER_TABLES = set(lineage.SILVER_LINEAGE) - lineage.SILVER_KVK_TABLES
 
 

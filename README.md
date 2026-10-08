@@ -302,8 +302,10 @@ the write. Each upload is a full snapshot, stored as one batch.
 
 How each silver table is made from bronze, with real before/after examples:
 [`docs/bronze_to_silver.md`](docs/bronze_to_silver.md). Where every single silver column
-comes from: [`docs/lineage.md`](docs/lineage.md), generated from `lineage.py` (also shown
-in the Dagster UI, tab *Column lineage* of `silver_cbs` and `silver_kvk`).
+comes from: [`docs/lineage.md`](docs/lineage.md), generated from `lineage.py` (also visible
+in the Dagster UI: the *Columns* list of the assets `silver_cbs` and `silver_kvk`, where
+every description starts with *From …*; Dagster's column-lineage graph itself is only in the
+paid Dagster+).
 
 **`cbs_silver.py`** — turns the raw CBS records into dimension tables (`dim_period`,
 `dim_sector`, `dim_company_size`, `dim_region`, `dim_survey_measure`), fact tables
@@ -406,7 +408,7 @@ A misspelled setting name stops the script with an error instead of being ignore
 ## Tests
 
 ```bash
-.venv/bin/pytest              # 307 tests, ~70 s, no internet needed
+.venv/bin/pytest              # 308 tests, ~70 s, no internet needed
 .venv/bin/pytest -m live      # one extra test against the real CBS API
 ```
 

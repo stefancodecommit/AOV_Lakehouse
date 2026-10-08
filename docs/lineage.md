@@ -2,7 +2,7 @@
 
 Where every silver column comes from in bronze, and what happens to it on the way.
 
-> Generated from `lineage.py` by `python lineage.py`; don't edit by hand. `tests/test_lineage.py` fails when a silver column is missing here or a named bronze field doesn't exist. The same lineage is shown in the Dagster UI (assets `silver_cbs` and `silver_kvk`, tab *Column lineage*). For the steps explained with real examples, see [bronze_to_silver.md](bronze_to_silver.md).
+> Generated from `lineage.py` by `python lineage.py`; don't edit by hand. `tests/test_lineage.py` fails when a silver column is missing here or a named bronze field doesn't exist. The same lineage is visible in the Dagster UI: assets `silver_cbs` and `silver_kvk`, the *Columns* list on their overview page (each description starts with *From …*). For the steps explained with real examples, see [bronze_to_silver.md](bronze_to_silver.md).
 
 How to read a source:
 

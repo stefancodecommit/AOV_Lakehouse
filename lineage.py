@@ -4,8 +4,10 @@ field(s) it comes from, and what happens to it on the way.
 
 This file is the single source of truth. From it:
 - `python lineage.py` writes docs/lineage.md (a readable table per silver table)
-- orchestration/definitions.py shows the same lineage in the Dagster UI (column lineage
-  of the silver_cbs and silver_kvk assets)
+- orchestration/definitions.py shows the same lineage in the Dagster UI: in the free
+  (open-source) Dagster, as the column list of the silver_cbs and silver_kvk assets,
+  each description starting with "From <bronze field>"; the lineage is also stored in
+  Dagster's own format, which only the paid Dagster+ draws as a graph
 - tests/test_lineage.py checks that it is complete and correct: every silver column has
   an entry, every named bronze field exists, and docs/lineage.md is up to date. So a new
   silver column can't be added without saying where it comes from.
@@ -351,9 +353,10 @@ def markdown() -> str:
         "",
         "> Generated from `lineage.py` by `python lineage.py`; don't edit by hand. "
         "`tests/test_lineage.py` fails when a silver column is missing here or a named "
-        "bronze field doesn't exist. The same lineage is shown in the Dagster UI "
-        "(assets `silver_cbs` and `silver_kvk`, tab *Column lineage*). For the steps "
-        "explained with real examples, see [bronze_to_silver.md](bronze_to_silver.md).",
+        "bronze field doesn't exist. The same lineage is visible in the Dagster UI: "
+        "assets `silver_cbs` and `silver_kvk`, the *Columns* list on their overview page "
+        "(each description starts with *From …*). For the steps explained with real "
+        "examples, see [bronze_to_silver.md](bronze_to_silver.md).",
         "",
         "How to read a source:",
         "",
@@ -386,7 +389,10 @@ def markdown() -> str:
 def dagster_lineage(asset_tables: set[str]) -> dict:
     """Column lineage and column descriptions for one Dagster asset (silver_cbs or
     silver_kvk), in Dagster's format. Columns are named '<table>.<column>'; bronze
-    sources point at the bronze assets, silver sources outside the asset at silver_cbs."""
+    sources point at the bronze assets, silver sources outside the asset at silver_cbs.
+
+    The free Dagster UI shows the column list (dagster/column_schema) but not the column
+    lineage graph (a Dagster+ feature), so each description starts with its sources."""
     import dagster as dg
 
     def asset_of(s: Source) -> str:
@@ -402,7 +408,8 @@ def dagster_lineage(asset_tables: set[str]) -> dict:
     for table in sorted(asset_tables):
         for column, c in SILVER_LINEAGE[table].items():
             name = f"{table}.{column}"
-            schema.append(dg.TableColumn(name, description=c.how))
+            origin = ", ".join(str(s) for s in c.sources) or "the run"
+            schema.append(dg.TableColumn(name, description=f"From {origin} — {c.how}"))
             sources = set()
             for s in c.sources:
                 if s.is_silver and s.table.removeprefix("silver:") in asset_tables:

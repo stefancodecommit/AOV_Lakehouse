@@ -438,7 +438,9 @@ Run: `docker compose up -d` (Dagster http://localhost:3000, dashboard :8501)
       (2026-10-08)
 - [x] Column lineage bronze -> silver (2026-10-08): `lineage.py` is the source; it
       generates `docs/lineage.md` (`python lineage.py`) and the column lineage of the
-      Dagster assets silver_cbs and silver_kvk. `tests/test_lineage.py` fails when a
+      Dagster assets silver_cbs and silver_kvk. Correction (2026-10-08): the free Dagster
+      UI doesn't draw column lineage (a Dagster+ feature); it does show the column list,
+      so each column's description there starts with "From <bronze field>". `tests/test_lineage.py` fails when a
       silver column has no entry, a named bronze field doesn't exist, or the document
       is out of date. 133 columns in 12 tables
 - [ ] Optional later: the same column lineage silver -> gold

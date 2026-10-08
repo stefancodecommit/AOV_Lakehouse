@@ -116,3 +116,13 @@ def test_dagster_shows_the_lineage():
     kvk = d.silver_kvk.specs_by_key[dg.AssetKey("silver_kvk")].metadata["dagster/column_lineage"]
     assert {x.asset_key.to_user_string() for x in kvk.deps_by_column["kvk_company.sbi2008_code"]} \
         == {"kvk_bronze", "silver_cbs"}
+
+
+def test_dagster_column_descriptions_start_with_their_origin():
+    """The free Dagster UI shows the column list, not the lineage graph (Dagster+ only),
+    so the origin has to be in the description."""
+    cols = {c.name: c.description for c in
+            L.dagster_lineage({"fct_absence_rate"})["dagster/column_schema"].columns}
+    assert cols["fct_absence_rate.absence_pct"].startswith(
+        "From 80072ned_typeddataset.raw_json.Ziekteverzuimpercentage_1 — as a number")
+    assert cols["fct_absence_rate.run_id"].startswith("From the run — ")
