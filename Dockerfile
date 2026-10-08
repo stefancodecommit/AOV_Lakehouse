@@ -18,9 +18,9 @@ WORKDIR /app
 # dagster-postgres: in Docker, Dagster keeps its run history in Postgres. It works with
 # the psycopg2 driver; SQLAlchemy 2.1 switched its default Postgres driver to psycopg 3,
 # with which Dagster's queued runs fail (SQL syntax error), so SQLAlchemy stays on 2.0.
-COPY requirements.txt .
-RUN pip install -r requirements.txt "dagster-postgres>=0.25" "psycopg2-binary>=2.9" \
-    "sqlalchemy>=2.0,<2.1"
+# Versions: exact, from requirements.txt and constraints.txt (SQLAlchemy 2.0.x is pinned there).
+COPY requirements.txt constraints.txt ./
+RUN pip install -r requirements.txt "dagster-postgres==0.29.25" "psycopg2-binary==2.9.13"
 
 COPY . .
 

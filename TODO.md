@@ -17,18 +17,19 @@ committed; no containers or servers left running. See the README for how to star
 everything (locally, or with `docker compose up -d`).
 
 **Next steps:**
-1. **Verify CI** (section 7): the GitHub Actions workflow is written but has never run,
-   because the repository has no GitHub remote. Either create a GitHub repository and
-   push (the real test; your choice whether and how to publish), or first run the test
-   suite in a clean Python 3.12 container (the workflow's version; locally it's 3.10).
-2. **Open question:** limit the *local* dashboard to this machine (section 4; one line
+1. **Verify CI on GitHub** (section 7): both CI jobs were run locally the way GitHub
+   would (clean Python 3.12, only committed files) and pass, after pinning exact package
+   versions. The real test is a push to a GitHub repository: your choice whether and
+   how to publish.
+2. **pandas 3** (section 7): make the code work with it, then raise the pin.
+3. **Open question:** limit the *local* dashboard to this machine (section 4; one line
    in `.streamlit/config.toml`). In Docker it already is.
-3. **When CBS publishes a new SBI crosswalk version:** update
+4. **When CBS publishes a new SBI crosswalk version:** update
    `reference.sbi_crosswalk_url` in config.yaml (section 1, Reference).
-4. **Open question** (Lakehouse viewer section): `CategoryGroupID` in `81644ned_regios`
+5. **Open question** (Lakehouse viewer section): `CategoryGroupID` in `81644ned_regios`
    is typed as text because every value is empty; give all-empty fields Arrow's null
    type so the first real value sets the type?
-5. Optional: email/Slack alerts (section 5), re-run the palette validator (needs
+6. Optional: email/Slack alerts (section 5), re-run the palette validator (needs
    Node.js, section 4), report the deltalake exit race upstream (Known issues).
 
 Run order (from the project folder, with the virtualenv):
@@ -535,8 +536,26 @@ Later, as each part is built:
 - [x] Tests for the data checks, quarantine, scope cleanup, silver KVK, gold, the
       dashboard's data loading and the Dagster definitions (all built with their parts)
 - [ ] GitHub Actions stage 1: run pytest on every push (`.github/workflows/tests.yml`).
-      Written, never run: the repository has no GitHub remote yet. Not verified: the
-      tests on Python 3.12 (the workflow's version; locally they run on 3.10)
+      Never run on GitHub: the repository has no GitHub remote yet. Run locally the way
+      CI would (2026-10-08): a clean `python:3.12` container with only the committed
+      files, `pip install -r requirements-dev.txt`, `pytest -m "not live"`. The first
+      try failed (79 tests): a fresh install got **pandas 3.0.6** (`pandas>=2.0`), which
+      the code doesn't support yet. Fixed by pinning exact versions (requirements.txt,
+      constraints.txt); then all 348 tests pass on Python 3.12
 - [ ] GitHub Actions stage 3: build the Docker image after the tests pass, and check the
-      code and the Dagster definitions load in it. Written 2026-10-08, never run on
-      GitHub; its commands (docker build, the two smoke tests) were run locally and pass
+      code and the Dagster definitions load in it. Never run on GitHub; run locally
+      2026-10-08 with the pinned versions: image builds, imports and
+      `dagster definitions validate` pass
+- [x] Exact package versions (2026-10-08): requirements.txt pins the packages the project
+      uses, constraints.txt every package they pull in; the Dockerfile installs the
+      same. The Docker image had pandas 3.0.6 and still the code from before the
+      reorganisation; rebuilt (`docker compose build`): new layout, pandas 2.3.3
+
+### pandas 3 (to do)
+- [ ] Make the code work with pandas 3 (text columns are Arrow strings by default), then
+      raise the pin in requirements.txt and regenerate constraints.txt. Known so far, in
+      the clean 3.12 run: `build_dim_survey_measure` (pipeline/silver/cbs.py) adds a text
+      column to one with empty values when it suffixes measure names with their era
+      (73 of the 79 failures); about 5 smaller differences (a timestamp unit, a
+      missing value compared as 'odd', Dagster's register job). The real data doesn't
+      hit the first one today (silver --preview runs on pandas 3), the tests do

@@ -123,6 +123,10 @@ python3 -m venv .venv
 .venv/bin/pip install -r requirements-dev.txt     # runtime packages + pytest
 ```
 
+The versions are exact (`requirements.txt`, and `constraints.txt` for everything those
+packages pull in), so your install, CI and the Docker image are the same. pandas stays on
+2.x for now: the code doesn't support pandas 3 yet (see TODO.md).
+
 Optional, only for the KVK *chat* agent: [Ollama](https://ollama.com) with a model that
 supports tool calling. On the development machine it is installed without root in
 `~/.local/ollama`:

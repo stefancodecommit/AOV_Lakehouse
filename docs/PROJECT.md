@@ -412,7 +412,7 @@ docker-compose.yml       the services (Dagster, Postgres, dashboard; optional Ol
 Dockerfile               one image for all Python services
 .env.example             Docker settings to copy to .env (user id, Postgres, model)
 .github/workflows/       CI: tests.yml runs pytest on every push
-requirements.txt, requirements-dev.txt
+requirements.txt, requirements-dev.txt   exact package versions; constraints.txt pins everything they pull in
 README.md                entry point: how the scripts fit together and how to run them
 TODO.md                  open work
 ```

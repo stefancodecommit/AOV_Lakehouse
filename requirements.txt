@@ -1,10 +1,15 @@
-deltalake>=0.18
-pyarrow>=14
-requests>=2.31
-pandas>=2.0
-openpyxl>=3.1             # read the SBI crosswalk xlsx
-pyyaml>=6.0               # config.yaml
-ollama>=0.4
-streamlit>=1.40           # dashboard (includes Altair for the charts)
-dagster>=1.9              # orchestration (orchestration/definitions.py)
-dagster-webserver>=1.9    # the Dagster UI (dagster dev)
+# The packages the project uses, at the exact versions it is tested with. Exact versions,
+# so the local virtualenv, CI and the Docker image install the same thing: with loose
+# rules (pandas>=2.0) a fresh install got pandas 3, which the code doesn't support yet
+# (see TODO.md). constraints.txt pins every package these pull in as well.
+-c constraints.txt
+deltalake==1.6.6
+pyarrow==25.0.1
+requests==2.34.2
+pandas==2.3.3             # not 3.x yet: see TODO.md, "pandas 3"
+openpyxl==3.1.5           # read the SBI crosswalk xlsx
+pyyaml==6.0.3             # config.yaml
+ollama==0.6.3
+streamlit==1.65.0         # dashboard (includes Altair for the charts)
+dagster==1.13.25          # orchestration (orchestration/definitions.py)
+dagster-webserver==1.13.25  # the Dagster UI (dagster dev)
