@@ -463,6 +463,9 @@ Delta tests (done 2026-10-05, `tests/test_delta.py`):
 Later, as each part is built:
 - [x] Tests for the data checks, quarantine, scope cleanup, silver KVK, gold, the
       dashboard's data loading and the Dagster definitions (all built with their parts)
-- [x] GitHub Actions stage 1: run pytest on every push (`.github/workflows/tests.yml`)
-- [x] GitHub Actions stage 3: build the Docker image after the tests pass, and check the
-      code and the Dagster definitions load in it (2026-10-08)
+- [ ] GitHub Actions stage 1: run pytest on every push (`.github/workflows/tests.yml`).
+      Written, never run: the repository has no GitHub remote yet. Not verified: the
+      tests on Python 3.12 (the workflow's version; locally they run on 3.10)
+- [ ] GitHub Actions stage 3: build the Docker image after the tests pass, and check the
+      code and the Dagster definitions load in it. Written 2026-10-08, never run on
+      GitHub; its commands (docker build, the two smoke tests) were run locally and pass

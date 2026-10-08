@@ -404,8 +404,9 @@ A misspelled setting name stops the script with an error instead of being ignore
 
 The tests use small samples copied from real CBS and KVK responses, and write real Delta
 tables in a temporary folder; a safety check makes a test fail if any script still points
-at the real `lakehouse/`. GitHub Actions runs the tests on every push
-(`.github/workflows/tests.yml`).
+at the real `lakehouse/`. A GitHub Actions workflow (`.github/workflows/tests.yml`) runs
+the tests and builds the Docker image on every push; it hasn't run yet, because the
+repository isn't on GitHub yet.
 
 | Test file | Covers |
 |---|---|

@@ -425,4 +425,4 @@ TODO.md                 open work
 | Streamlit dashboard | Built: 6 pages incl. data dictionary; provisional marked, "final only" switch |
 | Dagster orchestration and maintenance | Built: monthly CBS, automatic rebuilds after blocking checks, freshness, maintenance |
 | Docker Compose | Built and tested (pipeline, Dagster, dashboard); chat agent not yet tried in Docker |
-| CI | pytest on every push, then the Docker image is built and smoke-tested |
+| CI | Workflow written (pytest, then Docker build + smoke test); not run yet: no GitHub remote |
