@@ -10,7 +10,7 @@ next layer on top of it.
 Built and run on real data: bronze (CBS, KVK, SBI crosswalk) with checks and quarantine
 (CBS bronze with a column per field next to `raw_json`),
 silver (CBS, KVK), gold (5 tables), the Streamlit dashboard, Dagster orchestration,
-Docker Compose (including the KVK chat agent), column lineage, config, run log, 329 tests. All
+Docker Compose (including the KVK chat agent), column lineage, config, run log, 335 tests. All
 committed; no containers or servers left running. See the README for how to start
 everything (locally, or with `docker compose up -d`).
 
@@ -448,6 +448,16 @@ Run: `docker compose up -d` (Dagster http://localhost:3000, dashboard :8501)
   option (Ollama runs as root and could leave root-owned files in the home folder) in
   favour of copying the model into the Docker volume
 
+## Lakehouse viewer (built 2026-10-08: `lakehouse_viewer.py`)
+- [x] Browse every Delta table (bronze, silver, gold, run log), any version, read-only;
+      text filter over the whole table
+- [x] Data quality view: completeness, blank and padded text, distinct values, min/max,
+      most common value per column; flag true counts; duplicate rows; duplicate keys
+      (keys from `checks/layers.py`). Real data: 381,513 duplicate rows in bronze KVK (as
+      known), 0 duplicate keys everywhere, no padded text in silver or gold
+- [ ] Open question: `CategoryGroupID` in `81644ned_regios` is text (every value is
+      empty, so bronze inferred text) while it is a number in other code lists
+
 ## Documentation
 - [x] `docs/bronze_to_silver.md`: how each silver table is made, with real examples
       (2026-10-08)
@@ -487,7 +497,7 @@ crosswalk; `tests/test_checks.py` the CBS and KVK checks and quarantine;
 `tests/test_maintenance.py` the quarantine cleanup; `tests/test_config.py` the
 configuration; `tests/test_kvk_silver.py` silver KVK; `tests/test_gold.py` gold;
 `tests/test_dashboard.py` the dashboard (every page headless); `tests/test_orchestration.py`
-Dagster; `tests/test_delta.py` writes real Delta tables in `tmp_path` (329 tests, ~70 s). `conftest.py` fails a test when any module still points at the real
+Dagster; `tests/test_delta.py` writes real Delta tables in `tmp_path` (335 tests, ~70 s). `conftest.py` fails a test when any module still points at the real
 lakehouse or inbox. Checked by breaking the code on purpose:
 removing the delete-before-write, an empty `done_keys()` and non-UTC silver timestamps
 each make the right tests fail.

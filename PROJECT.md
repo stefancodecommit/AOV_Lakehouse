@@ -427,7 +427,7 @@ TODO.md                 open work
 | Data checks before ingestion (CBS) | Built (`checks/cbs.py`) |
 | Quarantine | Built for CBS, KVK and reference files; monthly cleanup in `maintenance.py` |
 | Alerting, freshness checks | To do |
-| pytest | 329 tests incl. real Delta tables, the dashboard pages and Dagster; one opt-in live CBS test |
+| pytest | 335 tests incl. real Delta tables, the dashboard pages and Dagster; one opt-in live CBS test |
 | Configuration file | Built (`config.yaml` + `config.py`) |
 | Gold | Built: 5 tables; provisional figures marked |
 | Streamlit dashboard | Built: 6 pages incl. data dictionary; provisional marked, "final only" switch |

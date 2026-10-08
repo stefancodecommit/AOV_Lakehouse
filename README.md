@@ -81,6 +81,7 @@ it next time (details per script below).
    checks/                   data checks before writing (cbs.py, kvk.py) and quarantine
    publish.py + runlog.py    silver/gold: staging, publishing, and the run log
    inspect_lakehouse.py      overview of every table, warnings and problems
+   lakehouse_viewer.py       browse any Delta table + data quality statistics (port 8502)
    maintenance.py            monthly tasks (quarantine, KVK retention, Delta vacuum)
    orchestration/            Dagster: schedules, automatic rebuilds, layer checks
    dashboard/                the Streamlit app; reads the gold tables only
@@ -149,6 +150,7 @@ Useful options:
 | `kvk_bronze_agent.py --file <zip>` | Load one specific file without the agent |
 | `cbs_silver.py --preview`, `kvk_silver.py --preview`, `gold.py --preview` | Build and summarise, write nothing |
 | `inspect_lakehouse.py --layer silver` | Overview of one layer |
+| `lakehouse_viewer.py` | Browse every bronze, silver and gold table at http://localhost:8502: rows (with a text filter over the whole table), data quality statistics, history, older versions |
 | `maintenance.py quarantine --dry-run` | Show which quarantine entries the monthly cleanup would remove |
 
 ## Running it automatically: Dagster
@@ -361,6 +363,7 @@ instance settings (one writing run at a time).
 | `runlog.py` | One row per silver/gold run in `lakehouse/_run_log`: when, what, status, which inputs |
 | `lineage.py` | Column lineage bronze → silver: the source of `docs/lineage.md`, `docs/lineage.html` (diagrams), `docs/lineage_explorer.html` (interactive; layout in `lineage_explorer_template.html`) and the lineage in Dagster; a test keeps it complete |
 | `inspect_lakehouse.py` | One-screen overview: rows, periods, freshness per table; warnings; problems (exit code 1) |
+| `lakehouse_viewer.py` | Small Streamlit app to look at any Delta table, any version, read-only; its *Data quality* view shows per column how complete it is, padded text, distinct values, min/max and the most common value, the flags' true counts, duplicate rows and duplicate keys |
 | `maintenance.py` | Monthly maintenance: quarantine cleanup, KVK retention, Delta optimize/vacuum |
 
 ## What ends up in `lakehouse/`
@@ -411,7 +414,7 @@ A misspelled setting name stops the script with an error instead of being ignore
 ## Tests
 
 ```bash
-.venv/bin/pytest              # 329 tests, ~65 s, no internet needed
+.venv/bin/pytest              # 335 tests, ~65 s, no internet needed
 .venv/bin/pytest -m live      # one extra test against the real CBS API
 ```
 
