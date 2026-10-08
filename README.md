@@ -15,6 +15,7 @@ as [Delta Lake](https://delta.io) tables in the folder `lakehouse/`.
 | `README.md` (this file) | What the project does, how the scripts fit together, how to run it |
 | [`PROJECT.md`](PROJECT.md) | The design: sub-questions, data sources, and *why* each choice was made |
 | [`TODO.md`](TODO.md) | Open work, decisions taken, and results of each real run |
+| [`docs/bronze_to_silver.md`](docs/bronze_to_silver.md) | How bronze becomes silver, table by table, with real examples |
 
 ## Contents
 
@@ -297,6 +298,9 @@ the actual checks run in Python (`checks/kvk.py`), and only a human typing `YES`
 the write. Each upload is a full snapshot, stored as one batch.
 
 ### Silver
+
+How each silver table is made from bronze, with real before/after examples:
+[`docs/bronze_to_silver.md`](docs/bronze_to_silver.md).
 
 **`cbs_silver.py`** — turns the raw CBS records into dimension tables (`dim_period`,
 `dim_sector`, `dim_company_size`, `dim_region`, `dim_survey_measure`), fact tables

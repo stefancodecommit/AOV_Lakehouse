@@ -402,6 +402,7 @@ Dockerfile              one image for all Python services
 requirements.txt
 requirements-dev.txt
 README.md               entry point: how the scripts fit together and how to run them
+docs/bronze_to_silver.md  how bronze becomes silver, table by table, with real examples
 PROJECT.md              this file
 TODO.md                 open work
 ```
