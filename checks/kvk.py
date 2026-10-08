@@ -1,5 +1,5 @@
 """Checks on a KVK open-dataset file (zip with one CSV, or the CSV itself) before it is
-written to bronze. Used by kvk_bronze_agent.py and, later, Dagster.
+written to bronze. Used by pipeline/bronze/kvk_agent.py and, later, Dagster.
 
 Errors (the file is rejected):
   - not a readable zip with a CSV inside, or a .csv

@@ -6,8 +6,8 @@ from pathlib import Path
 import dagster as dg
 import pytest
 
-import cbs_bronze as b
-import publish
+from pipeline.bronze import cbs as b
+from pipeline.common import publish
 from conftest import table_info
 from test_bronze_logic import DP_81589_FULL, business_record, periods
 from test_delta import bronze_delta  # noqa: F401  (fixture)

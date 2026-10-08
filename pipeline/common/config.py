@@ -1,7 +1,7 @@
 """
 Project settings: config.yaml, overridden by config.local.yaml and environment variables.
 
-    from config import settings, project_path
+    from pipeline.common.config import settings, project_path
     settings["cbs"]["start_year"]               # 2020
     project_path(settings["paths"]["lakehouse"])  # absolute Path
 
@@ -19,7 +19,7 @@ from pathlib import Path
 
 import yaml
 
-PROJECT_DIR = Path(__file__).resolve().parent
+PROJECT_DIR = Path(__file__).resolve().parents[2]      # pipeline/common/config.py -> project
 ENV_PREFIX = "LAKEHOUSE__"
 
 # Workaround for a crash in the deltalake library (seen with 1.4 - 1.6.6): right after a

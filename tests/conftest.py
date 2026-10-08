@@ -12,16 +12,16 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-import cbs_bronze  # noqa: E402
-import cbs_silver  # noqa: E402
-import kvk_bronze_agent  # noqa: E402
-import gold  # noqa: E402
+from pipeline.bronze import cbs as cbs_bronze  # noqa: E402
+from pipeline.silver import cbs as cbs_silver  # noqa: E402
+from pipeline.bronze import kvk_agent as kvk_bronze_agent  # noqa: E402
+from pipeline.gold import build as gold  # noqa: E402
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "dashboard"))
 import data as dashboard_data  # noqa: E402  (dashboard/data.py)
-import kvk_silver  # noqa: E402
-import maintenance  # noqa: E402
-import runlog  # noqa: E402
-import reference_bronze  # noqa: E402
+from pipeline.silver import kvk as kvk_silver  # noqa: E402
+from tools import maintenance  # noqa: E402
+from pipeline.common import runlog  # noqa: E402
+from pipeline.bronze import reference as reference_bronze  # noqa: E402
 
 INGESTED_AT = pd.Timestamp("2026-10-05 09:00", tz="UTC")
 MARGES = ["MW00000", "MOG0095", "MBG0095"]
@@ -69,7 +69,7 @@ def isolated_lakehouse(tmp_path, monkeypatch):
         "reference": tmp_path / "bronze" / "reference" / "_batch_log"})
 
     # Safety net: no module-level path may still point into the real lakehouse or inbox
-    import config
+    from pipeline.common import config
     real = [config.project_path(config.settings["paths"][k]) for k in ("lakehouse", "inbox")]
     for mod in (cbs_bronze, cbs_silver, reference_bronze, kvk_bronze_agent, maintenance, runlog,
                 kvk_silver, gold, dashboard_data):
@@ -214,7 +214,7 @@ def sample_bronze():
     }
 
 
-# Real v2.0 crosswalk rows (reference_bronze.py), as they sit in bronze
+# Real v2.0 crosswalk rows (pipeline/bronze/reference.py), as they sit in bronze
 CROSSWALK = [
     ["0111", "01", "Teelt van granen, peulvruchten en oliehoudende zaden", "01110", "01",
      "Teelt van andere granen dan rijst", "Teelt van granen (excl. rijst)"],

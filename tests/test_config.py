@@ -1,8 +1,8 @@
-"""config.py: config.yaml < config.local.yaml < LAKEHOUSE__* environment variables."""
+"""pipeline/common/config.py: config.yaml < config.local.yaml < LAKEHOUSE__* environment variables."""
 import pytest
 
-import cbs_bronze as b
-import config as c
+from pipeline.bronze import cbs as b
+from pipeline.common import config as c
 
 BASE = """
 paths:
@@ -99,7 +99,7 @@ def test_exit_pause_prevents_the_deltalake_crash_at_exit(tmp_path):
     import pyarrow as pa
     from deltalake import write_deltalake
     write_deltalake(str(tmp_path / "t"), pa.table({"v": list(range(1000))}))
-    script = ("import sys; sys.path.insert(0, %r); import config\n"
+    script = ("import sys; sys.path.insert(0, %r); import pipeline.common.config\n"
               "from deltalake import DeltaTable\n"
               "DeltaTable(%r).to_pyarrow_table()\n") % (str(c.PROJECT_DIR), str(tmp_path / "t"))
     codes = [subprocess.run([sys.executable, "-c", script], capture_output=True).returncode

@@ -1,4 +1,4 @@
-"""lineage.py: the bronze -> silver column lineage is complete, points at fields that
+"""tools/lineage.py: the bronze -> silver column lineage is complete, points at fields that
 exist, and docs/lineage.md matches it."""
 import json
 import sys
@@ -6,10 +6,10 @@ from pathlib import Path
 
 import pytest
 
-import cbs_bronze as b
-import kvk_silver as k
-import lineage as L
-import reference_bronze as r
+from pipeline.bronze import cbs as b
+from pipeline.silver import kvk as k
+from tools import lineage as L
+from pipeline.bronze import reference as r
 from conftest import sample_bronze
 from test_kvk_silver import COLUMNS as KVK_HEADER, CROSSWALK, bronze as kvk_bronze
 
@@ -51,7 +51,7 @@ def test_every_silver_table_has_lineage(silver_columns):
 
 @pytest.mark.parametrize("table", sorted(L.SILVER_LINEAGE))
 def test_every_column_has_lineage_in_the_same_order(silver_columns, table):
-    """A new silver column fails here until its origin is written down in lineage.py."""
+    """A new silver column fails here until its origin is written down in tools/lineage.py."""
     assert list(L.SILVER_LINEAGE[table]) == silver_columns[table]
 
 
@@ -98,7 +98,7 @@ def test_silver_to_silver_steps_are_followed_back_to_bronze():
 
 # =========================================================================== outputs
 def test_docs_lineage_md_and_html_are_up_to_date():
-    """Regenerate with: python lineage.py"""
+    """Regenerate with: python -m tools.lineage"""
     assert (ROOT / "docs" / "lineage.md").read_text(encoding="utf-8") == L.markdown()
     assert (ROOT / "docs" / "lineage.html").read_text(encoding="utf-8") == L.html()
     assert (ROOT / "docs" / "lineage_explorer.html").read_text(encoding="utf-8") == L.explorer_html()

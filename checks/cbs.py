@@ -13,7 +13,7 @@ from checks import CheckResult
 
 # How far behind a table may be before it counts as stale: the time since CBS last
 # modified it (TableInfos.Modified), per publication frequency. Matches the freshness
-# rule in PROJECT.md (quarterly 4 months, yearly 15 months).
+# rule in docs/PROJECT.md (quarterly 4 months, yearly 15 months).
 MAX_AGE = {"Perkwartaal": timedelta(days=122), "Perjaar": timedelta(days=456),
            "Permaand": timedelta(days=62), "Perweek": timedelta(days=14)}
 STOPPED_FREQUENCY = "Stopgezet"

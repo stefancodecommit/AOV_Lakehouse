@@ -7,7 +7,7 @@
 The same content (by SHA-256) is quarantined only once per source and name, so a source
 that keeps failing on every run doesn't fill the folder with copies. cleanup() removes
 entries that are resolved or older than a retention period (run monthly by
-maintenance.py); a problem that still exists is quarantined again by the next run.
+tools/maintenance.py); a problem that still exists is quarantined again by the next run.
 """
 from __future__ import annotations
 

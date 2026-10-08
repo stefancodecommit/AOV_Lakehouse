@@ -3,7 +3,7 @@ Column lineage, bronze -> silver: for every silver column, the bronze table(s) a
 field(s) it comes from, and what happens to it on the way.
 
 This file is the single source of truth. From it:
-- `python lineage.py` writes docs/lineage.md (a diagram and a table per silver table),
+- `python -m tools.lineage` writes docs/lineage.md (a diagram and a table per silver table),
   docs/lineage.html (all diagrams on one page, for a browser) and
   docs/lineage_explorer.html (interactive: pick a column or field, see its whole chain;
   built from lineage_explorer_template.html, works offline)
@@ -427,7 +427,7 @@ def mermaid_table(table: str) -> str:
             nodes[node] = f'  {node}["{label}"]:::{cls}'
             edges.append(f"  {node} --> {_id('col', column)}")
         if not c.sources:
-            nodes["run"] = '  run(["the silver run (publish.py)"]):::run'
+            nodes["run"] = '  run(["the silver run (pipeline/common/publish.py)"]):::run'
             edges.append(f"  run --> {_id('col', column)}")
     lines += sorted(nodes.values())
     lines.append(f'  subgraph {_id("tbl", table)}["silver: {table}"]')
@@ -476,8 +476,8 @@ def html() -> str:
 <body>
 <main>
 <h1>Column lineage: bronze → silver</h1>
-<p>Where every silver column comes from in bronze. Generated from <code>lineage.py</code>
-by <code>python lineage.py</code>; the same lineage as a table:
+<p>Where every silver column comes from in bronze. Generated from <code>tools/lineage.py</code>
+by <code>python -m tools.lineage</code>; the same lineage as a table:
 <a href="lineage.md">lineage.md</a>; explained with examples:
 <a href="bronze_to_silver.md">bronze_to_silver.md</a>.</p>
 <p class="legend"><span style="background:#f3e3c9;border-color:#a8743a">bronze field</span>
@@ -503,7 +503,7 @@ def markdown() -> str:
         "",
         "Where every silver column comes from in bronze, and what happens to it on the way.",
         "",
-        "> Generated from `lineage.py` by `python lineage.py`; don't edit by hand. "
+        "> Generated from `tools/lineage.py` by `python -m tools.lineage`; don't edit by hand. "
         "`tests/test_lineage.py` fails when a silver column is missing here or a named "
         "bronze field doesn't exist. The same lineage is visible in the Dagster UI: "
         "assets `silver_cbs` and `silver_kvk`, the *Columns* list on their overview page "
@@ -539,7 +539,7 @@ def markdown() -> str:
     for table in SILVER_LINEAGE:
         lines.append(f"- [`{table}`](#{table})")
     for table, columns in SILVER_LINEAGE.items():
-        script = "kvk_silver.py" if table in SILVER_KVK_TABLES else "cbs_silver.py"
+        script = "pipeline/silver/kvk.py" if table in SILVER_KVK_TABLES else "pipeline/silver/cbs.py"
         lines += ["", f"## {table}", "", f"Built by `{script}`.", "",
                   "```mermaid", mermaid_table(table), "```", "",
                   "| Column | Comes from | How |", "|---|---|---|"]
@@ -616,7 +616,7 @@ def explorer_data() -> dict:
                           "how": c.how}
             if not c.sources:
                 nodes["run"] = {"id": "run", "layer": "run", "table": "the silver run",
-                                "name": "publish.py", "how": "adds run_id to every row it publishes"}
+                                "name": "pipeline/common/publish.py", "how": "adds run_id to every row it publishes"}
                 edges.append(["run", cid])
             for s in c.sources:
                 sid = f"{s.table}.{s.field}" if s.is_silver else f"bronze:{s.table}.{s.field}"
@@ -640,7 +640,7 @@ def explorer_html() -> str:
 
 if __name__ == "__main__":
     from pathlib import Path
-    docs = Path(__file__).resolve().parent / "docs"
+    docs = Path(__file__).resolve().parents[1] / "docs"
     (docs / "lineage.md").write_text(markdown(), encoding="utf-8")
     (docs / "lineage.html").write_text(html(), encoding="utf-8")
     (docs / "lineage_explorer.html").write_text(explorer_html(), encoding="utf-8")

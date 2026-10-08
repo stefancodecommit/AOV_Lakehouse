@@ -2,7 +2,7 @@
 
 Where every silver column comes from in bronze, and what happens to it on the way.
 
-> Generated from `lineage.py` by `python lineage.py`; don't edit by hand. `tests/test_lineage.py` fails when a silver column is missing here or a named bronze field doesn't exist. The same lineage is visible in the Dagster UI: assets `silver_cbs` and `silver_kvk`, the *Columns* list on their overview page (each description starts with *From …*). For the steps explained with real examples, see [bronze_to_silver.md](bronze_to_silver.md).
+> Generated from `tools/lineage.py` by `python -m tools.lineage`; don't edit by hand. `tests/test_lineage.py` fails when a silver column is missing here or a named bronze field doesn't exist. The same lineage is visible in the Dagster UI: assets `silver_cbs` and `silver_kvk`, the *Columns* list on their overview page (each description starts with *From …*). For the steps explained with real examples, see [bronze_to_silver.md](bronze_to_silver.md).
 
 How to read a source:
 
@@ -103,7 +103,7 @@ flowchart LR
 
 ## map_characteristic
 
-Built by `cbs_silver.py`.
+Built by `pipeline/silver/cbs.py`.
 
 ```mermaid
 flowchart LR
@@ -114,7 +114,7 @@ flowchart LR
   n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_81644ned_bedrijfstakkenbranchessbi2008_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken__table_id["5 code lists of sectors and size classes<br/>_table_id"]:::bronze
   n_src_80072ned_categorygroups_83130ned_categorygroups_86009ned_categorygroups_ID["3 category-group lists<br/>ID"]:::bronze
   n_src_80072ned_categorygroups_83130ned_categorygroups_86009ned_categorygroups_Title["3 category-group lists<br/>Title"]:::bronze
-  run(["the silver run (publish.py)"]):::run
+  run(["the silver run (pipeline/common/publish.py)"]):::run
   subgraph n_tbl_map_characteristic["silver: map_characteristic"]
     n_col_source_table["source_table"]:::silver
     n_col_dimension["dimension"]:::silver
@@ -161,14 +161,14 @@ flowchart LR
 
 ## dim_sector
 
-Built by `cbs_silver.py`.
+Built by `pipeline/silver/cbs.py`.
 
 ```mermaid
 flowchart LR
   n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_81644ned_bedrijfstakkenbranchessbi2008_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken_Key["5 code lists of sectors and size classes<br/>Key"]:::bronze
   n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_81644ned_bedrijfstakkenbranchessbi2008_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken_Title["5 code lists of sectors and size classes<br/>Title"]:::bronze
   n_src_silver_map_characteristic_member_type["map_characteristic<br/>member_type"]:::silverref
-  run(["the silver run (publish.py)"]):::run
+  run(["the silver run (pipeline/common/publish.py)"]):::run
   subgraph n_tbl_dim_sector["silver: dim_sector"]
     n_col_sector_key["sector_key"]:::silver
     n_col_sbi_code["sbi_code"]:::silver
@@ -201,12 +201,12 @@ flowchart LR
 
 ## dim_company_size
 
-Built by `cbs_silver.py`.
+Built by `pipeline/silver/cbs.py`.
 
 ```mermaid
 flowchart LR
   n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_81589ned_dataproperties_81644ned_bedrijfstakkenbranchessbi2008_81644ned_dataproperties_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken_Title["80072ned_bedrijfskenmerkensbi2008, 81589ned_bedrijfstakkenbranchessbi2008, 81589ned_dataproperties, 81644ned_bedrijfstakkenbranchessbi2008, 81644ned_dataproperties, 83130ned_bedrijfskenmerken, 86009ned_bedrijfskenmerken<br/>Title"]:::bronze
-  run(["the silver run (publish.py)"]):::run
+  run(["the silver run (pipeline/common/publish.py)"]):::run
   subgraph n_tbl_dim_company_size["silver: dim_company_size"]
     n_col_size_key["size_key"]:::silver
     n_col_size_unit["size_unit"]:::silver
@@ -244,12 +244,12 @@ flowchart LR
 
 ## dim_period
 
-Built by `cbs_silver.py`.
+Built by `pipeline/silver/cbs.py`.
 
 ```mermaid
 flowchart LR
   n_src_80072ned_typeddataset_81589ned_typeddataset_81644ned_typeddataset_83130ned_typeddataset_86009ned_typeddataset_Perioden["the 5 data tables (TypedDataSet)<br/>Perioden"]:::bronze
-  run(["the silver run (publish.py)"]):::run
+  run(["the silver run (pipeline/common/publish.py)"]):::run
   subgraph n_tbl_dim_period["silver: dim_period"]
     n_col_period_key["period_key"]:::silver
     n_col_period_type["period_type"]:::silver
@@ -290,14 +290,14 @@ flowchart LR
 
 ## dim_region
 
-Built by `cbs_silver.py`.
+Built by `pipeline/silver/cbs.py`.
 
 ```mermaid
 flowchart LR
   n_src_81644ned_regios_Description["81644ned_regios<br/>Description"]:::bronze
   n_src_81644ned_regios_Key["81644ned_regios<br/>Key"]:::bronze
   n_src_81644ned_regios_Title["81644ned_regios<br/>Title"]:::bronze
-  run(["the silver run (publish.py)"]):::run
+  run(["the silver run (pipeline/common/publish.py)"]):::run
   subgraph n_tbl_dim_region["silver: dim_region"]
     n_col_region_key["region_key"]:::silver
     n_col_region_name["region_name"]:::silver
@@ -326,7 +326,7 @@ flowchart LR
 
 ## dim_survey_measure
 
-Built by `cbs_silver.py`.
+Built by `pipeline/silver/cbs.py`.
 
 ```mermaid
 flowchart LR
@@ -336,7 +336,7 @@ flowchart LR
   n_src_83130ned_dataproperties_86009ned_dataproperties_Type["survey DataProperties: 86009NED + 83130NED<br/>Type"]:::bronze
   n_src_83130ned_dataproperties_86009ned_dataproperties_Unit["survey DataProperties: 86009NED + 83130NED<br/>Unit"]:::bronze
   n_src_83130ned_dataproperties_86009ned_dataproperties__table_id["survey DataProperties: 86009NED + 83130NED<br/>_table_id"]:::bronze
-  run(["the silver run (publish.py)"]):::run
+  run(["the silver run (pipeline/common/publish.py)"]):::run
   subgraph n_tbl_dim_survey_measure["silver: dim_survey_measure"]
     n_col_source_table["source_table"]:::silver
     n_col_measure_key["measure_key"]:::silver
@@ -375,7 +375,7 @@ flowchart LR
 
 ## map_sbi2008_sbi2025
 
-Built by `cbs_silver.py`.
+Built by `pipeline/silver/cbs.py`.
 
 ```mermaid
 flowchart LR
@@ -387,7 +387,7 @@ flowchart LR
   n_src_reference_sbi2008_sbi2025_sbi2008_title["reference/sbi2008_sbi2025<br/>sbi2008_title"]:::bronze
   n_src_reference_sbi2008_sbi2025_sbi2025["reference/sbi2008_sbi2025<br/>sbi2025"]:::bronze
   n_src_reference_sbi2008_sbi2025_sbi2025_title["reference/sbi2008_sbi2025<br/>sbi2025_title"]:::bronze
-  run(["the silver run (publish.py)"]):::run
+  run(["the silver run (pipeline/common/publish.py)"]):::run
   subgraph n_tbl_map_sbi2008_sbi2025["silver: map_sbi2008_sbi2025"]
     n_col_sbi2008_code["sbi2008_code"]:::silver
     n_col_sbi2008_division["sbi2008_division"]:::silver
@@ -446,7 +446,7 @@ flowchart LR
 
 ## fct_absence_rate
 
-Built by `cbs_silver.py`.
+Built by `pipeline/silver/cbs.py`.
 
 ```mermaid
 flowchart LR
@@ -458,7 +458,7 @@ flowchart LR
   n_src_silver_map_characteristic_member_type["map_characteristic<br/>member_type"]:::silverref
   n_src_silver_map_characteristic_sector_key["map_characteristic<br/>sector_key"]:::silverref
   n_src_silver_map_characteristic_size_key["map_characteristic<br/>size_key"]:::silverref
-  run(["the silver run (publish.py)"]):::run
+  run(["the silver run (pipeline/common/publish.py)"]):::run
   subgraph n_tbl_fct_absence_rate["silver: fct_absence_rate"]
     n_col_period_key["period_key"]:::silver
     n_col_characteristic_key["characteristic_key"]:::silver
@@ -499,7 +499,7 @@ flowchart LR
 
 ## fct_absence_survey
 
-Built by `cbs_silver.py`.
+Built by `pipeline/silver/cbs.py`.
 
 ```mermaid
 flowchart LR
@@ -515,7 +515,7 @@ flowchart LR
   n_src_silver_map_characteristic_sector_key["map_characteristic<br/>sector_key"]:::silverref
   n_src_silver_map_characteristic_size_is_aggregate["map_characteristic<br/>size_is_aggregate"]:::silverref
   n_src_silver_map_characteristic_size_key["map_characteristic<br/>size_key"]:::silverref
-  run(["the silver run (publish.py)"]):::run
+  run(["the silver run (pipeline/common/publish.py)"]):::run
   subgraph n_tbl_fct_absence_survey["silver: fct_absence_survey"]
     n_col_source_table["source_table"]:::silver
     n_col_period_key["period_key"]:::silver
@@ -577,7 +577,7 @@ flowchart LR
 
 ## fct_business_count
 
-Built by `cbs_silver.py`.
+Built by `pipeline/silver/cbs.py`.
 
 ```mermaid
 flowchart LR
@@ -589,7 +589,7 @@ flowchart LR
   n_src_81589ned_typeddataset__measure_["81589ned_typeddataset<br/>(each measure)"]:::bronze
   n_src_81589ned_typeddataset__period_status["81589ned_typeddataset<br/>_period_status"]:::bronze
   n_src_silver_map_characteristic_member_type["map_characteristic<br/>member_type"]:::silverref
-  run(["the silver run (publish.py)"]):::run
+  run(["the silver run (pipeline/common/publish.py)"]):::run
   subgraph n_tbl_fct_business_count["silver: fct_business_count"]
     n_col_period_key["period_key"]:::silver
     n_col_sector_key["sector_key"]:::silver
@@ -643,7 +643,7 @@ flowchart LR
 
 ## fct_establishment_count
 
-Built by `cbs_silver.py`.
+Built by `pipeline/silver/cbs.py`.
 
 ```mermaid
 flowchart LR
@@ -656,7 +656,7 @@ flowchart LR
   n_src_81644ned_typeddataset__measure_["81644ned_typeddataset<br/>(each measure)"]:::bronze
   n_src_81644ned_typeddataset__period_status["81644ned_typeddataset<br/>_period_status"]:::bronze
   n_src_silver_map_characteristic_member_type["map_characteristic<br/>member_type"]:::silverref
-  run(["the silver run (publish.py)"]):::run
+  run(["the silver run (pipeline/common/publish.py)"]):::run
   subgraph n_tbl_fct_establishment_count["silver: fct_establishment_count"]
     n_col_period_key["period_key"]:::silver
     n_col_sector_key["sector_key"]:::silver
@@ -713,7 +713,7 @@ flowchart LR
 
 ## kvk_company
 
-Built by `kvk_silver.py`.
+Built by `pipeline/silver/kvk.py`.
 
 ```mermaid
 flowchart LR
@@ -729,7 +729,7 @@ flowchart LR
   n_src_kvk_basis_bedrijfsgegevens__row_number["kvk/basis_bedrijfsgegevens<br/>_row_number"]:::bronze
   n_src_silver_map_sbi2008_sbi2025_sbi2008_code["map_sbi2008_sbi2025<br/>sbi2008_code"]:::silverref
   n_src_silver_map_sbi2008_sbi2025_sbi2025_code["map_sbi2008_sbi2025<br/>sbi2025_code"]:::silverref
-  run(["the silver run (publish.py)"]):::run
+  run(["the silver run (pipeline/common/publish.py)"]):::run
   subgraph n_tbl_kvk_company["silver: kvk_company"]
     n_col_snapshot_date["snapshot_date"]:::silver
     n_col_batch_id["batch_id"]:::silver

@@ -32,13 +32,13 @@ most recent ones, a final row's comparisons only use final figures, so filtering
 is_provisional = False gives a consistent "final only" view.
 
 Gold refuses to build from silver CBS tables of different runs (a publish that stopped
-halfway). Publishing, staging, run_id and the run log work as in silver (publish.py,
+halfway). Publishing, staging, run_id and the run log work as in silver (pipeline/common/publish.py,
 pipeline "gold"); the run log's inputs include the silver run_ids that were read.
 
 Usage
 -----
-    python gold.py            # rebuild all gold tables
-    python gold.py --preview  # build and print a summary, write nothing
+    python -m pipeline.gold.build            # rebuild all gold tables
+    python -m pipeline.gold.build --preview  # build and print a summary, write nothing
 """
 from __future__ import annotations
 
@@ -48,7 +48,7 @@ import logging
 import numpy as np
 import pandas as pd
 
-from config import project_path, settings
+from pipeline.common.config import project_path, settings
 
 LAKEHOUSE = project_path(settings["paths"]["lakehouse"])
 SILVER_ROOT = LAKEHOUSE / "silver"
@@ -81,11 +81,11 @@ def read_silver(names: list[str], inputs: dict | None = None,
     """Silver tables by name. Records version and run_id in `inputs`; raises when the
     silver CBS tables come from different runs.
 
-    Different run_ids mean a silver publish stopped halfway (see publish.py): some
+    Different run_ids mean a silver publish stopped halfway (see pipeline/common/publish.py): some
     tables are new and some old. Combining them could pair, for example, a new fact
     table with an old dimension, so gold refuses and asks for a silver rerun."""
     from deltalake import DeltaTable
-    from publish import RunFailed
+    from pipeline.common.publish import RunFailed
     out, run_ids = {}, {}
     for name in names:
         path = SILVER_ROOT / name
@@ -108,7 +108,7 @@ def read_silver(names: list[str], inputs: dict | None = None,
     cbs = {tuple(run_ids[n]) for n in names if n in SILVER_CBS_TABLES and n in run_ids}
     if len(cbs) > 1:
         raise RunFailed(f"silver CBS tables come from different runs {sorted(cbs)}; "
-                        "rerun cbs_silver.py first")
+                        "rerun pipeline/silver/cbs.py first")
     return out
 
 
@@ -283,7 +283,7 @@ def build_absence_profile(t: dict) -> pd.DataFrame:
     For each value: its 95% interval, the national value, and differs_from_national.
     That flag is only set when the whole interval lies above or below the national
     value; a point estimate that differs but whose interval includes the national
-    value may be sampling noise (question 5 in PROJECT.md). rank_in_topic ranks the
+    value may be sampling noise (question 5 in docs/PROJECT.md). rank_in_topic ranks the
     measures inside one topic group, e.g. which complaint is most common."""
     s = t["fct_absence_survey"]
     s = s[s["source_table"] == "86009NED"].copy()
@@ -402,8 +402,8 @@ def read_inputs(inputs: dict | None = None) -> dict:
 
 
 def run() -> str:
-    """Build, stage, publish and log one gold run (publish.py). Returns the run_id."""
-    from publish import run_pipeline
+    """Build, stage, publish and log one gold run (pipeline/common/publish.py). Returns the run_id."""
+    from pipeline.common.publish import run_pipeline
     return run_pipeline(PIPELINE, lambda inputs: build_all(read_inputs(inputs)),
                         GOLD_ROOT, RUN_LOG, OPTIONAL_TABLES)
 

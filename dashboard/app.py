@@ -5,7 +5,7 @@ with higher sickness absence?
 Run from the project folder:
     .venv/bin/streamlit run dashboard/app.py
 
-It reads only the gold tables (lakehouse/gold/, built by gold.py). Pages live in
+It reads only the gold tables (lakehouse/gold/, built by pipeline/gold/build.py). Pages live in
 dashboard/views/; the shared frame (switch, freshness, credits) in common.py, chart
 styles in charts.py, data access and caching in data.py.
 """

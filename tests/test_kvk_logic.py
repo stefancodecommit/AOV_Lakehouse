@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-import kvk_bronze_agent as k
+from pipeline.bronze import kvk_agent as k
 
 # Header and rows as in the real KVK file of 2026-10-01
 REAL_HEADER = ('"Datum aanvang";"Actief";"Insolventie";"Rechtsvorm";"Postcode regio";'

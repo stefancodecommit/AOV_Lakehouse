@@ -1,7 +1,7 @@
 """
 Data access for the dashboard: it reads the gold tables only, never silver or bronze.
 
-Caching: each table is cached together with its Delta version. When gold.py publishes
+Caching: each table is cached together with its Delta version. When pipeline/gold/build.py publishes
 a new version, the version number changes, the cache misses, and the new data shows on
 the next page load, without restarting the dashboard.
 
@@ -19,8 +19,8 @@ from pathlib import Path
 
 import pandas as pd
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))   # project root: config.py
-from config import project_path, settings  # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))   # project root: pipeline/common/config.py
+from pipeline.common.config import project_path, settings  # noqa: E402
 
 GOLD_ROOT = project_path(settings["paths"]["lakehouse"]) / "gold"
 GOLD_TABLES = ["gold_absence_by_sector", "gold_absence_by_size", "gold_absence_profile",
@@ -87,7 +87,7 @@ def run_problem(tables: dict[str, pd.DataFrame]) -> str | None:
     per_run = {i: sorted(n for n, v in ids.items() if i in v) for i in sorted(distinct)}
     return ("These tables come from different gold runs, so they may not fit together: "
             + "; ".join(f"{i}: {', '.join(n)}" for i, n in per_run.items())
-            + ". Run gold.py again to fix this.")
+            + ". Run pipeline/gold/build.py again to fix this.")
 
 
 def freshness(df: pd.DataFrame) -> dict:

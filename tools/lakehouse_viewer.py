@@ -18,7 +18,7 @@ the files of the chosen version. The viewer only reads, never writes.
 
 Usage
 -----
-    .venv/bin/python lakehouse_viewer.py      # opens http://localhost:8502
+    .venv/bin/python -m tools.lakehouse_viewer  # opens http://localhost:8502
 (the dashboard uses 8501, so both can run at once; only reachable from this machine)
 """
 from __future__ import annotations
@@ -31,8 +31,11 @@ import pandas as pd
 import pyarrow as pa
 import pyarrow.compute as pc
 
-import cbs_silver
-from checks.layers import GOLD_KEYS, SILVER_CBS_KEYS
+# `streamlit run` puts only this file's folder on the path; the project root has the
+# pipeline and checks packages
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from checks.layers import GOLD_KEYS, SILVER_CBS_KEYS  # noqa: E402
+from pipeline.silver import cbs as cbs_silver  # noqa: E402
 
 PORT = 8502
 LAYERS = ["bronze", "silver", "gold", "other"]
@@ -251,7 +254,7 @@ if __name__ == "__main__":
     from streamlit.runtime.scriptrunner import get_script_run_ctx
     if get_script_run_ctx(suppress_warning=True) is not None:   # running inside Streamlit
         main()
-    else:                                            # started as `python lakehouse_viewer.py`
+    else:  # started as `python -m tools.lakehouse_viewer`
         print(f"Lakehouse viewer: http://localhost:{PORT}  (Ctrl+C to stop)", flush=True)
         # headless: no first-run e-mail question, no browser opened automatically
         sys.exit(subprocess.call([sys.executable, "-m", "streamlit", "run", __file__,

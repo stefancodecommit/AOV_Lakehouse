@@ -27,7 +27,7 @@ def load(names: list[str]) -> dict[str, pd.DataFrame]:
     missing = [n for n, df in tables.items() if df.empty]
     if missing:
         st.warning(f"Gold table(s) not available yet: {', '.join(missing)}. "
-                   "Run the pipeline up to `gold.py` first (see README).")
+                   "Run the pipeline up to `pipeline/gold/build.py` first (see README).")
     if problem := data.run_problem(tables):
         st.warning(problem)
     return tables
@@ -74,7 +74,7 @@ def branding() -> None:
     """The logo at the top of the sidebar, in its dark-mode variant when the viewer uses
     a dark theme. Without a logo file, the project note is shown as text instead."""
     import charts
-    from config import project_path, settings
+    from pipeline.common.config import project_path, settings
     cfg = settings.get("dashboard", {})
     logo = cfg.get("logo_dark") if charts.theme_mode() == "dark" else None
     logo = logo if logo and project_path(logo).is_file() else cfg.get("logo")

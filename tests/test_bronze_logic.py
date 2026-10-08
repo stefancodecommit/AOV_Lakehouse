@@ -5,8 +5,8 @@ import json
 import pytest
 import requests
 
-import cbs_bronze as b
-import cbs_silver as s
+from pipeline.bronze import cbs as b
+from pipeline.silver import cbs as s
 from conftest import DP_81589, table_info, topic_keys
 
 Endpoint = b.Endpoint

@@ -4,8 +4,8 @@ import pandas as pd
 import pytest
 from deltalake import DeltaTable
 
-import cbs_silver as s
-import reference_bronze as r
+from pipeline.silver import cbs as s
+from pipeline.bronze import reference as r
 
 HEADER = ["SBI2008", "SBI2008_2digit", "SBI2008 Omschrijving", "SBI2025", "SBI2025_2digit",
           "SBI2025 titel dd 20260101", "Omschrijving schakeling"]

@@ -5,8 +5,8 @@ typed tables in **silver**. Every example below is real: a record taken from thi
 project's lakehouse, next to the silver rows it turns into. You don't need to have read
 the code; the last section says where each step lives in it.
 
-- Silver CBS is built by [`cbs_silver.py`](../cbs_silver.py)
-- Silver KVK is built by [`kvk_silver.py`](../kvk_silver.py)
+- Silver CBS is built by [`pipeline/silver/cbs.py`](../pipeline/silver/cbs.py)
+- Silver KVK is built by [`pipeline/silver/kvk.py`](../pipeline/silver/kvk.py)
 - For the bigger picture (sources, layers, how to run), see the [README](../README.md)
 - For the origin of every single silver column, see the column lineage:
   [lineage.md](lineage.md)
@@ -70,7 +70,7 @@ Ziekteverzuimpercentage_1   5.4        (a number: DataProperties says Float)
 ```
 
 The field columns hold the same values as `raw_json`, unchanged, so bronze can be queried
-directly; `raw_json` stays as the proof of what was received, and `python cbs_bronze.py
+directly; `raw_json` stays as the proof of what was received, and `python -m pipeline.bronze.cbs
 --rebuild-columns` rebuilds the columns from it. A field CBS adds later becomes a new column.
 
 Read on its own, such a row says little: what is `T001081`? What does
@@ -132,7 +132,7 @@ silver row carries the `run_id` of the run that made it (see section 13).
  the period keys found in all fact tables ─────────► dim_period
 
  reference/sbi2008_sbi2025 (newest file version) ──► map_sbi2008_sbi2025
- kvk/basis_bedrijfsgegevens + map_sbi2008_sbi2025 ─► kvk_company      (kvk_silver.py)
+ kvk/basis_bedrijfsgegevens + map_sbi2008_sbi2025 ─► kvk_company      (pipeline/silver/kvk.py)
 ```
 
 Bronze tables that silver does **not** read, and why:
@@ -419,7 +419,7 @@ link, how many codes are on the other side; name the kind of link.
 
 ## 12. KVK companies → `kvk_company`
 
-Built by `kvk_silver.py`, after silver CBS (it needs the crosswalk). One row per company
+Built by `pipeline/silver/kvk.py`, after silver CBS (it needs the crosswalk). One row per company
 per upload; the dashboard uses the latest upload (`is_latest`).
 
 ### Typing and cleaning
@@ -483,7 +483,7 @@ the sector stays empty and the flag says why.
 
 Result on the real file: 90% of the active companies get an SBI 2008 section and
 division; the other 10% are marked, not guessed. The full list of flags is in the docstring
-of `kvk_silver.py`.
+of `pipeline/silver/kvk.py`.
 
 ## 13. Tracing a silver row back to its source
 
@@ -504,7 +504,7 @@ loaded on 2026-10-05.
 
 ## 14. Where each step lives in the code
 
-| Silver table | Function in `cbs_silver.py` |
+| Silver table | Function in `pipeline/silver/cbs.py` |
 |---|---|
 | (every table) reading bronze, stripping padding, dropping `ID` | `read_bronze`, `clean_fields`, `latest` (`parse_raw` for bronze without field columns) |
 | `map_characteristic` | `build_map_characteristic` (uses `parse_size`, `parse_sector`, `aggregate_flags`) |
@@ -517,9 +517,9 @@ loaded on 2026-10-05.
 | `fct_absence_survey` | `build_fct_absence_survey` |
 | `fct_business_count`, `fct_establishment_count` | `build_fct_counts` |
 | `map_sbi2008_sbi2025` | `build_map_sbi2008_sbi2025` (reads with `read_reference`) |
-| all of them, in order | `build_all`; publishing: `run` (via `publish.py`) |
+| all of them, in order | `build_all`; publishing: `run` (via `pipeline/common/publish.py`) |
 
-| Silver table | Function in `kvk_silver.py` |
+| Silver table | Function in `pipeline/silver/kvk.py` |
 |---|---|
 | reading bronze (only the needed columns) | `read_kvk_bronze` |
 | typing and cleaning | `build_kvk_company` |

@@ -4,11 +4,11 @@ Publishing a silver (later also gold) run: staging, swap and the run log.
 A run builds all its tables, writes them to <layer>/_staging/<run_id>/, and only when
 every table was staged replaces the live tables, each with a `run_id` column. A run that
 fails leaves the live tables untouched. Every run, successful or not, is a row in
-lakehouse/_run_log (runlog.py).
+lakehouse/_run_log (pipeline/common/runlog.py).
 
 Delta can't replace several tables in one commit: a crash while publishing could leave
 tables of two runs. RunFailed then names the tables already replaced, and
-inspect_lakehouse.py reports tables whose run_id isn't the latest successful run.
+tools/inspect_lakehouse.py reports tables whose run_id isn't the latest successful run.
 """
 from __future__ import annotations
 
@@ -104,7 +104,7 @@ def run_pipeline(pipeline: str, build, root: Path, run_log: Path,
     """Build, stage, publish and log one run. `build(inputs)` returns {table: DataFrame}
     and records the Delta version of every table it reads in `inputs`. Returns the
     run_id; raises (after logging the failed run) when something went wrong."""
-    import runlog
+    from pipeline.common import runlog
     started = datetime.now(timezone.utc)
     run_id = runlog.new_run_id(pipeline, started)
     inputs: dict = {}

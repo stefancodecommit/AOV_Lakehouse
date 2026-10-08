@@ -1,4 +1,4 @@
-"""lakehouse_viewer.py: finds every table per layer, filters the whole table, opens old
+"""tools/lakehouse_viewer.py: finds every table per layer, filters the whole table, opens old
 versions, computes the data quality statistics, and the page runs headless (AppTest)."""
 from pathlib import Path
 
@@ -6,12 +6,12 @@ import pyarrow as pa
 from deltalake import write_deltalake
 from streamlit.testing.v1 import AppTest
 
-import cbs_bronze as b
-import cbs_silver as s
-import lakehouse_viewer as v
+from pipeline.bronze import cbs as b
+from pipeline.silver import cbs as s
+from tools import lakehouse_viewer as v
 from test_delta import ABSENCE, period_request, records
 
-APP = str(Path(__file__).resolve().parents[1] / "lakehouse_viewer.py")
+APP = str(Path(__file__).resolve().parents[1] / "tools/lakehouse_viewer.py")
 
 
 def two_versions():

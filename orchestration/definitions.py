@@ -40,7 +40,7 @@ Schedules and jobs (the times are in config.yaml, section schedules)
 cbs_monthly        1st of the month 06:00: cbs_bronze and sbi_crosswalk
 freshness_monthly  1st of the month 09:00: the freshness checks
 maintenance        15th of the month 03:00: quarantine cleanup, KVK retention, Delta
-                   optimize/vacuum (maintenance.py)
+                   optimize/vacuum (tools/maintenance.py)
 Every run that writes to the lakehouse has the tag lakehouse=write; dagster.yaml allows
 one such run at a time, so maintenance never overlaps an ingestion.
 
@@ -60,16 +60,16 @@ import dagster as dg
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))   # the project's modules
 
-import cbs_bronze  # noqa: E402
-import cbs_silver  # noqa: E402
-import gold as gold_layer  # noqa: E402
-import kvk_bronze_agent  # noqa: E402
-import kvk_silver  # noqa: E402
-import lineage  # noqa: E402
-import maintenance  # noqa: E402
-import reference_bronze  # noqa: E402
+from pipeline.bronze import cbs as cbs_bronze  # noqa: E402
+from pipeline.silver import cbs as cbs_silver  # noqa: E402
+from pipeline.gold import build as gold_layer  # noqa: E402
+from pipeline.bronze import kvk_agent as kvk_bronze_agent  # noqa: E402
+from pipeline.silver import kvk as kvk_silver  # noqa: E402
+from tools import lineage  # noqa: E402
+from tools import maintenance  # noqa: E402
+from pipeline.bronze import reference as reference_bronze  # noqa: E402
 from checks import CheckResult  # noqa: E402
-from config import settings  # noqa: E402
+from pipeline.common.config import settings  # noqa: E402
 
 # Dagster runs each step in its own process and restores Python's search path after
 # loading this file, so the project folder added above is gone by the time a step
@@ -81,8 +81,8 @@ import checks.freshness  # noqa: E402,F401
 import checks.kvk  # noqa: E402,F401
 import checks.layers  # noqa: E402,F401
 import checks.quarantine  # noqa: E402,F401
-import publish  # noqa: E402,F401
-import runlog  # noqa: E402,F401
+from pipeline.common import publish  # noqa: E402,F401
+from pipeline.common import runlog  # noqa: E402,F401
 
 WRITE = {"lakehouse": "write"}       # see dagster.yaml: one writing run at a time
 # rebuild after new upstream data, but only when every upstream blocking check passed
@@ -102,7 +102,7 @@ def check_result(r: CheckResult, asset: str) -> dg.AssetCheckResult:
 # =========================================================================== bronze
 @dg.multi_asset(specs=[dg.AssetSpec(
     "cbs_bronze", group_name="bronze", skippable=True,
-    description="CBS OData -> bronze (cbs_bronze.py). Skipped when CBS had nothing new.")])
+    description="CBS OData -> bronze (pipeline/bronze/cbs.py). Skipped when CBS had nothing new.")])
 def cbs_bronze_asset(context: dg.AssetExecutionContext):
     summary = cbs_bronze.run(only=None, force=False, dry_run=False)
     if summary["failed"] and not summary["fetched"]:
@@ -116,7 +116,7 @@ def cbs_bronze_asset(context: dg.AssetExecutionContext):
 
 @dg.multi_asset(specs=[dg.AssetSpec(
     "sbi_crosswalk", group_name="bronze", skippable=True,
-    description="CBS SBI 2008 -> 2025 crosswalk -> bronze (reference_bronze.py). "
+    description="CBS SBI 2008 -> 2025 crosswalk -> bronze (pipeline/bronze/reference.py). "
                 "Skipped when the file is unchanged.")])
 def sbi_crosswalk_asset(context: dg.AssetExecutionContext):
     url = reference_bronze.CROSSWALK_URL
@@ -158,27 +158,27 @@ def _published(pipeline_run) -> dg.MaterializeResult:
     return dg.MaterializeResult(metadata={"run_id": run_id})
 
 
-# Column lineage (lineage.py): in the free Dagster UI visible as the asset's column list
+# Column lineage (tools/lineage.py): in the free Dagster UI visible as the asset's column list
 # (each description starts with "From <bronze field>"); the lineage graph is Dagster+ only
 CBS_SILVER_TABLES = set(lineage.SILVER_LINEAGE) - lineage.SILVER_KVK_TABLES
 
 
 @dg.asset(group_name="silver", deps=["cbs_bronze", "sbi_crosswalk"],
-          automation_condition=AFTER_NEW_DATA, description="cbs_silver.py: 11 tables",
+          automation_condition=AFTER_NEW_DATA, description="pipeline/silver/cbs.py: 11 tables",
           metadata=lineage.dagster_lineage(CBS_SILVER_TABLES))
 def silver_cbs() -> dg.MaterializeResult:
     return _published(cbs_silver.run)
 
 
 @dg.asset(group_name="silver", deps=["kvk_bronze", "silver_cbs"],
-          automation_condition=AFTER_NEW_DATA, description="kvk_silver.py: kvk_company",
+          automation_condition=AFTER_NEW_DATA, description="pipeline/silver/kvk.py: kvk_company",
           metadata=lineage.dagster_lineage(lineage.SILVER_KVK_TABLES))
 def silver_kvk() -> dg.MaterializeResult:
     return _published(kvk_silver.run)
 
 
 @dg.asset(group_name="gold", deps=["silver_cbs", "silver_kvk"],
-          automation_condition=AFTER_NEW_DATA, description="gold.py: 5 dashboard tables")
+          automation_condition=AFTER_NEW_DATA, description="pipeline/gold/build.py: 5 dashboard tables")
 def gold() -> dg.MaterializeResult:
     return _published(gold_layer.run)
 

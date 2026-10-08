@@ -1,4 +1,4 @@
-# Settings for the CBS/KVK lakehouse. Read by config.py.
+# Settings for the CBS/KVK lakehouse. Read by pipeline/common/config.py.
 #
 # Override per machine in config.local.yaml (same structure, only the keys you change;
 # not in git), or with environment variables: LAKEHOUSE__<SECTION>__<KEY>, e.g.
@@ -28,7 +28,7 @@ cbs:
     - 81644NED   # establishments per sector and region (yearly)
     - 81589NED   # businesses per sector, size class and legal form (quarterly)
   # Code lists and metadata: one small request each, made once.
-  # To refresh one later: python cbs_bronze.py --only <name> --force
+  # To refresh one later: python -m pipeline.bronze.cbs --only <name> --force
   # "<table>" alone is the table's service root (its list of entity sets).
   metadata:
     - 86009NED/Bedrijfskenmerken
@@ -76,7 +76,7 @@ kvk:
 
 reference:
   # CBS crosswalk SBI 2008 -> SBI 2025. For a newer version: change the URL, or run
-  # python reference_bronze.py --url <url>
+  # python -m pipeline.bronze.reference --url <url>
   sbi_crosswalk_url: https://www.cbs.nl/-/media/cbs/onze-diensten/methoden/classificaties/documents/2026/schakelschema-sbi2008sbi2025-v20.xlsx
 
 ollama:
@@ -101,12 +101,12 @@ schedules:
   maintenance: "0 3 15 * *"      # 15th of the month 03:00: quarantine, KVK retention, vacuum
 
 delta:
-  # maintenance.py (monthly) deletes Parquet files that no table version younger than
+  # tools/maintenance.py (monthly) deletes Parquet files that no table version younger than
   # this still needs; older versions can't be read ("time travel") after that.
   vacuum_retention_hours: 168     # 7 days
 
 quarantine:
-  # maintenance.py (monthly) removes entries that are resolved (ingested later) and
+  # tools/maintenance.py (monthly) removes entries that are resolved (ingested later) and
   # entries older than this; a problem that still exists is quarantined again next run.
   retention_days: 90
 

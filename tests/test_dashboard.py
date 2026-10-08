@@ -7,9 +7,9 @@ import pandas as pd
 import pytest
 from streamlit.testing.v1 import AppTest
 
-import cbs_silver as s
-import gold as g
-import publish
+from pipeline.silver import cbs as s
+from pipeline.gold import build as g
+from pipeline.common import publish
 from conftest import dashboard_data as data
 from test_delta import bronze_delta  # noqa: F401  (fixture)
 
@@ -112,7 +112,7 @@ def test_pages_warn_when_gold_tables_come_from_different_runs(gold_lakehouse):
 
 def test_logo_when_the_file_exists_otherwise_the_note(tmp_path, monkeypatch):
     """st.logo isn't part of the page tree AppTest inspects, so calls to it are recorded."""
-    import config
+    from pipeline.common import config
     import streamlit
     calls = []
     monkeypatch.setattr(streamlit, "logo", lambda image, **kw: calls.append(image))
@@ -131,7 +131,7 @@ def test_logo_when_the_file_exists_otherwise_the_note(tmp_path, monkeypatch):
 
 def test_dark_logo_in_dark_mode(tmp_path, monkeypatch):
     import charts
-    import config
+    from pipeline.common import config
     import streamlit
     calls = []
     monkeypatch.setattr(streamlit, "logo", lambda image, **kw: calls.append(image))

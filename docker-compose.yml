@@ -107,7 +107,7 @@ services:
     # its own profile, so `up` never starts it: it's an interactive chat, started on
     # demand with `run` (which enables it); --profile agent makes Ollama available
     profiles: ["kvk-agent"]
-    command: ["python", "kvk_bronze_agent.py"]
+    command: ["python", "-m", "pipeline.bronze.kvk_agent"]
     environment:
       <<: *app-env
       LAKEHOUSE__OLLAMA__HOST: http://ollama:11434

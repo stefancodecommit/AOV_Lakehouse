@@ -1,6 +1,6 @@
 # TODO
 
-Open work, in the order of `PROJECT.md`. Each phase builds on the one before it.
+Open work, in the order of `docs/PROJECT.md`. Each phase builds on the one before it.
 
 Rule for every phase: run each new layer on real data and check it before building the
 next layer on top of it.
@@ -28,14 +28,14 @@ everything (locally, or with `docker compose up -d`).
 
 Run order (from the project folder, with the virtualenv):
 
-    .venv/bin/python cbs_bronze.py                 # CBS API -> bronze (only new data)
-    .venv/bin/python reference_bronze.py           # SBI crosswalk (skips a known file)
-    .venv/bin/python kvk_bronze_agent.py --inbox   # newest new KVK file in inbox/kvk/
-    .venv/bin/python cbs_silver.py
-    .venv/bin/python kvk_silver.py                 # needs silver CBS (crosswalk)
-    .venv/bin/python gold.py
-    .venv/bin/python inspect_lakehouse.py          # overview, warnings, problems
-    .venv/bin/streamlit run dashboard/app.py       # the dashboard
+    .venv/bin/python -m pipeline.bronze.cbs                # CBS API -> bronze (only new data)
+    .venv/bin/python -m pipeline.bronze.reference          # SBI crosswalk (skips a known file)
+    .venv/bin/python -m pipeline.bronze.kvk_agent --inbox  # newest new KVK file in inbox/kvk/
+    .venv/bin/python -m pipeline.silver.cbs
+    .venv/bin/python -m pipeline.silver.kvk  # needs silver CBS (crosswalk)
+    .venv/bin/python -m pipeline.gold.build
+    .venv/bin/python -m tools.inspect_lakehouse  # overview, warnings, problems
+    .venv/bin/streamlit run dashboard/app.py     # the dashboard
     DAGSTER_HOME=$PWD/orchestration .venv/bin/dagster dev -f orchestration/definitions.py
                                                    # Dagster UI: http://localhost:3000
     .venv/bin/pytest                               # tests (live CBS test: -m live)
@@ -48,20 +48,20 @@ server with `~/.local/ollama/bin/ollama serve` before using the KVK agent in cha
 ## First real run (done 2026-10-05)
 
 Done on this machine, one layer at a time, using
-`python inspect_lakehouse.py` after each step for an overview (rows, periods, latest
+`python -m tools.inspect_lakehouse` after each step for an overview (rows, periods, latest
 ingest, problems).
 
 ### Bronze CBS (done 2026-10-05)
-- [x] `python cbs_bronze.py --dry-run`: check the periods found per dataset (2020 onward)
+- [x] `python -m pipeline.bronze.cbs --dry-run`: check the periods found per dataset (2020 onward)
       86009NED 2020–2025 (JJ), 80072NED 2020KW01–2026KW02, 83130NED 2020–2023 (JJ),
       81644NED 2020–2026 (JJ), 81589NED 2020KW01–2026KW03. 83130NED ends at 2023
       because CBS marks it as discontinued (`Frequency = Stopgezet`, last modified
       2024-04-17); 86009NED is its successor.
-- [x] `python cbs_bronze.py`: full first load; note how long it takes and the disk used
+- [x] `python -m pipeline.bronze.cbs`: full first load; note how long it takes and the disk used
       92 requests, 0 failures, 39 s, 6.6 MB on disk, ~240 MB peak memory.
-- [x] `inspect_lakehouse.py --layer bronze`: every configured endpoint has a table, no
+- [x] `python -m tools.inspect_lakehouse --layer bronze`: every configured endpoint has a table, no
       failures in the log (28 tables incl. `_ingestion_log`, no problems)
-- [x] Run `cbs_bronze.py` a second time: it should make no data requests
+- [x] Run `pipeline/bronze/cbs.py` a second time: it should make no data requests
       fetched=0, skipped=92 (only the 5 small `Perioden` planning requests are sent)
 - [x] Check 81644NED (sector × region): row count, and whether paging was needed
       1,540 rows per year (22 sectors × 70 regions), 10,780 in total; size classes and
@@ -73,7 +73,7 @@ ingest, problems).
       (Voorlopig); 81589NED 2025KW01–04 (NaderVoorlopig), 2026KW01–03 (Voorlopig).
 
 ### Bronze KVK (done 2026-10-05)
-- [x] Load one real file with the agent (`python kvk_bronze_agent.py`)
+- [x] Load one real file with the agent (`python -m pipeline.bronze.kvk_agent`)
       Ollama 0.35.1 (CPU only) with `qwen2.5:7b`; verify + confirm + ingest took 3.8 min,
       ~470 MB peak memory. Batch `kvk_20261005T153745Z_52785a6f`.
 - [x] Note the real CSV header; update `REQUIRED_COLUMNS` if needed
@@ -97,9 +97,9 @@ ingest, problems).
   another row, which is expected without a company ID (don't deduplicate).
 
 ### Silver CBS (done 2026-10-05)
-- [x] `python cbs_silver.py --preview`: row counts per table, and any warnings about
+- [x] `python -m pipeline.silver.cbs --preview`: row counts per table, and any warnings about
       keys missing from the code lists (no warnings)
-- [x] `python cbs_silver.py`, then `inspect_lakehouse.py --layer silver`: all ten tables
+- [x] `python -m pipeline.silver.cbs`, then `python -m tools.inspect_lakehouse --layer silver`: all ten tables
       present, no unknown keys. 3.7 s, ~590 MB peak memory, 1.6 MB on disk; largest is
       `fct_business_count` (521,937 rows). No problems reported.
 - [x] Spot-check against CBS StatLine: the national absence percentage for the latest
@@ -124,12 +124,12 @@ ingest, problems).
 ## 0. Foundations
 - [x] Decide the dashboard's audience: personal use, for an educational project
       (2026-10-05). Runs on this machine; no login or public hosting needed.
-- [x] `config.yaml` + `config.py` (2026-10-05): paths, CBS base URL/tables/metadata/start
+- [x] `config.yaml` + `pipeline/common/config.py` (2026-10-05): paths, CBS base URL/tables/metadata/start
       year/period preference/pause, KVK URLs/columns/malformed limit, SBI crosswalk URL,
       Ollama host and model. Overrides: `config.local.yaml`, then environment variables
       `LAKEHOUSE__<SECTION>__<KEY>`; unknown keys are an error (`tests/test_config.py`)
-- [x] Replace the hard-coded settings in `cbs_bronze.py`, `cbs_silver.py`,
-      `kvk_bronze_agent.py`, `reference_bronze.py` and `inspect_lakehouse.py`; paths are
+- [x] Replace the hard-coded settings in `pipeline/bronze/cbs.py`, `pipeline/silver/cbs.py`,
+      `pipeline/bronze/kvk_agent.py`, `pipeline/bronze/reference.py` and `tools/inspect_lakehouse.py`; paths are
       now relative to the project folder, so the scripts work from any directory
 - [x] Add retention, Dagster schedules and alert targets to `config.yaml` when those
       parts are built: `quarantine.retention_days`, `delta.vacuum_retention_hours`,
@@ -146,7 +146,7 @@ kept; stripping and renaming stay in silver).
       otherwise inferred; nested values as JSON text; a field named like a lineage column
       becomes `field_<name>`
 - [x] A later batch can't change a column's type; a field CBS adds becomes a new column
-- [x] `cbs_bronze.py --rebuild-columns`: field columns from `raw_json`, no API calls; run
+- [x] `python -m pipeline.bronze.cbs --rebuild-columns`: field columns from `raw_json`, no API calls; run
       on the real lakehouse (32 tables)
 - [x] Silver reads the columns (falls back to `raw_json` for bronze without them); all 11
       silver tables verified identical to before the change on the real data
@@ -172,9 +172,9 @@ table's DataProperties, fetched live once per table per run, only when there is 
       small requests); a snapshot is stored in `bronze/<table>_tableinfos` only when its
       Modified/MetaDataModified dates change (part of the request key, so bronze keeps a
       history). Warnings never block ingestion (`check_table_lifecycle`, severity
-      warning); `inspect_lakehouse.py` shows them separately from problems. Real run:
+      warning); `tools/inspect_lakehouse.py` shows them separately from problems. Real run:
       83130NED warned as stopped (OutputStatus Gediscontinueerd); others regular
-- [x] Cleanup step for scope changes: `python cbs_bronze.py --cleanup-scope [--dry-run]`
+- [x] Cleanup step for scope changes: `python -m pipeline.bronze.cbs --cleanup-scope [--dry-run]`
       removes tables no longer configured (with their log entries) and periods outside
       the start year / period preference. Periods are judged with the ingestion rule on
       CBS's current period list (the Perioden table in bronze is a one-time snapshot and
@@ -189,7 +189,7 @@ of 2.55M SBI codes, 1.42M exist only in SBI 2025 and 0.50M only in SBI 2008; 224
 distinct codes are in neither list (mostly 6-digit KVK sub-codes such as 011301).
 Source: CBS "schakelschema SBI 2008 - SBI 2025" v2.0
 (https://www.cbs.nl/-/media/cbs/onze-diensten/methoden/classificaties/documents/2026/schakelschema-sbi2008sbi2025-v20.xlsx).
-- [x] `reference_bronze.py`: download (or `--file`), check, load into
+- [x] `pipeline/bronze/reference.py`: download (or `--file`), check, load into
       `lakehouse/bronze/reference/sbi2008_sbi2025` with a batch log
 - [x] No double loads: the file's SHA-256 is logged and the same file is skipped
       (whatever its name); one Delta commit per file; rows of a batch that was written
@@ -214,8 +214,8 @@ Source: CBS "schakelschema SBI 2008 - SBI 2025" v2.0
 - [x] KVK: rejected files are copied to quarantine with their verification report (not
       when the file was rejected only because it is already in bronze)
 - [x] Reference files (SBI crosswalk) that fail their checks are quarantined the same way
-- [x] `inspect_lakehouse.py` lists quarantined batches and counts them as problems
-- [x] Monthly quarantine cleanup (decided 2026-10-05): `python maintenance.py quarantine
+- [x] `tools/inspect_lakehouse.py` lists quarantined batches and counts them as problems
+- [x] Monthly quarantine cleanup (decided 2026-10-05): `python -m tools.maintenance quarantine
       [--dry-run]` removes entries that are resolved (same CBS table/entity/period, or a
       newer KVK/reference batch, ingested after the entry) and entries older than
       `quarantine.retention_days` (90). A problem that persists is quarantined again by
@@ -230,13 +230,13 @@ Source: CBS "schakelschema SBI 2008 - SBI 2025" v2.0
       them (2026-10-05); the report on the real file is identical before and after
 - [x] Read uploads from `inbox/kvk/` (2026-10-05): agent tool `list_inbox` (newest first,
       marks files already ingested, says what to do next), bare file names are looked up
-      in the inbox, `python kvk_bronze_agent.py --inbox` loads the newest new file
+      in the inbox, `python -m pipeline.bronze.kvk_agent --inbox` loads the newest new file
       without the LLM. Checked with Ollama on the real inbox
 
 ## 2. Silver
 
 ### CBS
-- [x] Dimensions, facts and mapping table (`cbs_silver.py`)
+- [x] Dimensions, facts and mapping table (`pipeline/silver/cbs.py`)
 - [x] Fixed 2026-10-05: "942/9420 Werknemersorganisaties" (sectors: trade unions) were
       parsed as size classes because their name contains "werknemer"; size words now
       have to be whole words. Checked over all 1,678 titles: only these two changed
@@ -247,10 +247,10 @@ Source: CBS "schakelschema SBI 2008 - SBI 2025" v2.0
       succeeded; record the `run_id` on every table (2026-10-05). `silver/_staging/<run_id>/`
       is removed after each run; a required table that comes out empty fails the run,
       `map_sbi2008_sbi2025` is optional
-- [x] Run log `lakehouse/_run_log` (`runlog.py`), one row per run: run_id, pipeline,
+- [x] Run log `lakehouse/_run_log` (`pipeline/common/runlog.py`), one row per run: run_id, pipeline,
       start/end, status, error, rows per table, Delta version of every bronze input,
       git commit. Joinable with every silver table on `run_id`
-- [x] `inspect_lakehouse.py` shows the latest runs and reports a failed latest run or
+- [x] `tools/inspect_lakehouse.py` shows the latest runs and reports a failed latest run or
       silver tables whose run_id isn't the latest successful one
 - [x] Decision (2026-10-05): no SCD type 2 in silver. Silver keeps only current rows (full
       rebuild, 1.6 MB live); SCD2 would make tables larger, need merge logic and force
@@ -259,7 +259,7 @@ Source: CBS "schakelschema SBI 2008 - SBI 2025" v2.0
       `vacuum`. CBS revision history (provisional -> final) is not tracked; revisit only
       if revisions become an analysis question. KVK can't use SCD2: no company key
 
-### KVK (built 2026-10-05: `kvk_silver.py`)
+### KVK (built 2026-10-05: `pipeline/silver/kvk.py`)
 Build one thin table, `lakehouse/silver/kvk_company`, from
 `lakehouse/bronze/kvk/basis_bedrijfsgegevens`. Same staging, `run_id` column and run log
 as silver CBS (pipeline `silver_kvk`).
@@ -319,9 +319,9 @@ Notes:
   can't be tracked across snapshots; compare snapshots only in aggregate.
 - Gold counts companies with `is_latest`; never sum across snapshots.
 
-## 3. Gold (built 2026-10-05: `gold.py`)
+## 3. Gold (built 2026-10-05: `pipeline/gold/build.py`)
 Main question: which company characteristics (sector, size class) go together with
-higher sickness absence. See `PROJECT.md` for the sub-questions.
+higher sickness absence. See `docs/PROJECT.md` for the sub-questions.
 - [x] `gold_absence_by_sector`: absence % per sector (every CBS level, `sbi_level` says
       which; the dashboard defaults to sections) and national total; difference from the
       total in percentage points; rank within the level per quarter; change versus the
@@ -448,7 +448,14 @@ Run: `docker compose up -d` (Dagster http://localhost:3000, dashboard :8501)
   option (Ollama runs as root and could leave root-owned files in the home folder) in
   favour of copying the model into the Docker volume
 
-## Lakehouse viewer (built 2026-10-08: `lakehouse_viewer.py`)
+## Folder structure (reorganised 2026-10-08)
+- [x] The root had 14 scripts side by side; now `pipeline/` (bronze/, silver/, gold/,
+      common/) holds the data flow and `tools/` what is run by hand; PROJECT.md moved to
+      `docs/`. Scripts run as modules: `python -m pipeline.bronze.cbs`. Checked: all tests,
+      every entry point on the real lakehouse (read-only modes), the Docker image (imports,
+      Dagster definitions, the KVK agent) and `docker compose config`
+
+## Lakehouse viewer (built 2026-10-08: `tools/lakehouse_viewer.py`)
 - [x] Browse every Delta table (bronze, silver, gold, run log), any version, read-only;
       text filter over the whole table
 - [x] Data quality view: completeness, blank and padded text, distinct values, min/max,
@@ -461,17 +468,17 @@ Run: `docker compose up -d` (Dagster http://localhost:3000, dashboard :8501)
 ## Documentation
 - [x] `docs/bronze_to_silver.md`: how each silver table is made, with real examples
       (2026-10-08)
-- [x] Column lineage bronze -> silver (2026-10-08): `lineage.py` is the source; it
-      generates `docs/lineage.md` (`python lineage.py`) and the column lineage of the
+- [x] Column lineage bronze -> silver (2026-10-08): `tools/lineage.py` is the source; it
+      generates `docs/lineage.md` (`python -m tools.lineage`) and the column lineage of the
       Dagster assets silver_cbs and silver_kvk. Correction (2026-10-08): the free Dagster
       UI doesn't draw column lineage (a Dagster+ feature); it does show the column list,
       so each column's description there starts with "From <bronze field>".
-- [x] Lineage diagrams (2026-10-08), generated by `python lineage.py` as Mermaid: an
+- [x] Lineage diagrams (2026-10-08), generated by `python -m tools.lineage` as Mermaid: an
       overview (sources -> silver tables) and one diagram per silver table (bronze fields
       -> columns), in `docs/lineage.md` (GitHub draws them) and `docs/lineage.html` (one
       page for a browser; loads Mermaid from the internet). Checked by rendering the page
 - [x] Interactive lineage explorer (2026-10-08): `docs/lineage_explorer.html`, generated
-      by `python lineage.py` from `lineage_explorer_template.html`; pick a silver column
+      by `python -m tools.lineage` from `tools/lineage_explorer_template.html`; pick a silver column
       (its whole chain back to bronze) or a bronze field (everything that depends on it),
       click boxes to follow the path; the address keeps the selection (#table.column);
       works offline. Checked by rendering both directions `tests/test_lineage.py` fails when a
@@ -485,7 +492,7 @@ Run: `docker compose up -d` (Dagster http://localhost:3000, dashboard :8501)
       deltalake 1.4.2, 1.5.1 and 1.6.6. Cause found 2026-10-08: a timing race, a
       background thread of the library is still busy for a moment after a read; scripts
       that exit right after a read crash (9-14 of 20 runs), scripts that do more work
-      afterwards rarely do. Mitigated: config.py (imported by every script) pauses 0.1 s
+      afterwards rarely do. Mitigated: pipeline/common/config.py (imported by every script) pauses 0.1 s
       at exit; measured 0 of 30 with even 0.02 s. Test: tests/test_config.py
 - [ ] Optional: report the race upstream (delta-rs) and remove the pause once fixed
 
@@ -508,7 +515,7 @@ Delta tests (done 2026-10-05, `tests/test_delta.py`):
 - [x] Bronze: `done_keys()` reads back what `log_success()` wrote
 - [x] Bronze: `run()` with fake HTTP but real Delta: second run makes no data
       requests; a status change refetches only that period and replaces its rows
-- [x] Silver: `cbs_silver.py` end to end from real bronze Delta tables; values equal
+- [x] Silver: `pipeline/silver/cbs.py` end to end from real bronze Delta tables; values equal
       the in-memory build; types read back (date32, int64 counts, bool, UTC timestamps);
       a rerun replaces the tables
 - [x] Optional live test, marked `@pytest.mark.live` and skipped by default (also in

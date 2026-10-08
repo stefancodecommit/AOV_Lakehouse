@@ -5,11 +5,11 @@ import sys
 import pandas as pd
 import pytest
 
-import cbs_silver as s
-import gold as g
-import inspect_lakehouse
-import publish
-import runlog
+from pipeline.silver import cbs as s
+from pipeline.gold import build as g
+from tools import inspect_lakehouse
+from pipeline.common import publish
+from pipeline.common import runlog
 from test_delta import bronze_delta  # noqa: F401  (fixture)
 
 F, V = "Definitief", "Voorlopig"
@@ -157,7 +157,7 @@ def test_kvk_context_empty_without_silver_kvk(silver_tables):
 
 # =========================================================================== end to end
 def test_gold_run_from_bronze_to_gold(bronze_delta, monkeypatch):
-    monkeypatch.setattr(sys, "argv", ["cbs_silver.py"])
+    monkeypatch.setattr(sys, "argv", ["pipeline/silver/cbs.py"])
     silver_run = s.run()
     run_id = g.run()
     runs = runlog.read_runs(g.RUN_LOG)

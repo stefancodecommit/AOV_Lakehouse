@@ -20,9 +20,9 @@ modified for longer than their frequency allows, from the newest TableInfos in b
 
 Usage
 -----
-    python inspect_lakehouse.py                  # all layers
-    python inspect_lakehouse.py --layer silver   # one layer
-    python inspect_lakehouse.py --root /data/lakehouse
+    python -m tools.inspect_lakehouse                 # all layers
+    python -m tools.inspect_lakehouse --layer silver  # one layer
+    python -m tools.inspect_lakehouse --root /data/lakehouse
 Exit code 1 when problems are found, so it can also be used in scripts.
 """
 from __future__ import annotations
@@ -112,7 +112,7 @@ def _fmt(value) -> str:
 def expected_bronze_names() -> list[str]:
     """Bronze table names the configuration should produce (to spot missing tables)."""
     try:
-        import cbs_bronze
+        from pipeline.bronze import cbs as cbs_bronze
         return sorted({e.name for e in cbs_bronze.ENDPOINTS})
     except Exception:  # running outside the project folder
         return []
@@ -128,7 +128,7 @@ def silver_run_problems(root: Path, pipeline: str = "silver_cbs") -> tuple[list[
     pipeline's latest successful run published (silver or gold)."""
     import pyarrow.compute as pc
     from deltalake import DeltaTable
-    import runlog
+    from pipeline.common import runlog
     runs = runlog.read_runs(root / "_run_log")
     runs = runs[runs["pipeline"] == pipeline]
     if runs.empty:
@@ -177,7 +177,7 @@ def main() -> int:
     """Print the overview per layer, quarantine, runs, warnings and problems.
     Returns 1 when there are problems, so scripts (and later Dagster) can react."""
     ap = argparse.ArgumentParser(description="Overview of the lakehouse Delta tables.")
-    from config import project_path, settings
+    from pipeline.common.config import project_path, settings
     ap.add_argument("--root", default=str(project_path(settings["paths"]["lakehouse"])),
                     help="lakehouse folder (default: paths.lakehouse in config.yaml)")
     ap.add_argument("--layer", choices=["bronze", "silver", "gold"], help="only this layer")
@@ -216,7 +216,7 @@ def main() -> int:
         if layer == "bronze":
             missing = [n for n in expected_bronze_names() if n not in present]
             for n in missing:
-                problems.append(f"bronze/{n}: configured in cbs_bronze.py but no table yet")
+                problems.append(f"bronze/{n}: configured in pipeline/bronze/cbs.py but no table yet")
         expected = {"silver": EXPECTED_SILVER, "gold": EXPECTED_GOLD}.get(layer, [])
         if tables:
             for n in expected:
@@ -237,7 +237,7 @@ def main() -> int:
                             f"(see {e['folder']}/report.json)")
 
     if not args.layer or args.layer in ("silver", "gold"):
-        import runlog
+        from pipeline.common import runlog
         pipelines = sorted(set(runlog.read_runs(root / "_run_log")["pipeline"]))
         for pipeline in [p for p in pipelines if not args.layer or pipeline_layer(p) == args.layer]:
             lines, run_problems = silver_run_problems(root, pipeline)

@@ -4,8 +4,8 @@ from datetime import datetime, timedelta, timezone
 
 import pandas as pd
 
-import cbs_bronze as b
-import maintenance as m
+from pipeline.bronze import cbs as b
+from tools import maintenance as m
 from checks.quarantine import cleanup, list_entries, quarantine
 from test_delta import ABSENCE, DP_80072, records
 from conftest import table_info

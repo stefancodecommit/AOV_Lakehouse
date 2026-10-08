@@ -132,12 +132,12 @@ SBI 2008 and SBI 2025 (Oct 2026: mostly SBI 2025).
 An xlsx from the CBS classifications page ("schakelschema", v2.0) linking SBI 2008 codes
 to SBI 2025 codes. Many-to-many: a code can be split over several new codes or merged with
 others. Needed to join KVK codes (partly SBI 2025) with the CBS tables (SBI 2008).
-Loaded by `reference_bronze.py`; the same file (by SHA-256) is never loaded twice, and
+Loaded by `pipeline/bronze/reference.py`; the same file (by SHA-256) is never loaded twice, and
 silver `map_sbi2008_sbi2025` uses the newest version only.
 
 ## Layers
 
-### Bronze CBS — `cbs_bronze.py` (built)
+### Bronze CBS — `pipeline/bronze/cbs.py` (built)
 
 - Calls the CBS API only for data that isn't in the lakehouse yet. Every request has a
   fixed key; keys already in `_ingestion_log` are skipped.
@@ -151,7 +151,7 @@ silver `map_sbi2008_sbi2025` uses the newest version only.
   bronze can be queried directly; cleaning stays in silver). `--rebuild-columns` rebuilds
   the columns from `raw_json` without API calls.
 
-### Bronze KVK — `kvk_bronze_agent.py` (built)
+### Bronze KVK — `pipeline/bronze/kvk_agent.py` (built)
 
 - An AI agent (local Ollama model with tool calling) gives the user the download link and
   asks them to upload the zip.
@@ -162,7 +162,7 @@ silver `map_sbi2008_sbi2025` uses the newest version only.
 - Each upload gets a `batch_id`, is written in one Delta commit, and is recorded in
   `kvk/_batch_log` with its timestamp, file hash, row count and verification report.
 
-### Silver CBS — `cbs_silver.py` (built)
+### Silver CBS — `pipeline/silver/cbs.py` (built)
 
 Rebuilt from bronze on every run.
 
@@ -173,7 +173,7 @@ Rebuilt from bronze on every run.
 - **Facts:** `fct_absence_rate`, `fct_absence_survey` (long format, value plus 95% bounds,
   the two survey tables kept apart), `fct_business_count`, `fct_establishment_count`.
 
-### Silver KVK — `kvk_silver.py` (built)
+### Silver KVK — `pipeline/silver/kvk.py` (built)
 
 One table, `kvk_company`: typed columns, snapshot date and latest-snapshot flag, and the
 company's sector. The sector is the main activity ("Hoofdactiviteiten"), not the full list
@@ -181,11 +181,11 @@ of activities. Main codes are mapped to SBI 2008 with `map_sbi2008_sbi2025` and 
 and division, so KVK joins with `dim_sector`. Edge cases (several or no main activities,
 KVK sub-codes, codes in both SBI lists, codes that came from several SBI 2008 codes) are
 marked with flag columns; derived sector columns are filled only when unambiguous (90% of
-active companies). Built by `kvk_silver.py`; see its docstring for every column.
+active companies). Built by `pipeline/silver/kvk.py`; see its docstring for every column.
 
-### Gold — `gold.py` (built)
+### Gold — `pipeline/gold/build.py` (built)
 
-Built around the main question (column details in the `gold.py` docstring):
+Built around the main question (column details in the `pipeline/gold/build.py` docstring):
 
 - **`gold_absence_by_sector`** (quarterly, from 80072NED): absence % per SBI section and
   the national total; difference from the national total in percentage points; rank per
@@ -267,12 +267,12 @@ mix of new and old tables. To prevent that:
   tables once every table in that run succeeded.
 - Every table records the `run_id` it was built in; gold and the dashboard check that the
   tables they combine come from the same run.
-- Every run, successful or failed, is a row in `lakehouse/_run_log` (`runlog.py`): run_id,
+- Every run, successful or failed, is a row in `lakehouse/_run_log` (`pipeline/common/runlog.py`): run_id,
   pipeline, start and end time, status, error, rows per table, the Delta version of each
   input table it read, and the git commit of the code. Joining a table's `run_id` to it
   shows when and how any row was produced.
 - Delta can't replace several tables in one commit, so a crash while publishing could
-  still leave tables of two runs. `inspect_lakehouse.py` reports that (every silver table
+  still leave tables of two runs. `tools/inspect_lakehouse.py` reports that (every silver table
   must carry the latest successful run_id); a rerun fixes it.
 
 ## Storage and maintenance
@@ -295,13 +295,13 @@ mix of new and old tables. To prevent that:
   15 months). Warnings don't block ingestion. A `TableInfos` snapshot is kept in bronze
   each time CBS changes it.
 - **Scope changes:** when the start year or period preference changes or a table is
-  removed from `config.yaml`, `python cbs_bronze.py --cleanup-scope` (try `--dry-run`
+  removed from `config.yaml`, `python -m pipeline.bronze.cbs --cleanup-scope` (try `--dry-run`
   first) removes bronze rows and log entries outside the new scope, so bronze matches
   the configuration. It's run by hand, never automatically.
 
 ## Configuration
 
-All settings come from one file (`config.yaml`, read by `config.py`) instead of being
+All settings come from one file (`config.yaml`, read by `pipeline/common/config.py`) instead of being
 written into the scripts:
 
 - lakehouse and inbox paths (relative to the project folder)
@@ -379,39 +379,42 @@ them. Ports are published on 127.0.0.1 only. Details in the README.
   every gold table and column, built largely from CBS metadata (`dim_survey_measure`,
   measure titles and units).
 
-## Repository layout (target)
+## Repository layout
 
 ```
-config.yaml, config.py  all settings, with local and environment overrides
-cbs_bronze.py           CBS API -> bronze
-kvk_bronze_agent.py     KVK zip -> bronze, via the agent
-reference_bronze.py     CBS SBI 2008 -> SBI 2025 crosswalk -> bronze
-checks/                 data checks (cbs.py, kvk.py) shared by ingestion, Dagster and
-                        pytest; quarantine.py saves failed batches and cleans them up
-maintenance.py          monthly tasks: quarantine cleanup (KVK retention, optimize/vacuum to do)
-cbs_silver.py           bronze CBS -> silver
-kvk_silver.py           bronze KVK -> silver kvk_company
-publish.py, runlog.py   staging, publishing and the run log, shared by silver and gold
-lineage.py              column lineage bronze -> silver (docs/lineage.md, Dagster UI)
-gold.py                 silver -> gold
-dashboard/              Streamlit app: app.py, views/ (pages), charts.py, data.py
-orchestration/          Dagster definitions (assets, checks, schedules, maintenance job) and dagster.yaml
-tests/                  pytest
-inspect_lakehouse.py    overview of all Delta tables and problems after a run
-inbox/                  kvk/: KVK zip uploads for the agent; reference/: downloaded
-                        reference files (not in git)
-docker-compose.yml      the services (Dagster, Postgres, dashboard; optional Ollama + agent)
-Dockerfile              one image for all Python services
-.env.example            Docker settings to copy to .env (user id, Postgres, model)
-.github/workflows/      CI: tests.yml runs pytest on every push
-requirements.txt
-requirements-dev.txt
-README.md               entry point: how the scripts fit together and how to run them
-docs/bronze_to_silver.md  how bronze becomes silver, table by table, with real examples
-docs/lineage.md, .html  column lineage bronze -> silver with diagrams, generated by lineage.py
-docs/lineage_explorer.html  interactive lineage (template: lineage_explorer_template.html)
-PROJECT.md              this file
-TODO.md                 open work
+pipeline/                the data flow, one subpackage per layer; run as python -m pipeline.<layer>.<script>
+  bronze/cbs.py          CBS API -> bronze
+  bronze/kvk_agent.py    KVK zip -> bronze, via the agent
+  bronze/reference.py    CBS SBI 2008 -> SBI 2025 crosswalk -> bronze
+  silver/cbs.py          bronze CBS -> silver
+  silver/kvk.py          bronze KVK -> silver kvk_company
+  gold/build.py          silver -> gold
+  common/config.py       settings from config.yaml, with local and environment overrides
+  common/publish.py      silver and gold: staging, then publishing all tables together
+  common/runlog.py       the run log (one row per silver/gold run)
+checks/                  data checks (cbs.py, kvk.py) shared by ingestion, Dagster and pytest;
+                         layers.py (layer checks), freshness.py, quarantine.py
+tools/                   run by hand (some also scheduled by Dagster); python -m tools.<script>
+  inspect_lakehouse.py   overview of all Delta tables and problems after a run
+  lakehouse_viewer.py    browse any Delta table, with data quality statistics
+  maintenance.py         monthly tasks: quarantine cleanup, KVK retention, optimize/vacuum
+  lineage.py             column lineage bronze -> silver (docs/lineage.*, Dagster UI);
+                         lineage_explorer_template.html is the explorer's page layout
+dashboard/               Streamlit app: app.py, views/ (pages), charts.py, data.py
+orchestration/           Dagster definitions (assets, checks, schedules, maintenance job) and dagster.yaml
+tests/                   pytest
+docs/                    this file, bronze_to_silver.md, lineage.md/.html, lineage_explorer.html
+config.yaml              all settings
+inbox/                   kvk/: KVK zip uploads for the agent; reference/: downloaded
+                         reference files (not in git)
+lakehouse/               the Delta tables (not in git)
+docker-compose.yml       the services (Dagster, Postgres, dashboard; optional Ollama + agent)
+Dockerfile               one image for all Python services
+.env.example             Docker settings to copy to .env (user id, Postgres, model)
+.github/workflows/       CI: tests.yml runs pytest on every push
+requirements.txt, requirements-dev.txt
+README.md                entry point: how the scripts fit together and how to run them
+TODO.md                  open work
 ```
 
 ## Status
@@ -425,10 +428,10 @@ TODO.md                 open work
 | Silver CBS | Built, incl. `map_sbi2008_sbi2025`; checked against CBS StatLine; staging, `run_id`, run log |
 | Silver KVK | Built (`kvk_company`): sector = main activity, edge cases as flags; 90% of active companies get an SBI 2008 section |
 | Data checks before ingestion (CBS) | Built (`checks/cbs.py`) |
-| Quarantine | Built for CBS, KVK and reference files; monthly cleanup in `maintenance.py` |
+| Quarantine | Built for CBS, KVK and reference files; monthly cleanup in `tools/maintenance.py` |
 | Alerting, freshness checks | To do |
 | pytest | 335 tests incl. real Delta tables, the dashboard pages and Dagster; one opt-in live CBS test |
-| Configuration file | Built (`config.yaml` + `config.py`) |
+| Configuration file | Built (`config.yaml` + `pipeline/common/config.py`) |
 | Gold | Built: 5 tables; provisional figures marked |
 | Streamlit dashboard | Built: 6 pages incl. data dictionary; provisional marked, "final only" switch |
 | Dagster orchestration and maintenance | Built: monthly CBS, automatic rebuilds after blocking checks, freshness, maintenance |

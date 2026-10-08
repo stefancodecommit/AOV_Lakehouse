@@ -41,9 +41,9 @@ lakehouse/bronze/reference/_batch_log        batch_id, dataset, ingested_at, sou
 
 Usage
 -----
-    python reference_bronze.py                      # download from CBS and load if new
-    python reference_bronze.py --file schakelschema-sbi2008sbi2025-v20.xlsx
-    python reference_bronze.py --url <newer version's URL>
+    python -m pipeline.bronze.reference  # download from CBS and load if new
+    python -m pipeline.bronze.reference --file schakelschema-sbi2008sbi2025-v20.xlsx
+    python -m pipeline.bronze.reference --url <newer version's URL>
 """
 from __future__ import annotations
 
@@ -57,7 +57,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from config import project_path, settings
+from pipeline.common.config import project_path, settings
 
 CROSSWALK_URL = settings["reference"]["sbi_crosswalk_url"]
 DOWNLOAD_DIR = project_path(settings["paths"]["inbox"]) / "reference"

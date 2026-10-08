@@ -50,6 +50,6 @@ jobs:
 
       - name: Smoke test - the code loads inside the image
         run: |
-          docker run --rm cbs-kvk-lakehouse:ci python -c "import cbs_bronze, cbs_silver, gold, kvk_silver, publish, runlog"
+          docker run --rm cbs-kvk-lakehouse:ci python -c "import pipeline.bronze.cbs, pipeline.silver.cbs, pipeline.gold.build, pipeline.silver.kvk, pipeline.common.publish, pipeline.common.runlog"
           # without DAGSTER_HOME: validating needs no Postgres (it uses a temporary folder)
           docker run --rm cbs-kvk-lakehouse:ci env -u DAGSTER_HOME dagster definitions validate -f orchestration/definitions.py

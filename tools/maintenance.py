@@ -25,11 +25,11 @@ that no version newer than delta.vacuum_retention_hours still needs.
 
 Usage
 -----
-    python maintenance.py quarantine --dry-run   # list what would be removed
-    python maintenance.py quarantine             # remove it
-    python maintenance.py kvk-retention [--dry-run]
-    python maintenance.py delta [--dry-run]      # optimize + vacuum every Delta table
-    python maintenance.py all [--dry-run]        # all of the above (the monthly job)
+    python -m tools.maintenance quarantine --dry-run  # list what would be removed
+    python -m tools.maintenance quarantine            # remove it
+    python -m tools.maintenance kvk-retention [--dry-run]
+    python -m tools.maintenance delta [--dry-run]  # optimize + vacuum every Delta table
+    python -m tools.maintenance all [--dry-run]    # all of the above (the monthly job)
 """
 from __future__ import annotations
 
@@ -41,7 +41,7 @@ from pathlib import Path
 import pandas as pd
 
 from checks.quarantine import cleanup
-from config import project_path, settings
+from pipeline.common.config import project_path, settings
 
 LAKEHOUSE = project_path(settings["paths"]["lakehouse"])
 QUARANTINE_ROOT = LAKEHOUSE / "quarantine"

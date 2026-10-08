@@ -41,7 +41,7 @@ if not biz.empty:
 kvk = t["gold_kvk_context"]
 st.subheader("Active BVs and NVs per sector (KVK)")
 if kvk.empty:
-    st.info("No KVK data yet: load a KVK file and run kvk_silver.py and gold.py.")
+    st.info("No KVK data yet: load a KVK file and run pipeline/silver/kvk.py and pipeline/gold/build.py.")
 else:
     st.caption(f"KVK snapshot of {kvk['snapshot_date'].iloc[0]} · Source: KVK Handelsregister "
                "Open Dataset. Sector from the company's main activity, translated to SBI 2008.")

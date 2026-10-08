@@ -36,7 +36,7 @@ COMMON = {
 }
 
 st.title("Data dictionary")
-st.markdown("The dashboard reads only these gold tables (built by `gold.py`). Columns and "
+st.markdown("The dashboard reads only these gold tables (built by `pipeline/gold/build.py`). Columns and "
             "types are read from the tables themselves.")
 
 for name in data.GOLD_TABLES:

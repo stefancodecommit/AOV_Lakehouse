@@ -13,10 +13,10 @@ as [Delta Lake](https://delta.io) tables in the folder `lakehouse/`.
 | Document | What it's for |
 |---|---|
 | `README.md` (this file) | What the project does, how the scripts fit together, how to run it |
-| [`PROJECT.md`](PROJECT.md) | The design: sub-questions, data sources, and *why* each choice was made |
+| [`docs/PROJECT.md`](docs/PROJECT.md) | The design: sub-questions, data sources, and *why* each choice was made |
 | [`TODO.md`](TODO.md) | Open work, decisions taken, and results of each real run |
 | [`docs/bronze_to_silver.md`](docs/bronze_to_silver.md) | How bronze becomes silver, table by table, with real examples |
-| [`docs/lineage.md`](docs/lineage.md) | Column lineage: for every silver column, the bronze field(s) it comes from, as diagrams and tables (generated from `lineage.py`) |
+| [`docs/lineage.md`](docs/lineage.md) | Column lineage: for every silver column, the bronze field(s) it comes from, as diagrams and tables (generated from `tools/lineage.py`) |
 | [`docs/lineage.html`](docs/lineage.html) | The same lineage diagrams on one page, to open in a browser |
 | [`docs/lineage_explorer.html`](docs/lineage_explorer.html) | Interactive lineage: pick a silver column or bronze field and see its whole chain, in both directions (works offline) |
 
@@ -62,37 +62,53 @@ it next time (details per script below).
 
 ## How the scripts fit together
 
+The folders follow the layers. `pipeline/` holds the data flow, one subfolder per layer;
+`tools/` holds what you run by hand to look at or maintain the lakehouse.
+
 ```
- SOURCES                  BRONZE                      SILVER                   GOLD
- (outside)                raw, as received            cleaned, typed           dashboard-ready
+cbs-kvk-lakehouse/
+├── pipeline/               the data flow, in layer order
+│   ├── bronze/             sources -> bronze: cbs.py, kvk_agent.py, reference.py
+│   ├── silver/             bronze -> silver: cbs.py, kvk.py
+│   ├── gold/               silver -> gold: build.py
+│   └── common/             shared by all layers: config.py, publish.py, runlog.py
+├── checks/                 data checks before writing, layer checks, quarantine
+├── tools/                  inspect_lakehouse.py, lakehouse_viewer.py, maintenance.py,
+│                           lineage.py (+ the explorer's HTML template)
+├── dashboard/              the Streamlit app; reads the gold tables only
+├── orchestration/          Dagster: schedules, automatic rebuilds, layer checks
+├── docs/                   PROJECT.md (the design) and the bronze -> silver documents
+├── tests/                  pytest
+├── config.yaml             all settings (paths, URLs, tables, model)
+└── lakehouse/, inbox/      the data and the KVK uploads (not in git)
+```
 
- CBS OData API ──────► cbs_bronze.py ──────────┐
- (5 tables + code lists)  lakehouse/bronze/    ├──► cbs_silver.py ─────┐
-                                               │    11 tables           │
- CBS crosswalk xlsx ──► reference_bronze.py ───┘    (dims, facts,      ├──► gold.py ──► dashboard/
- (SBI 2008 -> 2025)       bronze/reference/          SBI crosswalk) ───┤    5 tables     (Streamlit)
-                                                          │             │
- KVK zip in inbox/kvk ► kvk_bronze_agent.py ──────► kvk_silver.py ──────┘
- (1.9M companies)         bronze/kvk/               kvk_company
-                          (Ollama agent or --inbox)  (needs the crosswalk)
+How data moves through the scripts:
 
- Shared building blocks, used by the scripts above:
-   config.py + config.yaml   all settings (paths, URLs, tables, model)
-   checks/                   data checks before writing (cbs.py, kvk.py) and quarantine
-   publish.py + runlog.py    silver/gold: staging, publishing, and the run log
-   inspect_lakehouse.py      overview of every table, warnings and problems
-   lakehouse_viewer.py       browse any Delta table + data quality statistics (port 8502)
-   maintenance.py            monthly tasks (quarantine, KVK retention, Delta vacuum)
-   orchestration/            Dagster: schedules, automatic rebuilds, layer checks
-   dashboard/                the Streamlit app; reads the gold tables only
+```
+ SOURCES                  BRONZE                   SILVER                    GOLD
+ (outside)                as received              cleaned, typed            dashboard-ready
+
+ CBS OData API ─────► bronze/cbs.py ───────┐
+ (5 tables +              lakehouse/bronze/  ├──► silver/cbs.py ─────────┐
+  code lists)                                │    11 tables (dims,       │
+ CBS crosswalk xlsx ─► bronze/reference.py ─┘    facts, SBI crosswalk)  ├──► gold/build.py ──► dashboard/
+ (SBI 2008 -> 2025)       bronze/reference/            │                 │    5 tables          (Streamlit)
+                                                       │ crosswalk       │
+ KVK zip in inbox/kvk ─► bronze/kvk_agent.py ──────► silver/kvk.py ─────┘
+ (1.9M companies)         bronze/kvk/              kvk_company
+                          (Ollama agent or --inbox)
+
+ (script paths relative to pipeline/; shared: pipeline/common/ and checks/)
 ```
 
 Reading the diagram:
 
 - Each arrow is a script reading the layer on its left and writing the layer on its right.
+  Each is run as a module from the project folder, e.g. `python -m pipeline.silver.cbs`.
   The scripts don't call each other; they only share data through `lakehouse/`. That is
   why they have to run in order (see [Running the pipeline](#running-the-pipeline)).
-- `kvk_silver.py` needs the SBI crosswalk from silver CBS, because KVK codes companies in
+- `silver/kvk.py` needs the SBI crosswalk from silver CBS, because KVK codes companies in
   a newer classification (SBI 2025) than CBS (SBI 2008).
 - They can be run by hand (below), or by Dagster, which runs them on a schedule and
   only when new data arrived (see [Dagster](#running-it-automatically-dagster)).
@@ -124,14 +140,14 @@ From the project folder, in this order. Every step can be repeated safely: it on
 work when something is new.
 
 ```bash
-.venv/bin/python cbs_bronze.py                 # 1. CBS API -> bronze (~40 s first time)
-.venv/bin/python reference_bronze.py           # 2. SBI crosswalk -> bronze
-.venv/bin/python kvk_bronze_agent.py --inbox   # 3. newest new KVK zip in inbox/kvk/ -> bronze
-.venv/bin/python cbs_silver.py                 # 4. bronze CBS + crosswalk -> silver
-.venv/bin/python kvk_silver.py                 # 5. bronze KVK -> silver (needs step 4)
-.venv/bin/python gold.py                       # 6. silver -> gold
-.venv/bin/python inspect_lakehouse.py          # 7. check the result
-.venv/bin/streamlit run dashboard/app.py       # 8. open the dashboard in the browser
+.venv/bin/python -m pipeline.bronze.cbs                # 1. CBS API -> bronze (~40 s first time)
+.venv/bin/python -m pipeline.bronze.reference          # 2. SBI crosswalk -> bronze
+.venv/bin/python -m pipeline.bronze.kvk_agent --inbox  # 3. newest new KVK zip in inbox/kvk/ -> bronze
+.venv/bin/python -m pipeline.silver.cbs                # 4. bronze CBS + crosswalk -> silver
+.venv/bin/python -m pipeline.silver.kvk                # 5. bronze KVK -> silver (needs step 4)
+.venv/bin/python -m pipeline.gold.build                # 6. silver -> gold
+.venv/bin/python -m tools.inspect_lakehouse            # 7. check the result
+.venv/bin/streamlit run dashboard/app.py               # 8. open the dashboard in the browser
 ```
 
 For step 3, first download the zip from
@@ -142,16 +158,16 @@ Useful options:
 
 | Command | What it does |
 |---|---|
-| `cbs_bronze.py --dry-run` | List what would be requested, fetch nothing |
-| `cbs_bronze.py --only 81589` | Only endpoints whose name contains "81589" |
-| `cbs_bronze.py --cleanup-scope --dry-run` | Show bronze data outside the configuration (e.g. after raising the start year); without `--dry-run` it removes it |
-| `cbs_bronze.py --rebuild-columns` | Rebuild bronze's field columns from `raw_json`, no API calls (after a change in how fields are typed) |
-| `kvk_bronze_agent.py` | Chat with the KVK intake agent (needs Ollama) |
-| `kvk_bronze_agent.py --file <zip>` | Load one specific file without the agent |
-| `cbs_silver.py --preview`, `kvk_silver.py --preview`, `gold.py --preview` | Build and summarise, write nothing |
-| `inspect_lakehouse.py --layer silver` | Overview of one layer |
-| `lakehouse_viewer.py` | Browse every bronze, silver and gold table at http://localhost:8502: rows (with a text filter over the whole table), data quality statistics, history, older versions |
-| `maintenance.py quarantine --dry-run` | Show which quarantine entries the monthly cleanup would remove |
+| `python -m pipeline.bronze.cbs --dry-run` | List what would be requested, fetch nothing |
+| `python -m pipeline.bronze.cbs --only 81589` | Only endpoints whose name contains "81589" |
+| `python -m pipeline.bronze.cbs --cleanup-scope --dry-run` | Show bronze data outside the configuration (e.g. after raising the start year); without `--dry-run` it removes it |
+| `python -m pipeline.bronze.cbs --rebuild-columns` | Rebuild bronze's field columns from `raw_json`, no API calls (after a change in how fields are typed) |
+| `python -m pipeline.bronze.kvk_agent` | Chat with the KVK intake agent (needs Ollama) |
+| `python -m pipeline.bronze.kvk_agent --file <zip>` | Load one specific file without the agent |
+| `python -m pipeline.silver.cbs --preview`, `python -m pipeline.silver.kvk --preview`, `python -m pipeline.gold.build --preview` | Build and summarise, write nothing |
+| `python -m tools.inspect_lakehouse --layer silver` | Overview of one layer |
+| `python -m tools.lakehouse_viewer` | Browse every bronze, silver and gold table at http://localhost:8502: rows (with a text filter over the whole table), data quality statistics, history, older versions |
+| `python -m tools.maintenance quarantine --dry-run` | Show which quarantine entries the monthly cleanup would remove |
 
 ## Running it automatically: Dagster
 
@@ -282,7 +298,7 @@ Every script starts with a docstring that explains it in more detail; this is th
 
 ### Bronze
 
-**`cbs_bronze.py`** — reads the CBS OData API (v3) for the five tables in `config.yaml`:
+**`pipeline/bronze/cbs.py`** — reads the CBS OData API (v3) for the five tables in `config.yaml`:
 the data itself (`TypedDataSet`) and the code lists that explain it.
 - *Incremental:* data is requested one period at a time. A log table
   (`bronze/_ingestion_log`) records every request already loaded, so a second run only
@@ -294,11 +310,11 @@ the data itself (`TypedDataSet`) and the code lists that explain it.
   empty. A batch that fails goes to quarantine and is retried next run.
 - *Lifecycle:* warns when CBS has stopped a table or hasn't updated it for too long.
 
-**`reference_bronze.py`** — downloads the CBS crosswalk between the old (SBI 2008) and new
+**`pipeline/bronze/reference.py`** — downloads the CBS crosswalk between the old (SBI 2008) and new
 (SBI 2025) sector classification. A file is recognised by its SHA-256 fingerprint, so the
 same file is never loaded twice; a new CBS version becomes a new batch.
 
-**`kvk_bronze_agent.py`** — loads the KVK open dataset (one zip with a CSV of ~1.9 million
+**`pipeline/bronze/kvk_agent.py`** — loads the KVK open dataset (one zip with a CSV of ~1.9 million
 companies). A local language model (Ollama) guides the user through download and upload;
 the actual checks run in Python (`checks/kvk.py`), and only a human typing `YES` can start
 the write. Each upload is a full snapshot, stored as one batch.
@@ -307,18 +323,18 @@ the write. Each upload is a full snapshot, stored as one batch.
 
 How each silver table is made from bronze, with real before/after examples:
 [`docs/bronze_to_silver.md`](docs/bronze_to_silver.md). Where every single silver column
-comes from: [`docs/lineage.md`](docs/lineage.md), generated from `lineage.py` (also visible
+comes from: [`docs/lineage.md`](docs/lineage.md), generated from `tools/lineage.py` (also visible
 in the Dagster UI: the *Columns* list of the assets `silver_cbs` and `silver_kvk`, where
 every description starts with *From …*; Dagster's column-lineage graph itself is only in the
 paid Dagster+).
 
-**`cbs_silver.py`** — turns the raw CBS records into dimension tables (`dim_period`,
+**`pipeline/silver/cbs.py`** — turns the raw CBS records into dimension tables (`dim_period`,
 `dim_sector`, `dim_company_size`, `dim_region`, `dim_survey_measure`), fact tables
 (`fct_absence_rate`, `fct_absence_survey`, `fct_business_count`,
 `fct_establishment_count`), and mapping tables (`map_characteristic`,
 `map_sbi2008_sbi2025`). Rebuilt completely on every run (the data is small).
 
-**`kvk_silver.py`** — builds `kvk_company`: one typed row per company per snapshot, with
+**`pipeline/silver/kvk.py`** — builds `kvk_company`: one typed row per company per snapshot, with
 the company's sector taken from its main activity and translated to SBI 2008 via the
 crosswalk. Unclear cases (several main activities, unknown codes, codes that exist in
 both classifications) are *marked with flag columns* instead of being guessed; the
@@ -326,7 +342,7 @@ sector is only filled in when there is exactly one answer (90% of active compani
 
 ### Gold
 
-**`gold.py`** — five tables, each answering part of the main question:
+**`pipeline/gold/build.py`** — five tables, each answering part of the main question:
 
 | Table | Answers |
 |---|---|
@@ -355,16 +371,16 @@ instance settings (one writing run at a time).
 
 | Module | Role |
 |---|---|
-| `config.py`, `config.yaml` | Every setting in one file, see [Configuration](#configuration) |
+| `pipeline/common/config.py`, `config.yaml` | Every setting in one file, see [Configuration](#configuration) |
 | `checks/cbs.py`, `checks/kvk.py` | Data checks before writing, used by the scripts, the tests and Dagster |
 | `checks/layers.py`, `checks/freshness.py` | Checks on a published layer, and freshness; run by Dagster after each layer |
 | `checks/quarantine.py` | Saves failed batches with a report; monthly cleanup |
-| `publish.py` | Silver and gold: write all tables to a staging folder first, replace the live tables only when all succeeded |
-| `runlog.py` | One row per silver/gold run in `lakehouse/_run_log`: when, what, status, which inputs |
-| `lineage.py` | Column lineage bronze → silver: the source of `docs/lineage.md`, `docs/lineage.html` (diagrams), `docs/lineage_explorer.html` (interactive; layout in `lineage_explorer_template.html`) and the lineage in Dagster; a test keeps it complete |
-| `inspect_lakehouse.py` | One-screen overview: rows, periods, freshness per table; warnings; problems (exit code 1) |
-| `lakehouse_viewer.py` | Small Streamlit app to look at any Delta table, any version, read-only; its *Data quality* view shows per column how complete it is, padded text, distinct values, min/max and the most common value, the flags' true counts, duplicate rows and duplicate keys |
-| `maintenance.py` | Monthly maintenance: quarantine cleanup, KVK retention, Delta optimize/vacuum |
+| `pipeline/common/publish.py` | Silver and gold: write all tables to a staging folder first, replace the live tables only when all succeeded |
+| `pipeline/common/runlog.py` | One row per silver/gold run in `lakehouse/_run_log`: when, what, status, which inputs |
+| `tools/lineage.py` | Column lineage bronze → silver: the source of `docs/lineage.md`, `docs/lineage.html` (diagrams), `docs/lineage_explorer.html` (interactive; layout in `tools/lineage_explorer_template.html`) and the lineage in Dagster; a test keeps it complete |
+| `tools/inspect_lakehouse.py` | One-screen overview: rows, periods, freshness per table; warnings; problems (exit code 1) |
+| `tools/lakehouse_viewer.py` | Small Streamlit app to look at any Delta table, any version, read-only; its *Data quality* view shows per column how complete it is, padded text, distinct values, min/max and the most common value, the flags' true counts, duplicate rows and duplicate keys |
+| `tools/maintenance.py` | Monthly maintenance: quarantine cleanup, KVK retention, Delta optimize/vacuum |
 
 ## What ends up in `lakehouse/`
 
@@ -401,14 +417,14 @@ A misspelled setting name stops the script with an error instead of being ignore
 - **Checks before writing** decide whether a batch may enter bronze (`checks/`). A failed
   batch is not written and not logged, so the next run tries again.
 - **Quarantine** keeps every failed batch with a report of what failed, for inspection
-  (`lakehouse/quarantine/`). The same content is saved once; `maintenance.py` removes
+  (`lakehouse/quarantine/`). The same content is saved once; `tools/maintenance.py` removes
   entries that were resolved or are older than 90 days.
 - **Safe publishing** (silver and gold): all tables of a run are first written to a
   staging folder; the live tables are only replaced when every table succeeded.
 - **Run log:** every silver and gold table has a `run_id` column. Joining it with
   `lakehouse/_run_log` shows when the row was made, by which code version, and from
   which input versions.
-- **`inspect_lakehouse.py`** reports empty or missing tables, quarantined batches, failed
+- **`tools/inspect_lakehouse.py`** reports empty or missing tables, quarantined batches, failed
   runs, and tables from different runs.
 
 ## Tests
@@ -426,7 +442,7 @@ repository isn't on GitHub yet.
 
 | Test file | Covers |
 |---|---|
-| `test_bronze_logic.py` | Period selection, request keys, paging, skip rules, checks and quarantine in `cbs_bronze.run()` |
+| `test_bronze_logic.py` | Period selection, request keys, paging, skip rules, checks and quarantine in `pipeline/bronze/cbs.py` (`run()`) |
 | `test_silver_logic.py` | Parsers and silver CBS tables |
 | `test_delta.py` | Bronze and silver on real Delta tables: revisions, the log, publishing, the run log, scope cleanup |
 | `test_checks.py` | `checks/`: CBS and KVK checks, quarantine |
@@ -456,7 +472,7 @@ Limitations worth knowing when reading the results:
   be translated to SBI 2008 unambiguously; they are marked, not guessed.
 - **Provisional figures** (the latest CBS periods) can still change.
 - **A known library issue, worked around:** `deltalake` could crash while Python shut
-  down right after reading a table (exit code 134, after the work was done). `config.py`
+  down right after reading a table (exit code 134, after the work was done). `pipeline/common/config.py`
   pauses 0.1 s at exit, which prevents it; details in `TODO.md`, "Known issues".
 
 ## Sources and licence

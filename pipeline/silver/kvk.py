@@ -34,13 +34,13 @@ sbi2008_code                         filled only when there is exactly one candi
 sbi2008_division, sbi2008_section    filled only when all candidates share it; join with
                                      CBS dim_sector on sbi_code (level division/section)
 
-Uses silver map_sbi2008_sbi2025 (run cbs_silver.py first). Publishing, staging,
-run_id and the run log work as in silver CBS (publish.py, pipeline silver_kvk).
+Uses silver map_sbi2008_sbi2025 (run pipeline/silver/cbs.py first). Publishing, staging,
+run_id and the run log work as in silver CBS (pipeline/common/publish.py, pipeline silver_kvk).
 
 Usage
 -----
-    python kvk_silver.py            # rebuild kvk_company
-    python kvk_silver.py --preview  # build and print a summary, write nothing
+    python -m pipeline.silver.kvk            # rebuild kvk_company
+    python -m pipeline.silver.kvk --preview  # build and print a summary, write nothing
 """
 from __future__ import annotations
 
@@ -50,7 +50,7 @@ import logging
 import pandas as pd
 
 from checks.kvk import match_columns
-from config import project_path, settings
+from pipeline.common.config import project_path, settings
 
 LAKEHOUSE = project_path(settings["paths"]["lakehouse"])
 KVK_BRONZE = LAKEHOUSE / "bronze" / "kvk"
@@ -80,7 +80,7 @@ def read_kvk_bronze(versions: dict | None = None) -> pd.DataFrame:
     from deltalake import DeltaTable
     data, batch_log = KVK_BRONZE / "basis_bedrijfsgegevens", KVK_BRONZE / "_batch_log"
     if not (data / "_delta_log").exists() or not (batch_log / "_delta_log").exists():
-        log.warning("KVK bronze missing: %s (run kvk_bronze_agent.py first)", data)
+        log.warning("KVK bronze missing: %s (run pipeline/bronze/kvk_agent.py first)", data)
         return pd.DataFrame()
     log_dt, data_dt = DeltaTable(str(batch_log)), DeltaTable(str(data))
     if versions is not None:
@@ -108,11 +108,11 @@ def read_kvk_bronze(versions: dict | None = None) -> pd.DataFrame:
 
 def read_crosswalk(versions: dict | None = None) -> pd.DataFrame:
     """The SBI 2008 <-> 2025 crosswalk from silver (map_sbi2008_sbi2025), only the two
-    code columns. Without it every code becomes 'unknown', so run cbs_silver.py first."""
+    code columns. Without it every code becomes 'unknown', so run pipeline/silver/cbs.py first."""
     from deltalake import DeltaTable
     path = SILVER_ROOT / "map_sbi2008_sbi2025"
     if not (path / "_delta_log").exists():
-        log.warning("Crosswalk missing: %s (run reference_bronze.py and cbs_silver.py first)",
+        log.warning("Crosswalk missing: %s (run pipeline/bronze/reference.py and pipeline/silver/cbs.py first)",
                     path)
         return pd.DataFrame(columns=["sbi2008_code", "sbi2025_code"])
     dt = DeltaTable(str(path))
@@ -244,8 +244,8 @@ def build_all(read_bronze=read_kvk_bronze, read_map=read_crosswalk, inputs=None)
 
 
 def run() -> str:
-    """Build, stage, publish and log one silver KVK run (publish.py). Returns the run_id."""
-    from publish import run_pipeline
+    """Build, stage, publish and log one silver KVK run (pipeline/common/publish.py). Returns the run_id."""
+    from pipeline.common.publish import run_pipeline
     return run_pipeline(PIPELINE, lambda inputs: build_all(inputs=inputs), SILVER_ROOT, RUN_LOG)
 
 

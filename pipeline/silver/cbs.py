@@ -1,5 +1,5 @@
 """
-Silver layer for the CBS bronze tables written by cbs_bronze.py.
+Silver layer for the CBS bronze tables written by pipeline/bronze/cbs.py.
 
 Reads bronze Delta tables (one column per CBS field), cleans and types them, and rebuilds
 the silver tables below on every run (the data is small, so a full rebuild is
@@ -15,7 +15,7 @@ dim_region          regions of 81644NED with their level (country, landsdeel, pr
 dim_survey_measure  measures of the absence survey: name, CBS title, topic group, unit
 map_characteristic  every company-characteristic key per source table and what it is:
                     total, sector or size class
-map_sbi2008_sbi2025 CBS crosswalk SBI 2008 <-> SBI 2025 (from reference_bronze.py), latest
+map_sbi2008_sbi2025 CBS crosswalk SBI 2008 <-> SBI 2025 (from pipeline/bronze/reference.py), latest
                     file version only. Many-to-many: link_type says whether a link is
                     1:1, a split (one 2008 code -> several 2025 codes), a merge, or both
 
@@ -34,21 +34,21 @@ fct_establishment_count   81644NED  period x sector x region x breakdown -> coun
                           contains other classes of the same table: exclude those when
                           summing to avoid double counting).
 
-Runs, staging and the run log (publish.py)
+Runs, staging and the run log (pipeline/common/publish.py)
 ------------------------------------------
 Every run gets a run_id (e.g. silver_cbs_20261005T163000123456Z). All tables are first
 built and written to silver/_staging/<run_id>/; only when every table succeeded are the
 live tables replaced, each with a `run_id` column. A run that fails leaves the live
 tables untouched. Each run, successful or not, is a row in lakehouse/_run_log
-(runlog.py): when it ran, status, error, rows per table, and the Delta version of every
+(pipeline/common/runlog.py): when it ran, status, error, rows per table, and the Delta version of every
 bronze table it read, so silver rows can be joined to the run that made them. A
 required table that comes out empty fails the run; map_sbi2008_sbi2025 is optional
 (skipped until the crosswalk is loaded).
 
 Usage
 -----
-    python cbs_silver.py            # rebuild all silver tables
-    python cbs_silver.py --preview  # build and print a summary, write nothing
+    python -m pipeline.silver.cbs            # rebuild all silver tables
+    python -m pipeline.silver.cbs --preview  # build and print a summary, write nothing
 """
 from __future__ import annotations
 
@@ -61,14 +61,14 @@ from pathlib import Path
 
 import pandas as pd
 
-from config import project_path, settings
+from pipeline.common.config import project_path, settings
 
 LAKEHOUSE = project_path(settings["paths"]["lakehouse"])
 BRONZE_ROOT = LAKEHOUSE / "bronze"
 SILVER_ROOT = LAKEHOUSE / "silver"
 RUN_LOG = LAKEHOUSE / "_run_log"
 PIPELINE = "silver_cbs"
-OPTIONAL_TABLES = {"map_sbi2008_sbi2025"}   # empty until reference_bronze.py has run
+OPTIONAL_TABLES = {"map_sbi2008_sbi2025"}   # empty until pipeline/bronze/reference.py has run
 
 log = logging.getLogger("cbs_silver")
 
@@ -100,7 +100,7 @@ def read_bronze(table_id: str, entity: str, versions: dict | None = None) -> pd.
     for the run log."""
     path = BRONZE_ROOT / f"{table_id}_{entity}".lower()
     if not (path / "_delta_log").exists():
-        log.warning("Bronze table missing: %s (run cbs_bronze.py first)", path)
+        log.warning("Bronze table missing: %s (run pipeline/bronze/cbs.py first)", path)
         return pd.DataFrame()
     from deltalake import DeltaTable
     dt = DeltaTable(str(path))
@@ -122,11 +122,11 @@ def read_bronze(table_id: str, entity: str, versions: dict | None = None) -> pd.
 
 
 def read_reference(dataset: str, versions: dict | None = None) -> pd.DataFrame:
-    """Rows of the latest successful batch of a reference table (reference_bronze.py).
+    """Rows of the latest successful batch of a reference table (pipeline/bronze/reference.py).
     Bronze keeps every file version; silver uses only the newest one."""
     root = BRONZE_ROOT / "reference"
     if not (root / dataset / "_delta_log").exists() or not (root / "_batch_log" / "_delta_log").exists():
-        log.warning("Reference table missing: %s (run reference_bronze.py first)", root / dataset)
+        log.warning("Reference table missing: %s (run pipeline/bronze/reference.py first)", root / dataset)
         return pd.DataFrame()
     from deltalake import DeltaTable
     batches = DeltaTable(str(root / "_batch_log")).to_pandas()
@@ -582,7 +582,7 @@ def build_fct_counts(table_id: str, data: pd.DataFrame, dataprops: pd.DataFrame,
     dim = CHARACTERISTIC_DIMS[table_id]
     t = topics(dataprops)
     if t.empty:
-        raise RuntimeError(f"{table_id}: DataProperties missing in bronze; run cbs_bronze.py")
+        raise RuntimeError(f"{table_id}: DataProperties missing in bronze; run pipeline/bronze/cbs.py")
     t = t[t["measure_key"].isin(data.columns)].copy()
     grp = t["topic_group"].fillna("").str.lower()
     # which breakdown a measure belongs to, from its topic group's Dutch title
@@ -627,7 +627,7 @@ def build_fct_counts(table_id: str, data: pd.DataFrame, dataprops: pd.DataFrame,
 def build_map_sbi2008_sbi2025(ref: pd.DataFrame) -> pd.DataFrame:
     """The SBI 2008 -> SBI 2025 crosswalk (latest file version) with, per link, how many
     codes each side has: `link_type` is 1:1, split (one 2008 code -> several 2025 codes),
-    merge (several 2008 codes -> one 2025 code) or many-to-many. kvk_silver.py uses it to
+    merge (several 2008 codes -> one 2025 code) or many-to-many. pipeline/silver/kvk.py uses it to
     translate KVK's SBI 2025 codes back to the SBI 2008 sectors of the CBS tables."""
     if ref.empty:
         return pd.DataFrame()
@@ -696,10 +696,10 @@ def build_all(read=read_bronze, read_ref=read_reference) -> dict[str, pd.DataFra
 
 
 def run() -> str:
-    """Build, stage, publish and log one silver CBS run (publish.py). Returns the run_id;
+    """Build, stage, publish and log one silver CBS run (pipeline/common/publish.py). Returns the run_id;
     raises (after logging the failed run) when something went wrong."""
     from functools import partial
-    from publish import run_pipeline
+    from pipeline.common.publish import run_pipeline
 
     def build(inputs: dict) -> dict:
         return build_all(read=partial(read_bronze, versions=inputs),

@@ -26,7 +26,7 @@ import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 
-from config import PROJECT_DIR, project_path, settings
+from pipeline.common.config import PROJECT_DIR, project_path, settings
 
 RUN_LOG = project_path(settings["paths"]["lakehouse"]) / "_run_log"
 

@@ -9,9 +9,9 @@ import pyarrow as pa
 import pytest
 from deltalake import DeltaTable
 
-import cbs_bronze as b
-import cbs_silver as s
-import reference_bronze as r
+from pipeline.bronze import cbs as b
+from pipeline.silver import cbs as s
+from pipeline.bronze import reference as r
 from conftest import CROSSWALK_BATCH, INGESTED_AT, sample_bronze, sample_crosswalk, table_info
 from test_bronze_logic import periods
 
@@ -266,7 +266,7 @@ def silver_table(name):
 
 def test_silver_end_to_end_matches_the_in_memory_build(bronze_delta, silver, monkeypatch):
     """Delta round trip changes nothing but the lineage timestamp (bronze sets its own)."""
-    monkeypatch.setattr(sys, "argv", ["cbs_silver.py"])
+    monkeypatch.setattr(sys, "argv", ["pipeline/silver/cbs.py"])
     s.main()
 
     for name, expected in silver.items():
@@ -284,7 +284,7 @@ def test_silver_end_to_end_matches_the_in_memory_build(bronze_delta, silver, mon
 
 
 def test_silver_types_after_reading_back(bronze_delta, monkeypatch):
-    monkeypatch.setattr(sys, "argv", ["cbs_silver.py"])
+    monkeypatch.setattr(sys, "argv", ["pipeline/silver/cbs.py"])
     s.main()
 
     def types(name):
@@ -307,7 +307,7 @@ def test_silver_types_after_reading_back(bronze_delta, monkeypatch):
 
 
 def test_silver_rerun_replaces_tables(bronze_delta, monkeypatch):
-    monkeypatch.setattr(sys, "argv", ["cbs_silver.py"])
+    monkeypatch.setattr(sys, "argv", ["pipeline/silver/cbs.py"])
     s.main()
     first = silver_table("fct_absence_rate").to_pandas()
     s.main()
@@ -384,9 +384,9 @@ def test_cleanup_scope_leaves_kvk_and_reference_alone(tmp_path):
 
 
 # =========================================================================== silver runs and run log
-import inspect_lakehouse  # noqa: E402
-import publish  # noqa: E402
-import runlog  # noqa: E402
+from tools import inspect_lakehouse  # noqa: E402
+from pipeline.common import publish  # noqa: E402
+from pipeline.common import runlog  # noqa: E402
 
 
 def run_ids(name):

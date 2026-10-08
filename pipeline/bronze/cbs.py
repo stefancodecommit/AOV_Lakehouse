@@ -49,13 +49,13 @@ are removed. Run it with --dry-run first.
 Usage
 -----
     pip install -r requirements.txt
-    python cbs_bronze.py                 # ingest everything that's new
-    python cbs_bronze.py --dry-run       # show what would be requested
-    python cbs_bronze.py --only 81589    # limit to endpoints whose name contains "81589"
-    python cbs_bronze.py --force         # ignore the log and re-request (replaces rows)
-    python cbs_bronze.py --cleanup-scope --dry-run   # list what is outside the config
-    python cbs_bronze.py --cleanup-scope             # remove it
-    python cbs_bronze.py --rebuild-columns           # field columns again from raw_json
+    python -m pipeline.bronze.cbs                            # ingest everything that's new
+    python -m pipeline.bronze.cbs --dry-run                  # show what would be requested
+    python -m pipeline.bronze.cbs --only 81589               # limit to endpoints whose name contains "81589"
+    python -m pipeline.bronze.cbs --force                    # ignore the log and re-request (replaces rows)
+    python -m pipeline.bronze.cbs --cleanup-scope --dry-run  # list what is outside the config
+    python -m pipeline.bronze.cbs --cleanup-scope            # remove it
+    python -m pipeline.bronze.cbs --rebuild-columns          # field columns again from raw_json
 """
 from __future__ import annotations
 
@@ -72,7 +72,7 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-from config import project_path, settings
+from pipeline.common.config import project_path, settings
 
 _CFG = settings["cbs"]
 BASE_URL = _CFG["base_url"]

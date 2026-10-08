@@ -32,12 +32,12 @@ lakehouse/bronze/kvk/_batch_log               batch_id, ingested_at, source_file
 
 Usage
 -----
-    ollama pull qwen2.5:7b                     # any model that supports tool calling
-    python kvk_bronze_agent.py                 # chat with the agent
-    python kvk_bronze_agent.py --model llama3.1
-    python kvk_bronze_agent.py --file ~/Downloads/kvk-open-dataset-basis-bedrijfsgegevens.zip
+    ollama pull qwen2.5:7b               # any model that supports tool calling
+    python -m pipeline.bronze.kvk_agent  # chat with the agent
+    python -m pipeline.bronze.kvk_agent --model llama3.1
+    python -m pipeline.bronze.kvk_agent --file ~/Downloads/kvk-open-dataset-basis-bedrijfsgegevens.zip
                                                # no LLM: verify, confirm, ingest directly
-    python kvk_bronze_agent.py --inbox         # no LLM: the newest new file in inbox/kvk/
+    python -m pipeline.bronze.kvk_agent --inbox  # no LLM: the newest new file in inbox/kvk/
 """
 from __future__ import annotations
 
@@ -51,7 +51,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from checks.kvk import check_file, iter_rows as _iter_rows, sha256 as _sha256
-from config import project_path, settings
+from pipeline.common.config import project_path, settings
 
 # --------------------------------------------------------------------------- config
 _CFG = settings["kvk"]
