@@ -110,7 +110,7 @@ ingest, problems).
 - [x] Fix what the run uncovered, and add a test for each fix (only fix: the KVK SBI
       column names, tested in `tests/test_kvk_logic.py`)
 - [x] Turn the checks above into the Delta tests (section 7: `tests/test_delta.py`)
-- [ ] Later: the same checks as Dagster asset checks (section 5)
+- [x] Later: the same checks as Dagster asset checks (section 5, `checks/layers.py`)
 
 ## 0. Foundations
 - [x] Decide the dashboard's audience: personal use, for an educational project
@@ -122,8 +122,10 @@ ingest, problems).
 - [x] Replace the hard-coded settings in `cbs_bronze.py`, `cbs_silver.py`,
       `kvk_bronze_agent.py`, `reference_bronze.py` and `inspect_lakehouse.py`; paths are
       now relative to the project folder, so the scripts work from any directory
-- [ ] Add retention, Dagster schedules and alert targets to `config.yaml` when those
-      parts are built
+- [x] Add retention, Dagster schedules and alert targets to `config.yaml` when those
+      parts are built: `quarantine.retention_days`, `delta.vacuum_retention_hours`,
+      `kvk.max_snapshot_age_days`, `schedules` (2026-10-08); no alert targets (alerts are
+      shown in the Dagster UI)
 
 ## 1. Bronze
 
@@ -175,9 +177,11 @@ Source: CBS "schakelschema SBI 2008 - SBI 2025" v2.0
       5 rows the SBI 2025 2-digit column was copied from the SBI 2008 side (71111 / 74)
 - [x] Silver `map_sbi2008_sbi2025` from the latest batch only (see Silver CBS)
 - [ ] Check periodically for a newer version of the file on the CBS classifications page
-      and load it with `--url` (Dagster: a manual or monthly reference asset)
-- [ ] Decide how silver KVK handles SBI 2025 main codes that came from several SBI 2008
-      codes (see Silver KVK below)
+      and load it with `--url`. Dagster's monthly `sbi_crosswalk` only re-downloads the
+      configured URL; a new CBS version gets a new URL, so a person must update
+      `reference.sbi_crosswalk_url` in config.yaml
+- [x] Decide how silver KVK handles SBI 2025 main codes that came from several SBI 2008
+      codes: flags, derived columns only when unambiguous (see Silver KVK below)
 
 ### Quarantine (done 2026-10-05)
 - [x] Batches that fail a runtime check go to `lakehouse/quarantine/<source>/<timestamp>_<name>/`
@@ -194,7 +198,7 @@ Source: CBS "schakelschema SBI 2008 - SBI 2025" v2.0
       `quarantine.retention_days` (90). A problem that persists is quarantined again by
       the next run. Tested on real data: a corrupted 2026KW02 batch was kept while
       unresolved and removed after the correct data was ingested
-- [ ] Schedule it monthly in Dagster (section 5, maintenance job)
+- [x] Schedule it monthly in Dagster (section 5, maintenance job)
 
 ### KVK
 - [x] Load the first real file and confirm the CSV header (see "Bronze KVK" above)
@@ -422,12 +426,14 @@ Run: `docker compose up -d` (Dagster http://localhost:3000, dashboard :8501)
   favour of copying the model into the Docker volume
 
 ## Known issues
-- [ ] deltalake aborts at interpreter exit ("terminate called without an active
-      exception", exit code 134) in some runs after reading a Delta table: ~50% with
-      `to_pyarrow_table()`, ~5% with `to_pandas()`; seen with deltalake 1.4.2, 1.5.1 and
-      1.6.6. The work is done before it happens, but the exit code is wrong (4 of 20
-      `cbs_bronze.py` runs). Matters for Dagster and CI: find or report the upstream
-      issue in delta-rs; meanwhile, judge a run by its log, not only its exit code.
+- [x] deltalake aborts at interpreter exit ("terminate called without an active
+      exception", exit code 134) in some runs after reading a Delta table; seen with
+      deltalake 1.4.2, 1.5.1 and 1.6.6. Cause found 2026-10-08: a timing race, a
+      background thread of the library is still busy for a moment after a read; scripts
+      that exit right after a read crash (9-14 of 20 runs), scripts that do more work
+      afterwards rarely do. Mitigated: config.py (imported by every script) pauses 0.1 s
+      at exit; measured 0 of 30 with even 0.02 s. Test: tests/test_config.py
+- [ ] Optional: report the race upstream (delta-rs) and remove the pause once fixed
 
 ## 7. Tests and CI
 
@@ -455,8 +461,8 @@ Delta tests (done 2026-10-05, `tests/test_delta.py`):
       `pytest.ini`): fetches `81589NED/Perioden`. Run with `pytest -m live`
 
 Later, as each part is built:
-- [ ] Tests for the data checks, quarantine, scope cleanup, silver KVK, gold, the
-      dashboard's data loading and the Dagster definitions
+- [x] Tests for the data checks, quarantine, scope cleanup, silver KVK, gold, the
+      dashboard's data loading and the Dagster definitions (all built with their parts)
 - [x] GitHub Actions stage 1: run pytest on every push (`.github/workflows/tests.yml`)
 - [x] GitHub Actions stage 3: build the Docker image after the tests pass, and check the
       code and the Dagster definitions load in it (2026-10-08)

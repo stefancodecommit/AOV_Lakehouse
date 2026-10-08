@@ -35,7 +35,7 @@ cbs_bronze, kvk_bronze         freshness (checks/freshness.py): warnings only. T
                                an asset doesn't run when that asset is skipped, and a
                                stale source is exactly a skipped asset.
 
-Schedules and jobs
+Schedules and jobs (the times are in config.yaml, section schedules)
 ------------------
 cbs_monthly        1st of the month 06:00: cbs_bronze and sbi_crosswalk
 freshness_monthly  1st of the month 09:00: the freshness checks
@@ -328,16 +328,15 @@ defs = dg.Definitions(
     assets=[cbs_bronze_asset, sbi_crosswalk_asset, kvk_bronze, silver_cbs, silver_kvk, gold],
     asset_checks=[silver_cbs_checks, silver_kvk_checks, gold_checks, cbs_fresh, kvk_fresh],
     jobs=[cbs_ingest_job, freshness_job, maintenance_job, register_existing_data],
-    schedules=[
-        dg.ScheduleDefinition(name="cbs_monthly", job=cbs_ingest_job, cron_schedule="0 6 1 * *",
-                              execution_timezone="Europe/Amsterdam",
-                              default_status=dg.DefaultScheduleStatus.RUNNING),
-        dg.ScheduleDefinition(name="freshness_monthly", job=freshness_job,
-                              cron_schedule="0 9 1 * *", execution_timezone="Europe/Amsterdam",
-                              default_status=dg.DefaultScheduleStatus.RUNNING),
-        dg.ScheduleDefinition(name="maintenance_monthly", job=maintenance_job,
-                              cron_schedule="0 3 15 * *", execution_timezone="Europe/Amsterdam",
-                              default_status=dg.DefaultScheduleStatus.RUNNING),
+    schedules=[                      # times: config.yaml, section schedules
+        dg.ScheduleDefinition(name=name, job=job,
+                              cron_schedule=settings["schedules"][config_key],
+                              execution_timezone=settings["schedules"]["timezone"],
+                              default_status=dg.DefaultScheduleStatus.RUNNING)
+        for name, config_key, job in [
+            ("cbs_monthly", "cbs_ingest", cbs_ingest_job),
+            ("freshness_monthly", "freshness", freshness_job),
+            ("maintenance_monthly", "maintenance", maintenance_job)]
     ],
     sensors=[dg.AutomationConditionSensorDefinition(
         "rebuild_after_new_data", target=dg.AssetSelection.all(), run_tags=WRITE,

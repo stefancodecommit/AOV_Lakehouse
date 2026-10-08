@@ -92,6 +92,14 @@ dashboard:
   logo_dark: dashboard/assets/eur_logo_dark.svg
   project_note: Erasmus University Rotterdam
 
+schedules:
+  # When Dagster runs the jobs (cron: minute hour day-of-month month day-of-week), in
+  # this time zone. Only while Dagster runs (dagster dev, or docker compose up).
+  timezone: Europe/Amsterdam
+  cbs_ingest: "0 6 1 * *"        # 1st of the month 06:00: CBS + SBI crosswalk
+  freshness: "0 9 1 * *"         # 1st of the month 09:00: freshness warnings
+  maintenance: "0 3 15 * *"      # 15th of the month 03:00: quarantine, KVK retention, vacuum
+
 delta:
   # maintenance.py (monthly) deletes Parquet files that no table version younger than
   # this still needs; older versions can't be read ("time travel") after that.

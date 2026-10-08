@@ -89,3 +89,19 @@ def test_endpoints_from_config():
         ("80072NED", "TypedDataSet", True), ("80072NED", "Perioden", False),
         ("81589NED", "", False), ("81644NED", "TypedDataSet", False)]
     assert eps[3].odata_filter() == "Perioden ge '2025JJ00'"
+
+
+def test_exit_pause_prevents_the_deltalake_crash_at_exit(tmp_path):
+    """See config.EXIT_PAUSE_SECONDS: without the pause, a script that reads a Delta
+    table and exits right away aborts in about half of all runs (exit code 134)."""
+    import subprocess
+    import sys
+    import pyarrow as pa
+    from deltalake import write_deltalake
+    write_deltalake(str(tmp_path / "t"), pa.table({"v": list(range(1000))}))
+    script = ("import sys; sys.path.insert(0, %r); import config\n"
+              "from deltalake import DeltaTable\n"
+              "DeltaTable(%r).to_pyarrow_table()\n") % (str(c.PROJECT_DIR), str(tmp_path / "t"))
+    codes = [subprocess.run([sys.executable, "-c", script], capture_output=True).returncode
+             for _ in range(10)]
+    assert codes == [0] * 10, codes

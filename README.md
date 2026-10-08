@@ -437,8 +437,9 @@ Limitations worth knowing when reading the results:
 - **KVK sector for 10% of active companies is not determined**, because their codes can't
   be translated to SBI 2008 unambiguously; they are marked, not guessed.
 - **Provisional figures** (the latest CBS periods) can still change.
-- **A known library issue:** `deltalake` sometimes crashes while Python shuts down, after
-  the work is done (exit code 134). Details in `TODO.md`, "Known issues".
+- **A known library issue, worked around:** `deltalake` could crash while Python shut
+  down right after reading a table (exit code 134, after the work was done). `config.py`
+  pauses 0.1 s at exit, which prevents it; details in `TODO.md`, "Known issues".
 
 ## Sources and licence
 

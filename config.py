@@ -11,7 +11,9 @@ keys that exist in config.yaml, so a typo is an error instead of being ignored.
 """
 from __future__ import annotations
 
+import atexit
 import os
+import time
 from collections.abc import Mapping
 from pathlib import Path
 
@@ -19,6 +21,16 @@ import yaml
 
 PROJECT_DIR = Path(__file__).resolve().parent
 ENV_PREFIX = "LAKEHOUSE__"
+
+# Workaround for a crash in the deltalake library (seen with 1.4 - 1.6.6): right after a
+# Delta table is read, a background thread of the library is still busy for a moment.
+# If Python exits in that moment, the process aborts ("terminate called without an
+# active exception", exit code 134) although all work is done. Measured 2026-10-08: a
+# script that reads one table and exits crashed in 9-14 of 20 runs; with a short pause
+# at exit in 0 of 30 (already at 0.02 s). Every script imports this module, so one
+# pause here covers them all. Remove it once deltalake fixes the race.
+EXIT_PAUSE_SECONDS = 0.1
+atexit.register(time.sleep, EXIT_PAUSE_SECONDS)
 
 
 class ConfigError(ValueError):
