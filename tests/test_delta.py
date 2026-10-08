@@ -70,11 +70,99 @@ def test_bronze_schema_and_lineage():
     req = period_request("2026KW01", "Voorlopig")
     b.write_bronze(req, records("2026KW01", 6.0))
     dt = DeltaTable(str(b.BRONZE_ROOT / ABSENCE.name))
-    assert pa.schema(dt.schema().to_arrow()) == b.bronze_schema()
+    schema = pa.schema(dt.schema().to_arrow())
+    fixed = b.bronze_schema()
+    assert pa.schema(list(schema)[:len(fixed)]) == fixed          # lineage + raw_json first
+    assert schema.names[len(fixed):] == ["ID", "BedrijfskenmerkenSBI2008", "Perioden",
+                                         "Ziekteverzuimpercentage_1"]   # then the fields
     row = dt.to_pandas().iloc[0]
     assert row._request_key == req.key and row._table_id == "80072NED"
     assert row._source_url == f"{ABSENCE.url}?%24filter=Perioden+eq+%272026KW01%27"
     assert str(row._ingested_at.tz) == "UTC"
+
+
+# =========================================================================== structured bronze
+def bronze_types(ep=ABSENCE):
+    dt = DeltaTable(str(b.BRONZE_ROOT / ep.name))
+    return {f.name: str(f.type) for f in pa.schema(dt.schema().to_arrow())}
+
+
+def test_fields_are_columns_with_values_as_received_and_raw_json_kept():
+    recs = [{"ID": 1, "BedrijfskenmerkenSBI2008": "307500 ", "Perioden": "2026KW01",
+             "Ziekteverzuimpercentage_1": 6.2}]
+    b.write_bronze(period_request("2026KW01", "Voorlopig"), recs)
+    row = bronze_rows().iloc[0]
+    assert row["BedrijfskenmerkenSBI2008"] == "307500 "            # padding kept: silver strips
+    assert row["Ziekteverzuimpercentage_1"] == 6.2
+    assert json.loads(row["raw_json"]) == recs[0]
+
+
+def test_types_come_from_dataproperties():
+    """5 and 5.4 in one field: without DataProperties the first batch would be int64."""
+    b.write_bronze(period_request("2025KW04", "Definitief"), records("2025KW04", 5), DP_80072)
+    b.write_bronze(period_request("2026KW01", "Voorlopig"), records("2026KW01", 5.4), DP_80072)
+    assert bronze_types()["Ziekteverzuimpercentage_1"] == "double"
+    assert list(bronze_rows()["Ziekteverzuimpercentage_1"]) == [5.0, 5.4]
+
+
+def test_a_later_batch_cannot_change_a_column_type():
+    b.write_bronze(period_request("2025KW04", "Definitief"), records("2025KW04", 5.5))
+    b.write_bronze(period_request("2026KW01", "Voorlopig"), records("2026KW01", 6))  # int now
+    assert bronze_types()["Ziekteverzuimpercentage_1"] == "double"
+
+
+def test_a_field_cbs_adds_later_becomes_a_new_column():
+    b.write_bronze(period_request("2025KW04", "Definitief"), records("2025KW04", 5.5))
+    newer = [{**r, "Nieuw_2": 7} for r in records("2026KW01", 6.0)]
+    b.write_bronze(period_request("2026KW01", "Voorlopig"), newer)
+    df = bronze_rows()
+    assert "Nieuw_2" in df and df["Nieuw_2"].isna().iloc[0] and df["Nieuw_2"].iloc[1] == 7
+
+
+def test_nested_values_and_clashing_names_are_kept():
+    ep = Endpoint("86009NED", "DataProperties")
+    (req,) = b.plan_requests(None, ep)
+    b.write_bronze(req, [{"odata.type": "Cbs.OData.Topic", "Key": "X", "_period": "odd",
+                          "Extra": {"a": 1}, "Flag": True}])
+    row = bronze_rows(ep).iloc[0]
+    assert row["odata.type"] == "Cbs.OData.Topic"                  # exact field name
+    assert row["field__period"] == "odd" and row["_period"] is None  # no clash with lineage
+    assert json.loads(row["Extra"]) == {"a": 1}
+    assert bronze_types(ep)["Flag"] == "bool" and row["Flag"] == True  # noqa: E712
+
+
+def write_old_format(req, recs):
+    """A bronze table as written before bronze had a column per field."""
+    from deltalake import write_deltalake
+    table = b.bronze_table(req, recs, b.datetime.now(b.timezone.utc))
+    write_deltalake(str(b.BRONZE_ROOT / req.endpoint.name),
+                    table.select(b.bronze_schema().names), mode="append")
+
+
+def test_silver_reads_old_and_new_bronze_the_same():
+    recs = records("2026KW01", 6.0, 5.4)
+    write_old_format(period_request("2026KW01", "Voorlopig"), recs)
+    old = s.read_bronze("80072NED", "TypedDataSet")
+    b.rebuild_columns()
+    new = s.read_bronze("80072NED", "TypedDataSet")
+    pd.testing.assert_frame_equal(old, new)
+    assert "ID" not in new and new.BedrijfskenmerkenSBI2008.iloc[0] == "T001081"
+
+
+def test_rebuild_columns_keeps_rows_and_lineage_and_uses_bronze_dataproperties():
+    dp = Endpoint("80072NED", "DataProperties")
+    (dp_req,) = b.plan_requests(None, dp)
+    b.write_bronze(dp_req, DP_80072)
+    write_old_format(period_request("2026KW01", "Voorlopig"), records("2026KW01", 6))
+    before = bronze_rows()[b.bronze_schema().names]
+    assert b.rebuild_columns(dry_run=True) == ["bronze/80072ned_dataproperties: 3 rows",
+                                               "bronze/80072ned_typeddataset: 1 rows"]
+    assert "Perioden" not in bronze_rows()                         # dry run changes nothing
+    b.rebuild_columns()
+    after = bronze_rows()
+    pd.testing.assert_frame_equal(after[before.columns], before)
+    assert bronze_types()["Ziekteverzuimpercentage_1"] == "double"  # 6 is an int in the JSON
+    assert b.done_keys() == set()                                   # the log is left alone
 
 
 # =========================================================================== ingestion log

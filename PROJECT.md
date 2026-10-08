@@ -91,7 +91,7 @@ package, no Spark).
 
 ```
 lakehouse/
-  bronze/   <table_id>_<entity>/       CBS raw records (one table per endpoint)
+  bronze/   <table_id>_<entity>/       CBS records as received: raw_json + a column per field
             _ingestion_log/            CBS: one row per API request already ingested
             kvk/basis_bedrijfsgegevens KVK raw CSV rows, one snapshot per batch
             kvk/_batch_log             KVK: one row per uploaded batch
@@ -146,6 +146,10 @@ silver `map_sbi2008_sbi2025` uses the newest version only.
   fetched again and replaces its old rows instead of duplicating them.
 - Follows pagination to the last page; a request is logged only after its data is written,
   so failures are retried on the next run.
+- Stores each record as received twice: as text (`raw_json`) and as one column per CBS
+  field, typed from the table's DataProperties, values unchanged (decided 2026-10-08, so
+  bronze can be queried directly; cleaning stays in silver). `--rebuild-columns` rebuilds
+  the columns from `raw_json` without API calls.
 
 ### Bronze KVK — `kvk_bronze_agent.py` (built)
 
@@ -423,7 +427,7 @@ TODO.md                 open work
 | Data checks before ingestion (CBS) | Built (`checks/cbs.py`) |
 | Quarantine | Built for CBS, KVK and reference files; monthly cleanup in `maintenance.py` |
 | Alerting, freshness checks | To do |
-| pytest | 307 tests incl. real Delta tables, the dashboard pages and Dagster; one opt-in live CBS test |
+| pytest | 329 tests incl. real Delta tables, the dashboard pages and Dagster; one opt-in live CBS test |
 | Configuration file | Built (`config.yaml` + `config.py`) |
 | Gold | Built: 5 tables; provisional figures marked |
 | Streamlit dashboard | Built: 6 pages incl. data dictionary; provisional marked, "final only" switch |

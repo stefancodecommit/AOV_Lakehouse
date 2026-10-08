@@ -7,9 +7,10 @@ next layer on top of it.
 
 ## Where to continue (status 2026-10-08)
 
-Built and run on real data: bronze (CBS, KVK, SBI crosswalk) with checks and quarantine,
+Built and run on real data: bronze (CBS, KVK, SBI crosswalk) with checks and quarantine
+(CBS bronze with a column per field next to `raw_json`),
 silver (CBS, KVK), gold (5 tables), the Streamlit dashboard, Dagster orchestration,
-Docker Compose (including the KVK chat agent), column lineage, config, run log, 307 tests. All
+Docker Compose (including the KVK chat agent), column lineage, config, run log, 329 tests. All
 committed; no containers or servers left running. See the README for how to start
 everything (locally, or with `docker compose up -d`).
 
@@ -136,6 +137,20 @@ ingest, problems).
       shown in the Dagster UI)
 
 ## 1. Bronze
+
+### CBS: structured bronze, raw_json kept (done 2026-10-08)
+Bronze held each CBS record only as JSON text, so it couldn't be queried without parsing.
+Now every CBS bronze table also has one column per field, values as received (padding
+kept; stripping and renaming stay in silver).
+- [x] Field types from the table's DataProperties (dimensions text, measures by Datatype),
+      otherwise inferred; nested values as JSON text; a field named like a lineage column
+      becomes `field_<name>`
+- [x] A later batch can't change a column's type; a field CBS adds becomes a new column
+- [x] `cbs_bronze.py --rebuild-columns`: field columns from `raw_json`, no API calls; run
+      on the real lakehouse (32 tables)
+- [x] Silver reads the columns (falls back to `raw_json` for bronze without them); all 11
+      silver tables verified identical to before the change on the real data
+- [x] Lineage, docs/lineage.*, bronze_to_silver.md, README and PROJECT updated
 
 ### CBS: data checks before ingestion (done 2026-10-05)
 A validation step between `fetch_all` and `write_bronze`; a request that fails is not
@@ -472,7 +487,7 @@ crosswalk; `tests/test_checks.py` the CBS and KVK checks and quarantine;
 `tests/test_maintenance.py` the quarantine cleanup; `tests/test_config.py` the
 configuration; `tests/test_kvk_silver.py` silver KVK; `tests/test_gold.py` gold;
 `tests/test_dashboard.py` the dashboard (every page headless); `tests/test_orchestration.py`
-Dagster; `tests/test_delta.py` writes real Delta tables in `tmp_path` (307 tests, ~75 s). `conftest.py` fails a test when any module still points at the real
+Dagster; `tests/test_delta.py` writes real Delta tables in `tmp_path` (329 tests, ~70 s). `conftest.py` fails a test when any module still points at the real
 lakehouse or inbox. Checked by breaking the code on purpose:
 removing the delete-before-write, an empty `done_keys()` and non-UTC silver timestamps
 each make the right tests fail.

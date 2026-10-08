@@ -112,13 +112,13 @@ flowchart LR
 </pre></section>
 <section id="n_s_silver__map_characteristic"><h2>silver: map_characteristic</h2><pre class="mermaid">
 flowchart LR
+  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_81644ned_bedrijfstakkenbranchessbi2008_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken_CategoryGroupID["5 code lists of sectors and size classes<br/>CategoryGroupID"]:::bronze
+  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_81644ned_bedrijfstakkenbranchessbi2008_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken_Key["5 code lists of sectors and size classes<br/>Key"]:::bronze
+  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_81644ned_bedrijfstakkenbranchessbi2008_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken_Title["5 code lists of sectors and size classes<br/>Title"]:::bronze
   n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_81644ned_bedrijfstakkenbranchessbi2008_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken__entity["5 code lists of sectors and size classes<br/>_entity"]:::bronze
   n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_81644ned_bedrijfstakkenbranchessbi2008_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken__table_id["5 code lists of sectors and size classes<br/>_table_id"]:::bronze
-  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_81644ned_bedrijfstakkenbranchessbi2008_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken_raw_json_CategoryGroupID["5 code lists of sectors and size classes<br/>raw_json.CategoryGroupID"]:::bronze
-  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_81644ned_bedrijfstakkenbranchessbi2008_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken_raw_json_Key["5 code lists of sectors and size classes<br/>raw_json.Key"]:::bronze
-  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_81644ned_bedrijfstakkenbranchessbi2008_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken_raw_json_Title["5 code lists of sectors and size classes<br/>raw_json.Title"]:::bronze
-  n_src_80072ned_categorygroups_83130ned_categorygroups_86009ned_categorygroups_raw_json_ID["3 category-group lists<br/>raw_json.ID"]:::bronze
-  n_src_80072ned_categorygroups_83130ned_categorygroups_86009ned_categorygroups_raw_json_Title["3 category-group lists<br/>raw_json.Title"]:::bronze
+  n_src_80072ned_categorygroups_83130ned_categorygroups_86009ned_categorygroups_ID["3 category-group lists<br/>ID"]:::bronze
+  n_src_80072ned_categorygroups_83130ned_categorygroups_86009ned_categorygroups_Title["3 category-group lists<br/>Title"]:::bronze
   run(["the silver run (publish.py)"]):::run
   subgraph n_tbl_map_characteristic["silver: map_characteristic"]
     n_col_source_table["source_table"]:::silver
@@ -134,16 +134,16 @@ flowchart LR
   end
   n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_81644ned_bedrijfstakkenbranchessbi2008_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken__table_id --> n_col_source_table
   n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_81644ned_bedrijfstakkenbranchessbi2008_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken__entity --> n_col_dimension
-  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_81644ned_bedrijfstakkenbranchessbi2008_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken_raw_json_Key --> n_col_characteristic_key
-  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_81644ned_bedrijfstakkenbranchessbi2008_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken_raw_json_Title --> n_col_title
-  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_81644ned_bedrijfstakkenbranchessbi2008_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken_raw_json_CategoryGroupID --> n_col_category_group
-  n_src_80072ned_categorygroups_83130ned_categorygroups_86009ned_categorygroups_raw_json_ID --> n_col_category_group
-  n_src_80072ned_categorygroups_83130ned_categorygroups_86009ned_categorygroups_raw_json_Title --> n_col_category_group
-  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_81644ned_bedrijfstakkenbranchessbi2008_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken_raw_json_Key --> n_col_member_type
-  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_81644ned_bedrijfstakkenbranchessbi2008_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken_raw_json_Title --> n_col_member_type
-  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_81644ned_bedrijfstakkenbranchessbi2008_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken_raw_json_Key --> n_col_sector_key
-  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_81644ned_bedrijfstakkenbranchessbi2008_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken_raw_json_Title --> n_col_size_key
-  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_81644ned_bedrijfstakkenbranchessbi2008_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken_raw_json_Title --> n_col_size_is_aggregate
+  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_81644ned_bedrijfstakkenbranchessbi2008_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken_Key --> n_col_characteristic_key
+  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_81644ned_bedrijfstakkenbranchessbi2008_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken_Title --> n_col_title
+  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_81644ned_bedrijfstakkenbranchessbi2008_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken_CategoryGroupID --> n_col_category_group
+  n_src_80072ned_categorygroups_83130ned_categorygroups_86009ned_categorygroups_ID --> n_col_category_group
+  n_src_80072ned_categorygroups_83130ned_categorygroups_86009ned_categorygroups_Title --> n_col_category_group
+  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_81644ned_bedrijfstakkenbranchessbi2008_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken_Key --> n_col_member_type
+  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_81644ned_bedrijfstakkenbranchessbi2008_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken_Title --> n_col_member_type
+  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_81644ned_bedrijfstakkenbranchessbi2008_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken_Key --> n_col_sector_key
+  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_81644ned_bedrijfstakkenbranchessbi2008_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken_Title --> n_col_size_key
+  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_81644ned_bedrijfstakkenbranchessbi2008_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken_Title --> n_col_size_is_aggregate
   run --> n_col_run_id
   classDef bronze fill:#f3e3c9,stroke:#a8743a,color:#1d1d1d
   classDef silver fill:#e4e7ec,stroke:#6b7480,color:#1d1d1d
@@ -152,8 +152,8 @@ flowchart LR
 </pre></section>
 <section id="n_s_silver__dim_sector"><h2>silver: dim_sector</h2><pre class="mermaid">
 flowchart LR
-  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_81644ned_bedrijfstakkenbranchessbi2008_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken_raw_json_Key["5 code lists of sectors and size classes<br/>raw_json.Key"]:::bronze
-  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_81644ned_bedrijfstakkenbranchessbi2008_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken_raw_json_Title["5 code lists of sectors and size classes<br/>raw_json.Title"]:::bronze
+  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_81644ned_bedrijfstakkenbranchessbi2008_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken_Key["5 code lists of sectors and size classes<br/>Key"]:::bronze
+  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_81644ned_bedrijfstakkenbranchessbi2008_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken_Title["5 code lists of sectors and size classes<br/>Title"]:::bronze
   n_src_silver_map_characteristic_member_type["map_characteristic<br/>member_type"]:::silverref
   run(["the silver run (publish.py)"]):::run
   subgraph n_tbl_dim_sector["silver: dim_sector"]
@@ -164,12 +164,12 @@ flowchart LR
     n_col_title["title"]:::silver
     n_col_run_id["run_id"]:::silver
   end
-  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_81644ned_bedrijfstakkenbranchessbi2008_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken_raw_json_Key --> n_col_sector_key
+  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_81644ned_bedrijfstakkenbranchessbi2008_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken_Key --> n_col_sector_key
   n_src_silver_map_characteristic_member_type --> n_col_sector_key
-  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_81644ned_bedrijfstakkenbranchessbi2008_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken_raw_json_Title --> n_col_sbi_code
-  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_81644ned_bedrijfstakkenbranchessbi2008_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken_raw_json_Title --> n_col_sector_name
-  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_81644ned_bedrijfstakkenbranchessbi2008_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken_raw_json_Title --> n_col_sbi_level
-  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_81644ned_bedrijfstakkenbranchessbi2008_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken_raw_json_Title --> n_col_title
+  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_81644ned_bedrijfstakkenbranchessbi2008_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken_Title --> n_col_sbi_code
+  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_81644ned_bedrijfstakkenbranchessbi2008_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken_Title --> n_col_sector_name
+  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_81644ned_bedrijfstakkenbranchessbi2008_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken_Title --> n_col_sbi_level
+  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_81644ned_bedrijfstakkenbranchessbi2008_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken_Title --> n_col_title
   run --> n_col_run_id
   classDef bronze fill:#f3e3c9,stroke:#a8743a,color:#1d1d1d
   classDef silver fill:#e4e7ec,stroke:#6b7480,color:#1d1d1d
@@ -178,7 +178,7 @@ flowchart LR
 </pre></section>
 <section id="n_s_silver__dim_company_size"><h2>silver: dim_company_size</h2><pre class="mermaid">
 flowchart LR
-  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_81589ned_dataproperties_81644ned_bedrijfstakkenbranchessbi2008_81644ned_dataproperties_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken_raw_json_Title["80072ned_bedrijfskenmerkensbi2008, 81589ned_bedrijfstakkenbranchessbi2008, 81589ned_dataproperties, 81644ned_bedrijfstakkenbranchessbi2008, 81644ned_dataproperties, 83130ned_bedrijfskenmerken, 86009ned_bedrijfskenmerken<br/>raw_json.Title"]:::bronze
+  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_81589ned_dataproperties_81644ned_bedrijfstakkenbranchessbi2008_81644ned_dataproperties_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken_Title["80072ned_bedrijfskenmerkensbi2008, 81589ned_bedrijfstakkenbranchessbi2008, 81589ned_dataproperties, 81644ned_bedrijfstakkenbranchessbi2008, 81644ned_dataproperties, 83130ned_bedrijfskenmerken, 86009ned_bedrijfskenmerken<br/>Title"]:::bronze
   run(["the silver run (publish.py)"]):::run
   subgraph n_tbl_dim_company_size["silver: dim_company_size"]
     n_col_size_key["size_key"]:::silver
@@ -190,13 +190,13 @@ flowchart LR
     n_col_title["title"]:::silver
     n_col_run_id["run_id"]:::silver
   end
-  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_81589ned_dataproperties_81644ned_bedrijfstakkenbranchessbi2008_81644ned_dataproperties_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken_raw_json_Title --> n_col_size_key
-  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_81589ned_dataproperties_81644ned_bedrijfstakkenbranchessbi2008_81644ned_dataproperties_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken_raw_json_Title --> n_col_size_unit
-  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_81589ned_dataproperties_81644ned_bedrijfstakkenbranchessbi2008_81644ned_dataproperties_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken_raw_json_Title --> n_col_lower_bound
-  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_81589ned_dataproperties_81644ned_bedrijfstakkenbranchessbi2008_81644ned_dataproperties_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken_raw_json_Title --> n_col_upper_bound_excl
-  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_81589ned_dataproperties_81644ned_bedrijfstakkenbranchessbi2008_81644ned_dataproperties_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken_raw_json_Title --> n_col_size_range
-  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_81589ned_dataproperties_81644ned_bedrijfstakkenbranchessbi2008_81644ned_dataproperties_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken_raw_json_Title --> n_col_size_band
-  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_81589ned_dataproperties_81644ned_bedrijfstakkenbranchessbi2008_81644ned_dataproperties_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken_raw_json_Title --> n_col_title
+  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_81589ned_dataproperties_81644ned_bedrijfstakkenbranchessbi2008_81644ned_dataproperties_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken_Title --> n_col_size_key
+  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_81589ned_dataproperties_81644ned_bedrijfstakkenbranchessbi2008_81644ned_dataproperties_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken_Title --> n_col_size_unit
+  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_81589ned_dataproperties_81644ned_bedrijfstakkenbranchessbi2008_81644ned_dataproperties_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken_Title --> n_col_lower_bound
+  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_81589ned_dataproperties_81644ned_bedrijfstakkenbranchessbi2008_81644ned_dataproperties_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken_Title --> n_col_upper_bound_excl
+  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_81589ned_dataproperties_81644ned_bedrijfstakkenbranchessbi2008_81644ned_dataproperties_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken_Title --> n_col_size_range
+  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_81589ned_dataproperties_81644ned_bedrijfstakkenbranchessbi2008_81644ned_dataproperties_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken_Title --> n_col_size_band
+  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_81589ned_dataproperties_81644ned_bedrijfstakkenbranchessbi2008_81644ned_dataproperties_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken_Title --> n_col_title
   run --> n_col_run_id
   classDef bronze fill:#f3e3c9,stroke:#a8743a,color:#1d1d1d
   classDef silver fill:#e4e7ec,stroke:#6b7480,color:#1d1d1d
@@ -205,7 +205,7 @@ flowchart LR
 </pre></section>
 <section id="n_s_silver__dim_period"><h2>silver: dim_period</h2><pre class="mermaid">
 flowchart LR
-  n_src_80072ned_typeddataset_81589ned_typeddataset_81644ned_typeddataset_83130ned_typeddataset_86009ned_typeddataset_raw_json_Perioden["the 5 data tables (TypedDataSet)<br/>raw_json.Perioden"]:::bronze
+  n_src_80072ned_typeddataset_81589ned_typeddataset_81644ned_typeddataset_83130ned_typeddataset_86009ned_typeddataset_Perioden["the 5 data tables (TypedDataSet)<br/>Perioden"]:::bronze
   run(["the silver run (publish.py)"]):::run
   subgraph n_tbl_dim_period["silver: dim_period"]
     n_col_period_key["period_key"]:::silver
@@ -218,14 +218,14 @@ flowchart LR
     n_col_period_label["period_label"]:::silver
     n_col_run_id["run_id"]:::silver
   end
-  n_src_80072ned_typeddataset_81589ned_typeddataset_81644ned_typeddataset_83130ned_typeddataset_86009ned_typeddataset_raw_json_Perioden --> n_col_period_key
-  n_src_80072ned_typeddataset_81589ned_typeddataset_81644ned_typeddataset_83130ned_typeddataset_86009ned_typeddataset_raw_json_Perioden --> n_col_period_type
-  n_src_80072ned_typeddataset_81589ned_typeddataset_81644ned_typeddataset_83130ned_typeddataset_86009ned_typeddataset_raw_json_Perioden --> n_col_year
-  n_src_80072ned_typeddataset_81589ned_typeddataset_81644ned_typeddataset_83130ned_typeddataset_86009ned_typeddataset_raw_json_Perioden --> n_col_quarter
-  n_src_80072ned_typeddataset_81589ned_typeddataset_81644ned_typeddataset_83130ned_typeddataset_86009ned_typeddataset_raw_json_Perioden --> n_col_month
-  n_src_80072ned_typeddataset_81589ned_typeddataset_81644ned_typeddataset_83130ned_typeddataset_86009ned_typeddataset_raw_json_Perioden --> n_col_start_date
-  n_src_80072ned_typeddataset_81589ned_typeddataset_81644ned_typeddataset_83130ned_typeddataset_86009ned_typeddataset_raw_json_Perioden --> n_col_end_date
-  n_src_80072ned_typeddataset_81589ned_typeddataset_81644ned_typeddataset_83130ned_typeddataset_86009ned_typeddataset_raw_json_Perioden --> n_col_period_label
+  n_src_80072ned_typeddataset_81589ned_typeddataset_81644ned_typeddataset_83130ned_typeddataset_86009ned_typeddataset_Perioden --> n_col_period_key
+  n_src_80072ned_typeddataset_81589ned_typeddataset_81644ned_typeddataset_83130ned_typeddataset_86009ned_typeddataset_Perioden --> n_col_period_type
+  n_src_80072ned_typeddataset_81589ned_typeddataset_81644ned_typeddataset_83130ned_typeddataset_86009ned_typeddataset_Perioden --> n_col_year
+  n_src_80072ned_typeddataset_81589ned_typeddataset_81644ned_typeddataset_83130ned_typeddataset_86009ned_typeddataset_Perioden --> n_col_quarter
+  n_src_80072ned_typeddataset_81589ned_typeddataset_81644ned_typeddataset_83130ned_typeddataset_86009ned_typeddataset_Perioden --> n_col_month
+  n_src_80072ned_typeddataset_81589ned_typeddataset_81644ned_typeddataset_83130ned_typeddataset_86009ned_typeddataset_Perioden --> n_col_start_date
+  n_src_80072ned_typeddataset_81589ned_typeddataset_81644ned_typeddataset_83130ned_typeddataset_86009ned_typeddataset_Perioden --> n_col_end_date
+  n_src_80072ned_typeddataset_81589ned_typeddataset_81644ned_typeddataset_83130ned_typeddataset_86009ned_typeddataset_Perioden --> n_col_period_label
   run --> n_col_run_id
   classDef bronze fill:#f3e3c9,stroke:#a8743a,color:#1d1d1d
   classDef silver fill:#e4e7ec,stroke:#6b7480,color:#1d1d1d
@@ -234,9 +234,9 @@ flowchart LR
 </pre></section>
 <section id="n_s_silver__dim_region"><h2>silver: dim_region</h2><pre class="mermaid">
 flowchart LR
-  n_src_81644ned_regios_raw_json_Description["81644ned_regios<br/>raw_json.Description"]:::bronze
-  n_src_81644ned_regios_raw_json_Key["81644ned_regios<br/>raw_json.Key"]:::bronze
-  n_src_81644ned_regios_raw_json_Title["81644ned_regios<br/>raw_json.Title"]:::bronze
+  n_src_81644ned_regios_Description["81644ned_regios<br/>Description"]:::bronze
+  n_src_81644ned_regios_Key["81644ned_regios<br/>Key"]:::bronze
+  n_src_81644ned_regios_Title["81644ned_regios<br/>Title"]:::bronze
   run(["the silver run (publish.py)"]):::run
   subgraph n_tbl_dim_region["silver: dim_region"]
     n_col_region_key["region_key"]:::silver
@@ -245,10 +245,10 @@ flowchart LR
     n_col_description["description"]:::silver
     n_col_run_id["run_id"]:::silver
   end
-  n_src_81644ned_regios_raw_json_Key --> n_col_region_key
-  n_src_81644ned_regios_raw_json_Title --> n_col_region_name
-  n_src_81644ned_regios_raw_json_Key --> n_col_region_level
-  n_src_81644ned_regios_raw_json_Description --> n_col_description
+  n_src_81644ned_regios_Key --> n_col_region_key
+  n_src_81644ned_regios_Title --> n_col_region_name
+  n_src_81644ned_regios_Key --> n_col_region_level
+  n_src_81644ned_regios_Description --> n_col_description
   run --> n_col_run_id
   classDef bronze fill:#f3e3c9,stroke:#a8743a,color:#1d1d1d
   classDef silver fill:#e4e7ec,stroke:#6b7480,color:#1d1d1d
@@ -257,12 +257,12 @@ flowchart LR
 </pre></section>
 <section id="n_s_silver__dim_survey_measure"><h2>silver: dim_survey_measure</h2><pre class="mermaid">
 flowchart LR
+  n_src_83130ned_dataproperties_86009ned_dataproperties_Key["survey DataProperties: 86009NED + 83130NED<br/>Key"]:::bronze
+  n_src_83130ned_dataproperties_86009ned_dataproperties_ParentID["survey DataProperties: 86009NED + 83130NED<br/>ParentID"]:::bronze
+  n_src_83130ned_dataproperties_86009ned_dataproperties_Title["survey DataProperties: 86009NED + 83130NED<br/>Title"]:::bronze
+  n_src_83130ned_dataproperties_86009ned_dataproperties_Type["survey DataProperties: 86009NED + 83130NED<br/>Type"]:::bronze
+  n_src_83130ned_dataproperties_86009ned_dataproperties_Unit["survey DataProperties: 86009NED + 83130NED<br/>Unit"]:::bronze
   n_src_83130ned_dataproperties_86009ned_dataproperties__table_id["survey DataProperties: 86009NED + 83130NED<br/>_table_id"]:::bronze
-  n_src_83130ned_dataproperties_86009ned_dataproperties_raw_json_Key["survey DataProperties: 86009NED + 83130NED<br/>raw_json.Key"]:::bronze
-  n_src_83130ned_dataproperties_86009ned_dataproperties_raw_json_ParentID["survey DataProperties: 86009NED + 83130NED<br/>raw_json.ParentID"]:::bronze
-  n_src_83130ned_dataproperties_86009ned_dataproperties_raw_json_Title["survey DataProperties: 86009NED + 83130NED<br/>raw_json.Title"]:::bronze
-  n_src_83130ned_dataproperties_86009ned_dataproperties_raw_json_Type["survey DataProperties: 86009NED + 83130NED<br/>raw_json.Type"]:::bronze
-  n_src_83130ned_dataproperties_86009ned_dataproperties_raw_json_Unit["survey DataProperties: 86009NED + 83130NED<br/>raw_json.Unit"]:::bronze
   run(["the silver run (publish.py)"]):::run
   subgraph n_tbl_dim_survey_measure["silver: dim_survey_measure"]
     n_col_source_table["source_table"]:::silver
@@ -274,15 +274,15 @@ flowchart LR
     n_col_run_id["run_id"]:::silver
   end
   n_src_83130ned_dataproperties_86009ned_dataproperties__table_id --> n_col_source_table
-  n_src_83130ned_dataproperties_86009ned_dataproperties_raw_json_Key --> n_col_measure_key
-  n_src_83130ned_dataproperties_86009ned_dataproperties_raw_json_Type --> n_col_measure_key
-  n_src_83130ned_dataproperties_86009ned_dataproperties_raw_json_Key --> n_col_measure_name
-  n_src_83130ned_dataproperties_86009ned_dataproperties_raw_json_ParentID --> n_col_measure_name
-  n_src_83130ned_dataproperties_86009ned_dataproperties_raw_json_Title --> n_col_measure_name
-  n_src_83130ned_dataproperties_86009ned_dataproperties_raw_json_Title --> n_col_title
-  n_src_83130ned_dataproperties_86009ned_dataproperties_raw_json_ParentID --> n_col_topic_group
-  n_src_83130ned_dataproperties_86009ned_dataproperties_raw_json_Title --> n_col_topic_group
-  n_src_83130ned_dataproperties_86009ned_dataproperties_raw_json_Unit --> n_col_unit
+  n_src_83130ned_dataproperties_86009ned_dataproperties_Key --> n_col_measure_key
+  n_src_83130ned_dataproperties_86009ned_dataproperties_Type --> n_col_measure_key
+  n_src_83130ned_dataproperties_86009ned_dataproperties_Key --> n_col_measure_name
+  n_src_83130ned_dataproperties_86009ned_dataproperties_ParentID --> n_col_measure_name
+  n_src_83130ned_dataproperties_86009ned_dataproperties_Title --> n_col_measure_name
+  n_src_83130ned_dataproperties_86009ned_dataproperties_Title --> n_col_title
+  n_src_83130ned_dataproperties_86009ned_dataproperties_ParentID --> n_col_topic_group
+  n_src_83130ned_dataproperties_86009ned_dataproperties_Title --> n_col_topic_group
+  n_src_83130ned_dataproperties_86009ned_dataproperties_Unit --> n_col_unit
   run --> n_col_run_id
   classDef bronze fill:#f3e3c9,stroke:#a8743a,color:#1d1d1d
   classDef silver fill:#e4e7ec,stroke:#6b7480,color:#1d1d1d
@@ -340,11 +340,11 @@ flowchart LR
 </pre></section>
 <section id="n_s_silver__fct_absence_rate"><h2>silver: fct_absence_rate</h2><pre class="mermaid">
 flowchart LR
+  n_src_80072ned_typeddataset_BedrijfskenmerkenSBI2008["80072ned_typeddataset<br/>BedrijfskenmerkenSBI2008"]:::bronze
+  n_src_80072ned_typeddataset_Perioden["80072ned_typeddataset<br/>Perioden"]:::bronze
+  n_src_80072ned_typeddataset_Ziekteverzuimpercentage_1["80072ned_typeddataset<br/>Ziekteverzuimpercentage_1"]:::bronze
   n_src_80072ned_typeddataset__ingested_at["80072ned_typeddataset<br/>_ingested_at"]:::bronze
   n_src_80072ned_typeddataset__period_status["80072ned_typeddataset<br/>_period_status"]:::bronze
-  n_src_80072ned_typeddataset_raw_json_BedrijfskenmerkenSBI2008["80072ned_typeddataset<br/>raw_json.BedrijfskenmerkenSBI2008"]:::bronze
-  n_src_80072ned_typeddataset_raw_json_Perioden["80072ned_typeddataset<br/>raw_json.Perioden"]:::bronze
-  n_src_80072ned_typeddataset_raw_json_Ziekteverzuimpercentage_1["80072ned_typeddataset<br/>raw_json.Ziekteverzuimpercentage_1"]:::bronze
   n_src_silver_map_characteristic_member_type["map_characteristic<br/>member_type"]:::silverref
   n_src_silver_map_characteristic_sector_key["map_characteristic<br/>sector_key"]:::silverref
   n_src_silver_map_characteristic_size_key["map_characteristic<br/>size_key"]:::silverref
@@ -360,12 +360,12 @@ flowchart LR
     n_col_ingested_at["ingested_at"]:::silver
     n_col_run_id["run_id"]:::silver
   end
-  n_src_80072ned_typeddataset_raw_json_Perioden --> n_col_period_key
-  n_src_80072ned_typeddataset_raw_json_BedrijfskenmerkenSBI2008 --> n_col_characteristic_key
+  n_src_80072ned_typeddataset_Perioden --> n_col_period_key
+  n_src_80072ned_typeddataset_BedrijfskenmerkenSBI2008 --> n_col_characteristic_key
   n_src_silver_map_characteristic_member_type --> n_col_member_type
   n_src_silver_map_characteristic_sector_key --> n_col_sector_key
   n_src_silver_map_characteristic_size_key --> n_col_size_key
-  n_src_80072ned_typeddataset_raw_json_Ziekteverzuimpercentage_1 --> n_col_absence_pct
+  n_src_80072ned_typeddataset_Ziekteverzuimpercentage_1 --> n_col_absence_pct
   n_src_80072ned_typeddataset__period_status --> n_col_period_status
   n_src_80072ned_typeddataset__ingested_at --> n_col_ingested_at
   run --> n_col_run_id
@@ -376,13 +376,13 @@ flowchart LR
 </pre></section>
 <section id="n_s_silver__fct_absence_survey"><h2>silver: fct_absence_survey</h2><pre class="mermaid">
 flowchart LR
+  n_src_83130ned_typeddataset_86009ned_typeddataset_Bedrijfskenmerken["survey data: 86009NED + 83130NED<br/>Bedrijfskenmerken"]:::bronze
+  n_src_83130ned_typeddataset_86009ned_typeddataset_Marges["survey data: 86009NED + 83130NED<br/>Marges"]:::bronze
+  n_src_83130ned_typeddataset_86009ned_typeddataset_Perioden["survey data: 86009NED + 83130NED<br/>Perioden"]:::bronze
   n_src_83130ned_typeddataset_86009ned_typeddataset__ingested_at["survey data: 86009NED + 83130NED<br/>_ingested_at"]:::bronze
+  n_src_83130ned_typeddataset_86009ned_typeddataset__measure_["survey data: 86009NED + 83130NED<br/>(each measure)"]:::bronze
   n_src_83130ned_typeddataset_86009ned_typeddataset__period_status["survey data: 86009NED + 83130NED<br/>_period_status"]:::bronze
   n_src_83130ned_typeddataset_86009ned_typeddataset__table_id["survey data: 86009NED + 83130NED<br/>_table_id"]:::bronze
-  n_src_83130ned_typeddataset_86009ned_typeddataset_raw_json_Bedrijfskenmerken["survey data: 86009NED + 83130NED<br/>raw_json.Bedrijfskenmerken"]:::bronze
-  n_src_83130ned_typeddataset_86009ned_typeddataset_raw_json_Marges["survey data: 86009NED + 83130NED<br/>raw_json.Marges"]:::bronze
-  n_src_83130ned_typeddataset_86009ned_typeddataset_raw_json_Perioden["survey data: 86009NED + 83130NED<br/>raw_json.Perioden"]:::bronze
-  n_src_83130ned_typeddataset_86009ned_typeddataset_raw_json__measure_["survey data: 86009NED + 83130NED<br/>raw_json.(each measure)"]:::bronze
   n_src_silver_dim_survey_measure_measure_name["dim_survey_measure<br/>measure_name"]:::silverref
   n_src_silver_map_characteristic_member_type["map_characteristic<br/>member_type"]:::silverref
   n_src_silver_map_characteristic_sector_key["map_characteristic<br/>sector_key"]:::silverref
@@ -407,20 +407,20 @@ flowchart LR
     n_col_run_id["run_id"]:::silver
   end
   n_src_83130ned_typeddataset_86009ned_typeddataset__table_id --> n_col_source_table
-  n_src_83130ned_typeddataset_86009ned_typeddataset_raw_json_Perioden --> n_col_period_key
-  n_src_83130ned_typeddataset_86009ned_typeddataset_raw_json_Bedrijfskenmerken --> n_col_characteristic_key
+  n_src_83130ned_typeddataset_86009ned_typeddataset_Perioden --> n_col_period_key
+  n_src_83130ned_typeddataset_86009ned_typeddataset_Bedrijfskenmerken --> n_col_characteristic_key
   n_src_silver_map_characteristic_member_type --> n_col_member_type
   n_src_silver_map_characteristic_sector_key --> n_col_sector_key
   n_src_silver_map_characteristic_size_key --> n_col_size_key
   n_src_silver_map_characteristic_size_is_aggregate --> n_col_size_is_aggregate
-  n_src_83130ned_typeddataset_86009ned_typeddataset_raw_json__measure_ --> n_col_measure_key
+  n_src_83130ned_typeddataset_86009ned_typeddataset__measure_ --> n_col_measure_key
   n_src_silver_dim_survey_measure_measure_name --> n_col_measure_name
-  n_src_83130ned_typeddataset_86009ned_typeddataset_raw_json__measure_ --> n_col_value
-  n_src_83130ned_typeddataset_86009ned_typeddataset_raw_json_Marges --> n_col_value
-  n_src_83130ned_typeddataset_86009ned_typeddataset_raw_json__measure_ --> n_col_lower_95
-  n_src_83130ned_typeddataset_86009ned_typeddataset_raw_json_Marges --> n_col_lower_95
-  n_src_83130ned_typeddataset_86009ned_typeddataset_raw_json__measure_ --> n_col_upper_95
-  n_src_83130ned_typeddataset_86009ned_typeddataset_raw_json_Marges --> n_col_upper_95
+  n_src_83130ned_typeddataset_86009ned_typeddataset__measure_ --> n_col_value
+  n_src_83130ned_typeddataset_86009ned_typeddataset_Marges --> n_col_value
+  n_src_83130ned_typeddataset_86009ned_typeddataset__measure_ --> n_col_lower_95
+  n_src_83130ned_typeddataset_86009ned_typeddataset_Marges --> n_col_lower_95
+  n_src_83130ned_typeddataset_86009ned_typeddataset__measure_ --> n_col_upper_95
+  n_src_83130ned_typeddataset_86009ned_typeddataset_Marges --> n_col_upper_95
   n_src_83130ned_typeddataset_86009ned_typeddataset__period_status --> n_col_period_status
   n_src_83130ned_typeddataset_86009ned_typeddataset__ingested_at --> n_col_ingested_at
   run --> n_col_run_id
@@ -431,13 +431,13 @@ flowchart LR
 </pre></section>
 <section id="n_s_silver__fct_business_count"><h2>silver: fct_business_count</h2><pre class="mermaid">
 flowchart LR
-  n_src_81589ned_dataproperties_raw_json_ParentID["81589ned_dataproperties<br/>raw_json.ParentID"]:::bronze
-  n_src_81589ned_dataproperties_raw_json_Title["81589ned_dataproperties<br/>raw_json.Title"]:::bronze
+  n_src_81589ned_dataproperties_ParentID["81589ned_dataproperties<br/>ParentID"]:::bronze
+  n_src_81589ned_dataproperties_Title["81589ned_dataproperties<br/>Title"]:::bronze
+  n_src_81589ned_typeddataset_BedrijfstakkenBranchesSBI2008["81589ned_typeddataset<br/>BedrijfstakkenBranchesSBI2008"]:::bronze
+  n_src_81589ned_typeddataset_Perioden["81589ned_typeddataset<br/>Perioden"]:::bronze
   n_src_81589ned_typeddataset__ingested_at["81589ned_typeddataset<br/>_ingested_at"]:::bronze
+  n_src_81589ned_typeddataset__measure_["81589ned_typeddataset<br/>(each measure)"]:::bronze
   n_src_81589ned_typeddataset__period_status["81589ned_typeddataset<br/>_period_status"]:::bronze
-  n_src_81589ned_typeddataset_raw_json_BedrijfstakkenBranchesSBI2008["81589ned_typeddataset<br/>raw_json.BedrijfstakkenBranchesSBI2008"]:::bronze
-  n_src_81589ned_typeddataset_raw_json_Perioden["81589ned_typeddataset<br/>raw_json.Perioden"]:::bronze
-  n_src_81589ned_typeddataset_raw_json__measure_["81589ned_typeddataset<br/>raw_json.(each measure)"]:::bronze
   n_src_silver_map_characteristic_member_type["map_characteristic<br/>member_type"]:::silverref
   run(["the silver run (publish.py)"]):::run
   subgraph n_tbl_fct_business_count["silver: fct_business_count"]
@@ -455,17 +455,17 @@ flowchart LR
     n_col_ingested_at["ingested_at"]:::silver
     n_col_run_id["run_id"]:::silver
   end
-  n_src_81589ned_typeddataset_raw_json_Perioden --> n_col_period_key
-  n_src_81589ned_typeddataset_raw_json_BedrijfstakkenBranchesSBI2008 --> n_col_sector_key
+  n_src_81589ned_typeddataset_Perioden --> n_col_period_key
+  n_src_81589ned_typeddataset_BedrijfstakkenBranchesSBI2008 --> n_col_sector_key
   n_src_silver_map_characteristic_member_type --> n_col_member_type
-  n_src_81589ned_dataproperties_raw_json_ParentID --> n_col_breakdown
-  n_src_81589ned_dataproperties_raw_json_Title --> n_col_breakdown
-  n_src_81589ned_typeddataset_raw_json__measure_ --> n_col_measure_key
-  n_src_81589ned_dataproperties_raw_json_Title --> n_col_size_key
-  n_src_81589ned_dataproperties_raw_json_Title --> n_col_size_band
-  n_src_81589ned_dataproperties_raw_json_Title --> n_col_size_is_aggregate
-  n_src_81589ned_dataproperties_raw_json_Title --> n_col_legal_form
-  n_src_81589ned_typeddataset_raw_json__measure_ --> n_col_count
+  n_src_81589ned_dataproperties_ParentID --> n_col_breakdown
+  n_src_81589ned_dataproperties_Title --> n_col_breakdown
+  n_src_81589ned_typeddataset__measure_ --> n_col_measure_key
+  n_src_81589ned_dataproperties_Title --> n_col_size_key
+  n_src_81589ned_dataproperties_Title --> n_col_size_band
+  n_src_81589ned_dataproperties_Title --> n_col_size_is_aggregate
+  n_src_81589ned_dataproperties_Title --> n_col_legal_form
+  n_src_81589ned_typeddataset__measure_ --> n_col_count
   n_src_81589ned_typeddataset__period_status --> n_col_period_status
   n_src_81589ned_typeddataset__ingested_at --> n_col_ingested_at
   run --> n_col_run_id
@@ -476,14 +476,14 @@ flowchart LR
 </pre></section>
 <section id="n_s_silver__fct_establishment_count"><h2>silver: fct_establishment_count</h2><pre class="mermaid">
 flowchart LR
-  n_src_81644ned_dataproperties_raw_json_ParentID["81644ned_dataproperties<br/>raw_json.ParentID"]:::bronze
-  n_src_81644ned_dataproperties_raw_json_Title["81644ned_dataproperties<br/>raw_json.Title"]:::bronze
+  n_src_81644ned_dataproperties_ParentID["81644ned_dataproperties<br/>ParentID"]:::bronze
+  n_src_81644ned_dataproperties_Title["81644ned_dataproperties<br/>Title"]:::bronze
+  n_src_81644ned_typeddataset_BedrijfstakkenBranchesSBI2008["81644ned_typeddataset<br/>BedrijfstakkenBranchesSBI2008"]:::bronze
+  n_src_81644ned_typeddataset_Perioden["81644ned_typeddataset<br/>Perioden"]:::bronze
+  n_src_81644ned_typeddataset_RegioS["81644ned_typeddataset<br/>RegioS"]:::bronze
   n_src_81644ned_typeddataset__ingested_at["81644ned_typeddataset<br/>_ingested_at"]:::bronze
+  n_src_81644ned_typeddataset__measure_["81644ned_typeddataset<br/>(each measure)"]:::bronze
   n_src_81644ned_typeddataset__period_status["81644ned_typeddataset<br/>_period_status"]:::bronze
-  n_src_81644ned_typeddataset_raw_json_BedrijfstakkenBranchesSBI2008["81644ned_typeddataset<br/>raw_json.BedrijfstakkenBranchesSBI2008"]:::bronze
-  n_src_81644ned_typeddataset_raw_json_Perioden["81644ned_typeddataset<br/>raw_json.Perioden"]:::bronze
-  n_src_81644ned_typeddataset_raw_json_RegioS["81644ned_typeddataset<br/>raw_json.RegioS"]:::bronze
-  n_src_81644ned_typeddataset_raw_json__measure_["81644ned_typeddataset<br/>raw_json.(each measure)"]:::bronze
   n_src_silver_map_characteristic_member_type["map_characteristic<br/>member_type"]:::silverref
   run(["the silver run (publish.py)"]):::run
   subgraph n_tbl_fct_establishment_count["silver: fct_establishment_count"]
@@ -502,18 +502,18 @@ flowchart LR
     n_col_ingested_at["ingested_at"]:::silver
     n_col_run_id["run_id"]:::silver
   end
-  n_src_81644ned_typeddataset_raw_json_Perioden --> n_col_period_key
-  n_src_81644ned_typeddataset_raw_json_BedrijfstakkenBranchesSBI2008 --> n_col_sector_key
+  n_src_81644ned_typeddataset_Perioden --> n_col_period_key
+  n_src_81644ned_typeddataset_BedrijfstakkenBranchesSBI2008 --> n_col_sector_key
   n_src_silver_map_characteristic_member_type --> n_col_member_type
-  n_src_81644ned_typeddataset_raw_json_RegioS --> n_col_region_key
-  n_src_81644ned_dataproperties_raw_json_ParentID --> n_col_breakdown
-  n_src_81644ned_dataproperties_raw_json_Title --> n_col_breakdown
-  n_src_81644ned_typeddataset_raw_json__measure_ --> n_col_measure_key
-  n_src_81644ned_dataproperties_raw_json_Title --> n_col_size_key
-  n_src_81644ned_dataproperties_raw_json_Title --> n_col_size_band
-  n_src_81644ned_dataproperties_raw_json_Title --> n_col_size_is_aggregate
-  n_src_81644ned_dataproperties_raw_json_Title --> n_col_legal_form
-  n_src_81644ned_typeddataset_raw_json__measure_ --> n_col_count
+  n_src_81644ned_typeddataset_RegioS --> n_col_region_key
+  n_src_81644ned_dataproperties_ParentID --> n_col_breakdown
+  n_src_81644ned_dataproperties_Title --> n_col_breakdown
+  n_src_81644ned_typeddataset__measure_ --> n_col_measure_key
+  n_src_81644ned_dataproperties_Title --> n_col_size_key
+  n_src_81644ned_dataproperties_Title --> n_col_size_band
+  n_src_81644ned_dataproperties_Title --> n_col_size_is_aggregate
+  n_src_81644ned_dataproperties_Title --> n_col_legal_form
+  n_src_81644ned_typeddataset__measure_ --> n_col_count
   n_src_81644ned_typeddataset__period_status --> n_col_period_status
   n_src_81644ned_typeddataset__ingested_at --> n_col_ingested_at
   run --> n_col_run_id

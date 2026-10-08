@@ -39,11 +39,13 @@ rebuilt from bronze, without asking CBS or KVK again.
 **CBS** delivers data through an API (OData). Each answer is a list of records in JSON.
 Bronze stores **one Delta table per API endpoint**, for example `80072ned_typeddataset`
 (the figures of table 80072NED) or `80072ned_bedrijfskenmerkensbi2008` (its code list of
-sectors and size classes). Every bronze CBS table has the same columns:
+sectors and size classes). Every bronze CBS table has the same lineage columns, the
+record as text, and then **one column per field CBS sent**:
 
 | Column | What it is |
 |---|---|
 | `raw_json` | the record exactly as CBS sent it, as text |
+| one column per CBS field | e.g. `Perioden`, `Ziekteverzuimpercentage_1`: the value *as received* (padding and all), typed from the table's `DataProperties` (codes as text, measures as numbers) |
 | `_request_key` | which API request it came from (used to never ask the same thing twice) |
 | `_table_id`, `_entity` | the CBS table and endpoint, e.g. `80072NED`, `TypedDataSet` |
 | `_period`, `_period_status` | the period requested, and its CBS status then (final or provisional) |
@@ -61,9 +63,17 @@ _source_url    https://opendata.cbs.nl/ODataApi/odata/80072NED/TypedDataSet?$fil
 _ingested_at   2026-10-05 16:19 UTC
 raw_json       {"ID": 151, "BedrijfskenmerkenSBI2008": "T001081", "Perioden": "2026KW02",
                 "Ziekteverzuimpercentage_1": 5.4}
+ID                          151
+BedrijfskenmerkenSBI2008    T001081
+Perioden                    2026KW02
+Ziekteverzuimpercentage_1   5.4        (a number: DataProperties says Float)
 ```
 
-Read on its own, `raw_json` says little: what is `T001081`? What does
+The field columns hold the same values as `raw_json`, unchanged, so bronze can be queried
+directly; `raw_json` stays as the proof of what was received, and `python cbs_bronze.py
+--rebuild-columns` rebuilds the columns from it. A field CBS adds later becomes a new column.
+
+Read on its own, such a row says little: what is `T001081`? What does
 `Ziekteverzuimpercentage_1` measure, in which unit? The answers sit in *other* bronze
 tables (the code lists and the table's metadata, `DataProperties`). Combining them is
 silver's job.
@@ -136,8 +146,9 @@ Bronze tables that silver does **not** read, and why:
 
 ## 4. Steps every silver CBS table goes through
 
-1. **Read the bronze table** and turn each `raw_json` into columns. Keep the period
-   status and ingest time from bronze's own columns.
+1. **Read the bronze table's field columns.** Keep the period status and ingest time
+   from bronze's lineage columns. (A table written before bronze had field columns would
+   be read from `raw_json` instead; the result is the same.)
 2. **Strip the padding.** CBS pads keys with spaces (`'307500 '`, `'NL01  '`). Stripping
    them once here means every later join just works.
 3. **Drop the running number `ID`** in data records (it is only a position); in code lists
@@ -239,7 +250,7 @@ quarter, per sector or size class.
 {"ID": 5623, "BedrijfskenmerkenSBI2008": "WP19078", "Perioden": "2026KW02", "Ziekteverzuimpercentage_1": 2.5}
 ```
 
-**Steps:** parse, strip, drop `ID` (section 4); look up each key in `map_characteristic`;
+**Steps:** read, strip, drop `ID` (section 4); look up each key in `map_characteristic`;
 rename the CBS column names to plain ones; take the period status from bronze.
 
 **Silver:**
@@ -495,7 +506,7 @@ loaded on 2026-10-05.
 
 | Silver table | Function in `cbs_silver.py` |
 |---|---|
-| (every table) reading bronze, parsing JSON, stripping padding | `read_bronze`, `parse_raw`, `latest` |
+| (every table) reading bronze, stripping padding, dropping `ID` | `read_bronze`, `clean_fields`, `latest` (`parse_raw` for bronze without field columns) |
 | `map_characteristic` | `build_map_characteristic` (uses `parse_size`, `parse_sector`, `aggregate_flags`) |
 | `dim_sector` | `build_dim_sector` |
 | `dim_company_size` | `build_dim_company_size` |

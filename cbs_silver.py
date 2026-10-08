@@ -1,7 +1,7 @@
 """
 Silver layer for the CBS bronze tables written by cbs_bronze.py.
 
-Reads bronze Delta tables, parses the raw JSON, cleans and types it, and rebuilds
+Reads bronze Delta tables (one column per CBS field), cleans and types them, and rebuilds
 the silver tables below on every run (the data is small, so a full rebuild is
 simpler and always consistent).
 
@@ -87,12 +87,17 @@ TOTAL_KEY = "T001081"  # "A-U Alle economische activiteiten"
 SIZE_BANDS = [("<10", 0, 10), ("10-99", 10, 100), ("100+", 100, None)]
 
 META_COLS = ["_period_status", "_ingested_at"]
+# Columns every CBS bronze table has besides one column per field (cbs_bronze.bronze_schema)
+BRONZE_FIXED = {"_request_key", "_table_id", "_entity", "_period", "_period_status",
+                "_source_url", "_ingested_at", "_record_index", "raw_json"}
 
 
 # =========================================================================== bronze io
 def read_bronze(table_id: str, entity: str, versions: dict | None = None) -> pd.DataFrame:
-    """Bronze table as a DataFrame of parsed CBS records plus lineage columns.
-    `versions` (optional) collects the Delta version read, for the run log."""
+    """Bronze table as a DataFrame: one column per CBS field, plus the period status and
+    ingest time. Reads bronze's field columns; a table written before bronze had them is
+    read from raw_json instead. `versions` (optional) collects the Delta version read,
+    for the run log."""
     path = BRONZE_ROOT / f"{table_id}_{entity}".lower()
     if not (path / "_delta_log").exists():
         log.warning("Bronze table missing: %s (run cbs_bronze.py first)", path)
@@ -101,9 +106,19 @@ def read_bronze(table_id: str, entity: str, versions: dict | None = None) -> pd.
     dt = DeltaTable(str(path))
     if versions is not None:
         versions[f"bronze/{path.name}"] = dt.version()
-    raw = dt.to_pandas(columns=["_period_status", "_ingested_at", "raw_json"])
+    names = [f.name for f in dt.schema().fields]
+    fields = [n for n in names if n not in BRONZE_FIXED]
     # ID is only a row number in data rows; in CategoryGroups/DataProperties it's a real key
-    return parse_raw(raw, drop_id=entity == "TypedDataSet")
+    drop_id = entity == "TypedDataSet"
+    if not fields:     # a table written before bronze had a column per field
+        raw = dt.to_pandas(columns=["_period_status", "_ingested_at", "raw_json"])
+        return parse_raw(raw, drop_id=drop_id)
+    df = dt.to_pandas(columns=[*fields, *META_COLS])
+    df["_ingested_at"] = df["_ingested_at"].astype("datetime64[ns, UTC]")   # as parse_raw gives
+    # a field that was renamed in bronze because it clashed with a lineage column
+    df = df.rename(columns={n: n[len("field_"):] for n in fields
+                            if n.startswith("field_") and n[len("field_"):] in BRONZE_FIXED})
+    return clean_fields(df, drop_id)
 
 
 def read_reference(dataset: str, versions: dict | None = None) -> pd.DataFrame:
@@ -128,8 +143,9 @@ def read_reference(dataset: str, versions: dict | None = None) -> pd.DataFrame:
 
 
 def parse_raw(raw: pd.DataFrame, drop_id: bool = True) -> pd.DataFrame:
-    """Turn bronze rows (one JSON record per row) into a DataFrame with one column per
-    CBS field, plus the period status and ingest time from bronze's lineage columns.
+    """Turn bronze rows' raw_json into a DataFrame with one column per CBS field, plus the
+    period status and ingest time from bronze's lineage columns. Used for bronze written
+    before it had field columns, and for the tests' sample data.
 
     CBS pads keys with spaces ('301000 ', 'NL01  '); they are stripped here once, so
     every later join can compare keys directly. `drop_id`: in data rows the ID column is
@@ -139,6 +155,12 @@ def parse_raw(raw: pd.DataFrame, drop_id: bool = True) -> pd.DataFrame:
     df = pd.DataFrame([json.loads(s) for s in raw["raw_json"]])
     df["_period_status"] = raw["_period_status"].to_numpy()
     df["_ingested_at"] = raw["_ingested_at"].to_numpy()
+    return clean_fields(df, drop_id)
+
+
+def clean_fields(df: pd.DataFrame, drop_id: bool) -> pd.DataFrame:
+    """The first silver step for every CBS table, whichever way bronze was read: strip
+    CBS's padding from text values ('301000 ' -> '301000') and drop the running number."""
     for col in df.columns:  # CBS pads keys with spaces: '301000 '
         if df[col].dtype == object or pd.api.types.is_string_dtype(df[col]):
             df[col] = df[col].map(lambda v: v.strip() if isinstance(v, str) else v)

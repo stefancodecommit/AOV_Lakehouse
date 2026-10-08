@@ -26,13 +26,13 @@ def silver_columns(silver):
 
 
 def bronze_fields() -> dict[str, set[str]]:
-    """Fields per bronze table: the JSON keys in the sample records, bronze's own
-    columns, and the columns of the KVK and crosswalk tables."""
+    """Fields per bronze table: the CBS fields in the sample records (one bronze column
+    each), bronze's own columns, and the columns of the KVK and crosswalk tables."""
     lineage_cols = set(b.bronze_schema().names)
     out = {}
     for (table_id, entity), raw in sample_bronze().items():
         keys = set().union(*(json.loads(x) for x in raw["raw_json"]))
-        out[f"{table_id}_{entity}".lower()] = {f"raw_json.{x}" for x in keys} | lineage_cols
+        out[f"{table_id}_{entity}".lower()] = keys | lineage_cols
     # CategoryGroups of the survey tables have the same fields as 80072NED's
     for t in ("86009ned_categorygroups", "83130ned_categorygroups"):
         out[t] = out["80072ned_categorygroups"]
@@ -70,7 +70,7 @@ def test_every_named_bronze_field_exists():
     for table, columns in L.SILVER_LINEAGE.items():
         for column, c in columns.items():
             for s in c.sources:
-                if s.is_silver or s.field == "raw_json.<measure>":
+                if s.is_silver or s.field == "<measure>":
                     continue
                 assert s.field in fields[s.table], f"{table}.{column}: {s} not in bronze"
 
@@ -92,7 +92,7 @@ def test_only_run_id_has_no_source():
 
 def test_silver_to_silver_steps_are_followed_back_to_bronze():
     origin = L.bronze_sources("fct_absence_rate", "member_type")
-    assert L.Source("80072ned_bedrijfskenmerkensbi2008", "raw_json.Title") in origin
+    assert L.Source("80072ned_bedrijfskenmerkensbi2008", "Title") in origin
     assert not any(s.is_silver for s in origin)
 
 
@@ -136,7 +136,7 @@ def test_dagster_shows_the_lineage():
     deps = meta["dagster/column_lineage"].deps_by_column
     assert [(x.asset_key.to_user_string(), x.column_name)
             for x in deps["fct_absence_rate.absence_pct"]] == [
-        ("cbs_bronze", "80072ned_typeddataset.raw_json.Ziekteverzuimpercentage_1")]
+        ("cbs_bronze", "80072ned_typeddataset.Ziekteverzuimpercentage_1")]
     # a silver-to-silver step inside the asset is followed back to bronze
     assert {x.asset_key.to_user_string() for x in deps["fct_absence_rate.member_type"]} == {"cbs_bronze"}
     kvk = d.silver_kvk.specs_by_key[dg.AssetKey("silver_kvk")].metadata["dagster/column_lineage"]
@@ -150,5 +150,5 @@ def test_dagster_column_descriptions_start_with_their_origin():
     cols = {c.name: c.description for c in
             L.dagster_lineage({"fct_absence_rate"})["dagster/column_schema"].columns}
     assert cols["fct_absence_rate.absence_pct"].startswith(
-        "From 80072ned_typeddataset.raw_json.Ziekteverzuimpercentage_1 — as a number")
+        "From 80072ned_typeddataset.Ziekteverzuimpercentage_1 — as a number")
     assert cols["fct_absence_rate.run_id"].startswith("From the run — ")

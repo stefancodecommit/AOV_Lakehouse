@@ -26,8 +26,16 @@ How "ask only once" works
   bronze/<table>_tableinfos only when it changed: its Modified and MetaDataModified
   dates are part of the request key, so bronze keeps one row per version.
 
-Bronze tables keep the raw record as JSON plus lineage columns; parsing and typing
-happen in silver.
+What a bronze table holds
+-------------------------
+Lineage columns (request key, table, period and its status, source URL, ingest time,
+record index), the record exactly as received in `raw_json`, and one column per CBS
+field with the value as received: no stripping, renaming or recoding, that is silver's
+job. Field types come from the table's DataProperties (dimensions as text, measures by
+their Datatype); fields not described there are typed from their values, and nested
+values are kept as JSON text. A field CBS adds later becomes a new column; a later batch
+can't change an existing column's type. A field named like a lineage column is stored
+as `field_<name>`. `--rebuild-columns` rebuilds the field columns from raw_json.
 
 Scope cleanup
 -------------
@@ -47,6 +55,7 @@ Usage
     python cbs_bronze.py --force         # ignore the log and re-request (replaces rows)
     python cbs_bronze.py --cleanup-scope --dry-run   # list what is outside the config
     python cbs_bronze.py --cleanup-scope             # remove it
+    python cbs_bronze.py --rebuild-columns           # field columns again from raw_json
 """
 from __future__ import annotations
 
@@ -131,10 +140,9 @@ ENDPOINTS: list[Endpoint] = endpoints_from_config(_CFG)
 # pyarrow/deltalake are imported where Delta is read or written, so the planning and
 # HTTP logic (and its tests, and --dry-run) work without them.
 def bronze_schema():
-    """Columns of every CBS bronze table: lineage columns (_...) plus the raw record.
-
-    The record is kept as JSON text, untouched; typing happens in silver. Because every
-    endpoint has this same schema, a change in a CBS table never breaks a bronze write."""
+    """The fixed columns of every CBS bronze table: lineage columns (_...) plus the raw
+    record as JSON text. After these, every bronze table has one column per field of the
+    records (see structured_columns), so bronze is readable and still a faithful copy."""
     import pyarrow as pa
     return pa.schema([
         ("_request_key", pa.string()),
@@ -279,13 +287,106 @@ def done_keys() -> set[str]:
                .column("request_key").to_pylist())
 
 
-def write_bronze(req: Request, records: list[dict]) -> None:
+# --------------------------------------------------------------------------- structured columns
+# Bronze stores each record twice: as the exact JSON text (raw_json, the faithful copy)
+# and as one column per field, with the field's own name and its value as received. No
+# renaming, no stripping of CBS's padding spaces, no interpretation of codes: that is
+# silver's job. A field's type comes from CBS's description of the table (DataProperties)
+# when there is one; otherwise from the values. (Inferring from values alone isn't safe:
+# 80072NED's absence % arrives as 5 in one record and 5.4 in another.)
+_NUMERIC = {"Double": "float64", "Float": "float64", "Decimal": "float64",
+            "Long": "int64", "Integer": "int64", "Int16": "int64", "Int32": "int64",
+            "Int64": "int64", "Short": "int64", "Byte": "int64"}
+_DIMENSION_TYPES = {"Dimension", "TimeDimension", "GeoDimension", "GeoDetail"}
+
+
+def field_types(dataprops: list[dict] | None) -> dict[str, str]:
+    """Field -> Arrow type name from DataProperties: measures by their Datatype,
+    dimensions as text. Fields not described there are inferred from their values."""
+    out = {}
+    for d in dataprops or []:
+        if d.get("Type") in _DIMENSION_TYPES:
+            out[d["Key"]] = "string"
+        elif d.get("Type") == "Topic":
+            out[d["Key"]] = _NUMERIC.get(d.get("Datatype"), "string")
+    return out
+
+
+def _infer_type(values: list) -> str:
+    kinds = {type(v) for v in values if v is not None}
+    if not kinds or kinds == {str}:
+        return "string"
+    if kinds == {bool}:
+        return "bool"
+    if kinds == {int}:
+        return "int64"
+    if kinds <= {int, float}:
+        return "float64"
+    return "json"                     # nested values or a mix of kinds: kept as JSON text
+
+
+def structured_columns(records: list[dict], dataprops: list[dict] | None = None):
+    """One Arrow column per field (in order of first appearance), values as received."""
+    import pyarrow as pa
+    names = list(dict.fromkeys(k for r in records for k in r))
+    types = field_types(dataprops)
+    cols = {}
+    for name in names:
+        values = [r.get(name) for r in records]
+        kind = types.get(name) or _infer_type(values)
+        if kind == "json":
+            cols[name] = pa.array([None if v is None else json.dumps(v, ensure_ascii=False)
+                                   for v in values], pa.string())
+        elif kind == "float64":
+            cols[name] = pa.array([None if v is None else float(v) for v in values], pa.float64())
+        else:
+            cols[name] = pa.array(values, {"string": pa.string(), "bool": pa.bool_(),
+                                           "int64": pa.int64()}[kind])
+    return cols
+
+
+def bronze_table(req: "Request", records: list[dict], now: datetime,
+                 dataprops: list[dict] | None = None):
+    """The rows to write for one request: lineage columns, raw_json, then the fields."""
+    import pyarrow as pa
+    ep, n = req.endpoint, len(records)
+    fixed = pa.table({
+        "_request_key": [req.key] * n,
+        "_table_id": [ep.table_id] * n,
+        "_entity": [ep.entity or "root"] * n,
+        "_period": [req.period] * n,
+        "_period_status": [req.period_status] * n,
+        "_source_url": [req.display_url] * n,
+        "_ingested_at": [now] * n,
+        "_record_index": list(range(n)),
+        "raw_json": [json.dumps(r, ensure_ascii=False) for r in records],
+    }, schema=bronze_schema())
+    for name, column in structured_columns(records, dataprops).items():
+        if name in fixed.column_names:       # a field named like a lineage column
+            name = f"field_{name}"
+        fixed = fixed.append_column(name, column)
+    return fixed
+
+
+def _fit_to_table(path: Path, table):
+    """Cast new rows to the types an existing table already has for the same columns,
+    so a batch can't change a column's type; new fields become new columns (merge)."""
+    from deltalake import DeltaTable
+    import pyarrow as pa
+    if not (path / "_delta_log").exists():
+        return table
+    existing = pa.schema(DeltaTable(str(path)).schema().to_arrow())
+    fields = [existing.field(f.name) if f.name in existing.names else f for f in table.schema]
+    return table.cast(pa.schema(fields))
+
+
+def write_bronze(req: Request, records: list[dict], dataprops: list[dict] | None = None) -> None:
     """Write the records of one request to its bronze table.
 
     First deletes earlier rows of the same period (or the same request key), then
     appends. That makes the write repeatable: a revised period replaces its old rows,
-    and a retry after a crash can't create duplicates."""
-    import pyarrow as pa
+    and a retry after a crash can't create duplicates. `dataprops` (the table's
+    DataProperties) gives the fields their types; without it they are inferred."""
     from deltalake import DeltaTable, write_deltalake
     ep = req.endpoint
     path = BRONZE_ROOT / ep.name
@@ -300,19 +401,9 @@ def write_bronze(req: Request, records: list[dict]) -> None:
 
     if not records:
         return
-    n = len(records)
-    table = pa.table({
-        "_request_key": [req.key] * n,
-        "_table_id": [ep.table_id] * n,
-        "_entity": [ep.entity or "root"] * n,
-        "_period": [req.period] * n,
-        "_period_status": [req.period_status] * n,
-        "_source_url": [req.display_url] * n,
-        "_ingested_at": [now] * n,
-        "_record_index": list(range(n)),
-        "raw_json": [json.dumps(r, ensure_ascii=False) for r in records],
-    }, schema=bronze_schema())
-    write_deltalake(str(path), table, mode="append")
+    table = _fit_to_table(path, bronze_table(req, records, now, dataprops))
+    # merge: a field CBS adds later becomes a new column (older rows: empty)
+    write_deltalake(str(path), table, mode="append", schema_mode="merge")
 
 
 def log_success(req: Request, row_count: int, pages: int) -> None:
@@ -471,6 +562,45 @@ def cleanup_scope(session=None, dry_run: bool = True) -> list[str]:
     return actions
 
 
+def _bronze_dataprops(table_id: str) -> list[dict] | None:
+    """A table's DataProperties as stored in bronze (None when not ingested)."""
+    from deltalake import DeltaTable
+    path = BRONZE_ROOT / Endpoint(table_id, "DataProperties").name
+    if not (path / "_delta_log").exists():
+        return None
+    return [json.loads(x) for x in DeltaTable(str(path)).to_pandas(columns=["raw_json"])["raw_json"]]
+
+
+def rebuild_columns(dry_run: bool = False) -> list[str]:
+    """Rebuild the field columns of every CBS bronze table from its raw_json, without
+    calling the API: for tables written before bronze had a column per field, or after a
+    change in how fields are typed. Each table is overwritten as a whole (a new Delta
+    version; the old one stays readable through time travel). The lineage columns,
+    raw_json and the ingestion log are left as they are. Returns the tables done."""
+    import pyarrow as pa
+    from deltalake import DeltaTable, write_deltalake
+    fixed_names = bronze_schema().names
+    done = []
+    for log_dir in sorted(BRONZE_ROOT.glob("*/_delta_log")):   # kvk/ and reference/ are deeper
+        path = log_dir.parent
+        if path.name.startswith("_"):
+            continue
+        dt = DeltaTable(str(path))
+        fixed = dt.to_pyarrow_table(columns=fixed_names).cast(bronze_schema())
+        if dry_run:
+            done.append(f"bronze/{path.name}: {fixed.num_rows} rows")
+            continue
+        records = [json.loads(x) for x in fixed.column("raw_json").to_pylist()]
+        table_id = fixed.column("_table_id")[0].as_py() if fixed.num_rows else None
+        table = fixed
+        for name, column in structured_columns(records, _bronze_dataprops(table_id)).items():
+            table = table.append_column(f"field_{name}" if name in fixed_names else name, column)
+        write_deltalake(str(path), table, mode="overwrite", schema_mode="overwrite")
+        done.append(f"bronze/{path.name}: {table.num_rows} rows, "
+                    f"{table.num_columns - len(fixed_names)} field columns")
+    return done
+
+
 # --------------------------------------------------------------------------- main
 def run(only: str | None, force: bool, dry_run: bool) -> dict:
     """Ingest everything new for the configured endpoints.
@@ -524,7 +654,7 @@ def run(only: str | None, force: bool, dry_run: bool) -> dict:
                               "; ".join(f"{r.name}: {r.detail}" for r in failures(results)),
                               folder or "already in quarantine")
                     continue
-                write_bronze(req, records)
+                write_bronze(req, records, dataprops_cache.get(ep.table_id))
                 log_success(req, len(records), pages)
                 already.add(req.key)
                 fetched += 1
@@ -550,9 +680,14 @@ if __name__ == "__main__":
     ap.add_argument("--cleanup-scope", action="store_true",
                     help="remove bronze data outside config.yaml instead of ingesting "
                          "(combine with --dry-run to only list it)")
+    ap.add_argument("--rebuild-columns", action="store_true",
+                    help="rebuild bronze's field columns from raw_json, without API calls")
     args = ap.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-    if args.cleanup_scope:
+    if args.rebuild_columns:
+        for line in rebuild_columns(dry_run=args.dry_run):
+            log.info("%s%s", "[dry-run] " if args.dry_run else "", line)
+    elif args.cleanup_scope:
         actions = cleanup_scope(dry_run=args.dry_run)
         for a in actions:
             log.info("%s%s", "[dry-run] " if args.dry_run else "", a)

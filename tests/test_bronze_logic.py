@@ -153,7 +153,8 @@ def pipeline(monkeypatch):
         return [business_record(period)], 1
 
     monkeypatch.setattr(b, "fetch_all", fetch_all)
-    monkeypatch.setattr(b, "write_bronze", lambda req, recs: state["written"].append(req.key))
+    monkeypatch.setattr(b, "write_bronze",
+                        lambda req, recs, dataprops=None: state["written"].append(req.key))
     monkeypatch.setattr(b, "log_success", lambda req, n, pages: state["log"].add(req.key))
     return state
 

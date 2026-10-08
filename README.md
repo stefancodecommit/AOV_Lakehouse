@@ -42,8 +42,8 @@ as [Delta Lake](https://delta.io) tables in the folder `lakehouse/`.
 **Bronze, silver, gold (the "medallion" pattern).** Data moves through three layers, each
 with one job:
 
-- **Bronze** stores the data *exactly as received* (CBS records as JSON text, KVK rows as
-  text), plus where and when it came from. Nothing is interpreted yet, so any later step
+- **Bronze** stores the data *exactly as received* (CBS records as JSON text and as one
+  column per field, KVK rows as text), plus where and when it came from. Nothing is interpreted yet, so any later step
   can be redone from bronze without asking the source again.
 - **Silver** cleans and types the data (dates, numbers, true/false), gives codes a
   meaning (which key is a sector, which a size class), and links the sources together.
@@ -144,6 +144,7 @@ Useful options:
 | `cbs_bronze.py --dry-run` | List what would be requested, fetch nothing |
 | `cbs_bronze.py --only 81589` | Only endpoints whose name contains "81589" |
 | `cbs_bronze.py --cleanup-scope --dry-run` | Show bronze data outside the configuration (e.g. after raising the start year); without `--dry-run` it removes it |
+| `cbs_bronze.py --rebuild-columns` | Rebuild bronze's field columns from `raw_json`, no API calls (after a change in how fields are typed) |
 | `kvk_bronze_agent.py` | Chat with the KVK intake agent (needs Ollama) |
 | `kvk_bronze_agent.py --file <zip>` | Load one specific file without the agent |
 | `cbs_silver.py --preview`, `kvk_silver.py --preview`, `gold.py --preview` | Build and summarise, write nothing |
@@ -410,7 +411,7 @@ A misspelled setting name stops the script with an error instead of being ignore
 ## Tests
 
 ```bash
-.venv/bin/pytest              # 322 tests, ~65 s, no internet needed
+.venv/bin/pytest              # 329 tests, ~65 s, no internet needed
 .venv/bin/pytest -m live      # one extra test against the real CBS API
 ```
 

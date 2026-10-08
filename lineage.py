@@ -17,9 +17,10 @@ This file is the single source of truth. From it:
 
 Notation of a source field
 --------------------------
-    80072ned_typeddataset.raw_json.Perioden   a field inside the JSON record CBS sent
+    80072ned_typeddataset.Perioden            a field of the record CBS sent (bronze
+                                              keeps one column per field, and raw_json)
     80072ned_typeddataset._period_status      a lineage column bronze added
-    86009ned_typeddataset.raw_json.<measure>  every measure field (one row per measure)
+    86009ned_typeddataset.<measure>           every measure field (one row per measure)
     kvk/basis_bedrijfsgegevens.Actief         a column of the KVK file (stored as text)
     silver:map_characteristic.member_type     a column of another silver table
 """
@@ -31,7 +32,7 @@ from dataclasses import dataclass
 @dataclass(frozen=True)
 class Source:
     table: str          # bronze table folder, e.g. "80072ned_typeddataset"; or "silver:<table>"
-    field: str          # "raw_json.<key>", a bronze column, or a silver column
+    field: str          # a bronze column (a CBS field or a lineage column), or a silver column
 
     @property
     def is_silver(self) -> bool:
@@ -93,26 +94,26 @@ def counts(table_id: str, extra: dict[str, Column] | None = None) -> dict[str, C
     """fct_business_count / fct_establishment_count (same steps, 81644 adds the region)."""
     typed, props = TYPED[table_id], f"{table_id.lower()}_dataproperties"
     return {
-        "period_key": Column(src(typed, "raw_json.Perioden"), "as given (padding removed)"),
-        "sector_key": Column(src(typed, "raw_json.BedrijfstakkenBranchesSBI2008"),
+        "period_key": Column(src(typed, "Perioden"), "as given (padding removed)"),
+        "sector_key": Column(src(typed, "BedrijfstakkenBranchesSBI2008"),
                              "as given (padding removed); joins to dim_sector"),
         "member_type": Column(src(MAP, "member_type"),
                               "looked up by sector_key: sector or total"),
         **(extra or {}),
-        "breakdown": Column(src(props, "raw_json.ParentID", "raw_json.Title"),
+        "breakdown": Column(src(props, "ParentID", "Title"),
                             "the measure's topic group in DataProperties: 'total' (none), "
                             "'size' (…grootte) or 'legal_form' (Rechtsvorm)"),
-        "measure_key": Column(src(typed, "raw_json.<measure>"),
+        "measure_key": Column(src(typed, "<measure>"),
                               "the name of the measure field; one row per measure (wide -> long)"),
-        "size_key": Column(src(props, "raw_json.Title"), "size class parsed from the measure's "
+        "size_key": Column(src(props, "Title"), "size class parsed from the measure's "
                            "title, e.g. '2 werkzame personen' -> WP_2_3 (size rows only)"),
-        "size_band": Column(src(props, "raw_json.Title"),
+        "size_band": Column(src(props, "Title"),
                             "<10, 10-99 or 100+ from the parsed bounds (size rows only)"),
-        "size_is_aggregate": Column(src(props, "raw_json.Title"), "true when the class contains "
+        "size_is_aggregate": Column(src(props, "Title"), "true when the class contains "
                                     "other classes of the table (e.g. 0-50); leave out when summing"),
-        "legal_form": Column(src(props, "raw_json.Title"),
+        "legal_form": Column(src(props, "Title"),
                              "the measure's title, for legal-form rows"),
-        "count": Column(src(typed, "raw_json.<measure>"),
+        "count": Column(src(typed, "<measure>"),
                         "the measure's value, as a whole number (null when CBS left it empty)"),
         "period_status": Column(src(typed, "_period_status"), STATUS),
         "ingested_at": Column(src(typed, "_ingested_at"), INGESTED),
@@ -126,94 +127,94 @@ SILVER_LINEAGE: dict[str, dict[str, Column]] = {
         "source_table": Column(each(CODE_LISTS, "_table_id"), "the CBS table the key belongs to"),
         "dimension": Column(each(CODE_LISTS, "_entity"), "the code list's name, e.g. "
                             "BedrijfskenmerkenSBI2008"),
-        "characteristic_key": Column(each(CODE_LISTS, "raw_json.Key"), "as given (padding removed)"),
-        "title": Column(each(CODE_LISTS, "raw_json.Title"), "as given (spaces trimmed)"),
-        "category_group": Column(each(CODE_LISTS, "raw_json.CategoryGroupID")
-                                 + each(CATEGORY_GROUPS, "raw_json.ID", "raw_json.Title"),
+        "characteristic_key": Column(each(CODE_LISTS, "Key"), "as given (padding removed)"),
+        "title": Column(each(CODE_LISTS, "Title"), "as given (spaces trimmed)"),
+        "category_group": Column(each(CODE_LISTS, "CategoryGroupID")
+                                 + each(CATEGORY_GROUPS, "ID", "Title"),
                                  "the title of the key's category group (e.g. Bedrijfsgrootte)"),
-        "member_type": Column(each(CODE_LISTS, "raw_json.Key", "raw_json.Title"),
+        "member_type": Column(each(CODE_LISTS, "Key", "Title"),
                               "'size' when the title reads like a size class (whole words "
                               "'werknemers' / 'werkzame personen'), 'total' for T001081 or a "
                               "title starting with A-U, otherwise 'sector'"),
-        "sector_key": Column(each(CODE_LISTS, "raw_json.Key"),
+        "sector_key": Column(each(CODE_LISTS, "Key"),
                              "the key itself, for sectors and the total"),
-        "size_key": Column(each(CODE_LISTS, "raw_json.Title"), "size class parsed from the title, "
+        "size_key": Column(each(CODE_LISTS, "Title"), "size class parsed from the title, "
                            "e.g. '1 tot 10 werkzame personen' -> WP_1_10 (size rows only)"),
-        "size_is_aggregate": Column(each(CODE_LISTS, "raw_json.Title"),
+        "size_is_aggregate": Column(each(CODE_LISTS, "Title"),
                                     "true when the class contains other classes of the same "
                                     "table, e.g. 1-9 contains 1-4 and 5-9 (size rows only)"),
         "run_id": RUN_ID,
     },
     "dim_sector": {
-        "sector_key": Column(each(CODE_LISTS, "raw_json.Key") + src(MAP, "member_type"),
+        "sector_key": Column(each(CODE_LISTS, "Key") + src(MAP, "member_type"),
                              "the keys map_characteristic marks as sector or total; one row "
                              "per key (CBS uses the same key in every table)"),
-        "sbi_code": Column(each(CODE_LISTS, "raw_json.Title"),
+        "sbi_code": Column(each(CODE_LISTS, "Title"),
                            "the code at the start of the title: 'C Industrie' -> C"),
-        "sector_name": Column(each(CODE_LISTS, "raw_json.Title"),
+        "sector_name": Column(each(CODE_LISTS, "Title"),
                               "the rest of the title: 'C Industrie' -> Industrie"),
-        "sbi_level": Column(each(CODE_LISTS, "raw_json.Title"),
+        "sbi_level": Column(each(CODE_LISTS, "Title"),
                             "from the code's form: A-U total, C section, B-F section_group, "
                             "47 division, 812 group, 10-12 division_group, ..."),
-        "title": Column(each(CODE_LISTS, "raw_json.Title"),
+        "title": Column(each(CODE_LISTS, "Title"),
                         "as given; when tables differ, the most common title"),
         "run_id": RUN_ID,
     },
     "dim_company_size": {
-        "size_key": Column(each(CODE_LISTS, "raw_json.Title") + each(COUNT_PROPS, "raw_json.Title"),
+        "size_key": Column(each(CODE_LISTS, "Title") + each(COUNT_PROPS, "Title"),
                            "unit and bounds parsed from a size-class title: WN (employees) or "
                            "WP (persons employed), lower, upper -> e.g. WP_1_10"),
-        "size_unit": Column(each(CODE_LISTS, "raw_json.Title") + each(COUNT_PROPS, "raw_json.Title"),
+        "size_unit": Column(each(CODE_LISTS, "Title") + each(COUNT_PROPS, "Title"),
                             "'employees' (werknemers) or 'persons_employed' (werkzame personen)"),
-        "lower_bound": Column(each(CODE_LISTS, "raw_json.Title") + each(COUNT_PROPS, "raw_json.Title"),
+        "lower_bound": Column(each(CODE_LISTS, "Title") + each(COUNT_PROPS, "Title"),
                               "the first number of the title ('1 000' -> 1000)"),
-        "upper_bound_excl": Column(each(CODE_LISTS, "raw_json.Title") + each(COUNT_PROPS, "raw_json.Title"),
+        "upper_bound_excl": Column(each(CODE_LISTS, "Title") + each(COUNT_PROPS, "Title"),
                                    "the upper bound, exclusive; empty for 'of meer' (no upper bound)"),
-        "size_range": Column(each(CODE_LISTS, "raw_json.Title") + each(COUNT_PROPS, "raw_json.Title"),
+        "size_range": Column(each(CODE_LISTS, "Title") + each(COUNT_PROPS, "Title"),
                              "readable range from the bounds: 1-9, 100+"),
-        "size_band": Column(each(CODE_LISTS, "raw_json.Title") + each(COUNT_PROPS, "raw_json.Title"),
+        "size_band": Column(each(CODE_LISTS, "Title") + each(COUNT_PROPS, "Title"),
                             "<10, 10-99 or 100+: the band that contains the class"),
-        "title": Column(each(CODE_LISTS, "raw_json.Title") + each(COUNT_PROPS, "raw_json.Title"),
+        "title": Column(each(CODE_LISTS, "Title") + each(COUNT_PROPS, "Title"),
                         "as given (spaces normalised)"),
         "run_id": RUN_ID,
     },
     "dim_period": {
-        "period_key": Column(each(TYPED.values(), "raw_json.Perioden"),
+        "period_key": Column(each(TYPED.values(), "Perioden"),
                              "every period key that occurs in a fact table"),
-        "period_type": Column(each(TYPED.values(), "raw_json.Perioden"),
+        "period_type": Column(each(TYPED.values(), "Perioden"),
                               "from the key: KW quarter, JJ year, MM month, HJ half year"),
-        "year": Column(each(TYPED.values(), "raw_json.Perioden"), "the first four digits"),
-        "quarter": Column(each(TYPED.values(), "raw_json.Perioden"), "the quarter (KW, MM keys)"),
-        "month": Column(each(TYPED.values(), "raw_json.Perioden"), "the month (MM keys)"),
-        "start_date": Column(each(TYPED.values(), "raw_json.Perioden"), "first day of the period"),
-        "end_date": Column(each(TYPED.values(), "raw_json.Perioden"), "last day of the period"),
-        "period_label": Column(each(TYPED.values(), "raw_json.Perioden"),
+        "year": Column(each(TYPED.values(), "Perioden"), "the first four digits"),
+        "quarter": Column(each(TYPED.values(), "Perioden"), "the quarter (KW, MM keys)"),
+        "month": Column(each(TYPED.values(), "Perioden"), "the month (MM keys)"),
+        "start_date": Column(each(TYPED.values(), "Perioden"), "first day of the period"),
+        "end_date": Column(each(TYPED.values(), "Perioden"), "last day of the period"),
+        "period_label": Column(each(TYPED.values(), "Perioden"),
                                "readable label: 2026 Q2, 2025"),
         "run_id": RUN_ID,
     },
     "dim_region": {
-        "region_key": Column(src("81644ned_regios", "raw_json.Key"), "as given (padding removed)"),
-        "region_name": Column(src("81644ned_regios", "raw_json.Title"),
+        "region_key": Column(src("81644ned_regios", "Key"), "as given (padding removed)"),
+        "region_name": Column(src("81644ned_regios", "Title"),
                               "the title without its level suffix: 'Groningen (PV)' -> Groningen"),
-        "region_level": Column(src("81644ned_regios", "raw_json.Key"), "from the key's prefix: NL "
+        "region_level": Column(src("81644ned_regios", "Key"), "from the key's prefix: NL "
                                "country, LD landsdeel, PV province, CR corop, GM municipality"),
-        "description": Column(src("81644ned_regios", "raw_json.Description"), "as given"),
+        "description": Column(src("81644ned_regios", "Description"), "as given"),
         "run_id": RUN_ID,
     },
     "dim_survey_measure": {
         "source_table": Column(each(SURVEY_PROPS, "_table_id"), "the survey table"),
-        "measure_key": Column(each(SURVEY_PROPS, "raw_json.Key", "raw_json.Type"),
+        "measure_key": Column(each(SURVEY_PROPS, "Key", "Type"),
                               "the key of every Topic (measure) in DataProperties"),
-        "measure_name": Column(each(SURVEY_PROPS, "raw_json.Key", "raw_json.ParentID",
-                                    "raw_json.Title"),
+        "measure_name": Column(each(SURVEY_PROPS, "Key", "ParentID",
+                                    "Title"),
                                "the key in snake_case ('AantalKeerVerzuimd_2' -> "
                                "aantal_keer_verzuimd); a name that occurs twice gets the era of "
                                "its topic group (_until_2022 / _from_2022)"),
-        "title": Column(each(SURVEY_PROPS, "raw_json.Title"), "as given"),
-        "topic_group": Column(each(SURVEY_PROPS, "raw_json.ParentID", "raw_json.Title"),
+        "title": Column(each(SURVEY_PROPS, "Title"), "as given"),
+        "topic_group": Column(each(SURVEY_PROPS, "ParentID", "Title"),
                               "the titles of the TopicGroups above the measure (via ParentID), "
                               "joined with ' / '"),
-        "unit": Column(each(SURVEY_PROPS, "raw_json.Unit"), "as given: %, gemiddelde, ..."),
+        "unit": Column(each(SURVEY_PROPS, "Unit"), "as given: %, gemiddelde, ..."),
         "run_id": RUN_ID,
     },
     "map_sbi2008_sbi2025": {
@@ -239,11 +240,11 @@ SILVER_LINEAGE: dict[str, dict[str, Column]] = {
         "run_id": RUN_ID,
     },
     "fct_absence_rate": {
-        "period_key": Column(src(TYPED["80072NED"], "raw_json.Perioden"), "as given"),
-        "characteristic_key": Column(src(TYPED["80072NED"], "raw_json.BedrijfskenmerkenSBI2008"),
+        "period_key": Column(src(TYPED["80072NED"], "Perioden"), "as given"),
+        "characteristic_key": Column(src(TYPED["80072NED"], "BedrijfskenmerkenSBI2008"),
                                      "as given (padding removed)"),
         **characteristic(),
-        "absence_pct": Column(src(TYPED["80072NED"], "raw_json.Ziekteverzuimpercentage_1"),
+        "absence_pct": Column(src(TYPED["80072NED"], "Ziekteverzuimpercentage_1"),
                               "as a number: sick days as % of available working days"),
         "period_status": Column(src(TYPED["80072NED"], "_period_status"), STATUS),
         "ingested_at": Column(src(TYPED["80072NED"], "_ingested_at"), INGESTED),
@@ -252,21 +253,21 @@ SILVER_LINEAGE: dict[str, dict[str, Column]] = {
     "fct_absence_survey": {
         "source_table": Column(each(SURVEY, "_table_id"),
                                "86009NED or 83130NED: kept apart, never mixed"),
-        "period_key": Column(each(SURVEY, "raw_json.Perioden"), "as given"),
-        "characteristic_key": Column(each(SURVEY, "raw_json.Bedrijfskenmerken"),
+        "period_key": Column(each(SURVEY, "Perioden"), "as given"),
+        "characteristic_key": Column(each(SURVEY, "Bedrijfskenmerken"),
                                      "as given (padding removed)"),
         **characteristic(),
         "size_is_aggregate": Column(src(MAP, "size_is_aggregate"),
                                     "looked up by characteristic_key (size classes only)"),
-        "measure_key": Column(each(SURVEY, "raw_json.<measure>"),
+        "measure_key": Column(each(SURVEY, "<measure>"),
                               "the name of the measure field; one row per measure (wide -> long)"),
         "measure_name": Column(src("silver:dim_survey_measure", "measure_name"),
                                "looked up by source_table and measure_key"),
-        "value": Column(each(SURVEY, "raw_json.<measure>", "raw_json.Marges"),
+        "value": Column(each(SURVEY, "<measure>", "Marges"),
                         "the measure's value in the record with Marges = MW00000 (the estimate)"),
-        "lower_95": Column(each(SURVEY, "raw_json.<measure>", "raw_json.Marges"),
+        "lower_95": Column(each(SURVEY, "<measure>", "Marges"),
                            "the same measure in the record with Marges = MOG0095"),
-        "upper_95": Column(each(SURVEY, "raw_json.<measure>", "raw_json.Marges"),
+        "upper_95": Column(each(SURVEY, "<measure>", "Marges"),
                            "the same measure in the record with Marges = MBG0095"),
         "period_status": Column(each(SURVEY, "_period_status"), STATUS),
         "ingested_at": Column(each(SURVEY, "_ingested_at"), INGESTED),
@@ -274,7 +275,7 @@ SILVER_LINEAGE: dict[str, dict[str, Column]] = {
     },
     "fct_business_count": counts("81589NED"),
     "fct_establishment_count": counts("81644NED", extra={
-        "region_key": Column(src(TYPED["81644NED"], "raw_json.RegioS"),
+        "region_key": Column(src(TYPED["81644NED"], "RegioS"),
                              "as given (padding removed); joins to dim_region")}),
     "kvk_company": {
         "snapshot_date": Column(src(KVK, "_ingested_at"), "the day the upload was loaded"),
@@ -513,10 +514,10 @@ def markdown() -> str:
         "",
         "| Source | Meaning |",
         "|---|---|",
-        "| `80072ned_typeddataset.raw_json.Perioden` | a field in the JSON record CBS sent "
-        "(bronze table `80072ned_typeddataset`) |",
+        "| `80072ned_typeddataset.Perioden` | a field of the record CBS sent: a column of "
+        "bronze table `80072ned_typeddataset` (the whole record is also kept in `raw_json`) |",
         "| `80072ned_typeddataset._period_status` | a column bronze added when loading |",
-        "| `86009ned_typeddataset.raw_json.<measure>` | every measure field of the record "
+        "| `86009ned_typeddataset.<measure>` | every measure field of the record "
         "(silver has one row per measure) |",
         "| `kvk/basis_bedrijfsgegevens.Actief` | a column of the KVK file |",
         "| `silver:map_characteristic.member_type` | another silver table (its own lineage "
@@ -598,11 +599,11 @@ def _bronze_how(s: Source) -> str:
     if s.table.startswith("reference/"):
         return ("a column bronze added when loading the file" if s.field.startswith("_")
                 else "a column of the CBS crosswalk file, stored as text")
-    if s.field == "raw_json.<measure>":
+    if s.field == "<measure>":
         return "every measure field of the records CBS sent (one silver row per measure)"
-    if s.field.startswith("raw_json."):
-        return "a field of the JSON record CBS sent"
-    return "a column bronze added when loading (lineage)"
+    if s.field.startswith("_"):
+        return "a column bronze added when loading (lineage)"
+    return "a field of the record CBS sent, as received (also kept in raw_json)"
 
 
 def explorer_data() -> dict:
