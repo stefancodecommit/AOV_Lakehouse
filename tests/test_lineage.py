@@ -101,6 +101,17 @@ def test_docs_lineage_md_and_html_are_up_to_date():
     """Regenerate with: python lineage.py"""
     assert (ROOT / "docs" / "lineage.md").read_text(encoding="utf-8") == L.markdown()
     assert (ROOT / "docs" / "lineage.html").read_text(encoding="utf-8") == L.html()
+    assert (ROOT / "docs" / "lineage_explorer.html").read_text(encoding="utf-8") == L.explorer_html()
+
+
+def test_explorer_has_every_column_and_only_known_nodes():
+    data = L.explorer_data()
+    ids = {n["id"] for n in data["nodes"]}
+    columns = {f"silver:{t}.{c}" for t, cols in L.SILVER_LINEAGE.items() for c in cols}
+    assert columns <= ids and data["start"] in ids
+    assert all(a in ids and b in ids for a, b in data["edges"])
+    # every silver column has at least one incoming edge (from bronze, silver or the run)
+    assert columns <= {b for _, b in data["edges"]}
 
 
 @pytest.mark.parametrize("table", sorted(L.SILVER_LINEAGE))

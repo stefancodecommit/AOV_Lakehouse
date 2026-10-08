@@ -3,8 +3,10 @@ Column lineage, bronze -> silver: for every silver column, the bronze table(s) a
 field(s) it comes from, and what happens to it on the way.
 
 This file is the single source of truth. From it:
-- `python lineage.py` writes docs/lineage.md (a diagram and a table per silver table) and
-  docs/lineage.html (all diagrams on one page, for a browser)
+- `python lineage.py` writes docs/lineage.md (a diagram and a table per silver table),
+  docs/lineage.html (all diagrams on one page, for a browser) and
+  docs/lineage_explorer.html (interactive: pick a column or field, see its whole chain;
+  built from lineage_explorer_template.html, works offline)
 - orchestration/definitions.py shows the same lineage in the Dagster UI: in the free
   (open-source) Dagster, as the column list of the silver_cbs and silver_kvk assets,
   each description starting with "From <bronze field>"; the lineage is also stored in
@@ -521,7 +523,8 @@ def markdown() -> str:
         "is listed below) |",
         "",
         "Diagrams of the same lineage: below in this file (drawn by GitHub), or all on one page "
-        "in [lineage.html](lineage.html) (open it in a browser).",
+        "in [lineage.html](lineage.html) (open it in a browser). Interactive, to follow one "
+        "column or field through all steps: [lineage_explorer.html](lineage_explorer.html).",
         "",
         "## Overview: bronze tables → silver tables",
         "",
@@ -584,10 +587,61 @@ def dagster_lineage(asset_tables: set[str]) -> dict:
             "dagster/column_schema": dg.TableSchema(columns=schema)}
 
 
+# --------------------------------------------------------------------------- explorer
+EXPLORER_TEMPLATE = "lineage_explorer_template.html"
+EXPLORER_START = "silver:fct_absence_rate.member_type"   # a column with a silver step
+
+
+def _bronze_how(s: Source) -> str:
+    if s.table.startswith("kvk/"):
+        return "a column of the KVK file, stored as text"
+    if s.table.startswith("reference/"):
+        return ("a column bronze added when loading the file" if s.field.startswith("_")
+                else "a column of the CBS crosswalk file, stored as text")
+    if s.field == "raw_json.<measure>":
+        return "every measure field of the records CBS sent (one silver row per measure)"
+    if s.field.startswith("raw_json."):
+        return "a field of the JSON record CBS sent"
+    return "a column bronze added when loading (lineage)"
+
+
+def explorer_data() -> dict:
+    """Nodes (silver columns, bronze fields, the run) and edges for the explorer page."""
+    nodes, edges = {}, []
+    for table, columns in SILVER_LINEAGE.items():
+        for column, c in columns.items():
+            cid = f"silver:{table}.{column}"
+            nodes[cid] = {"id": cid, "layer": "silver", "table": table, "name": column,
+                          "how": c.how}
+            if not c.sources:
+                nodes["run"] = {"id": "run", "layer": "run", "table": "the silver run",
+                                "name": "publish.py", "how": "adds run_id to every row it publishes"}
+                edges.append(["run", cid])
+            for s in c.sources:
+                sid = f"{s.table}.{s.field}" if s.is_silver else f"bronze:{s.table}.{s.field}"
+                if not s.is_silver:
+                    nodes[sid] = {"id": sid, "layer": "bronze", "table": s.table,
+                                  "name": s.field, "how": _bronze_how(s)}
+                edges.append([sid, cid])
+    return {"nodes": sorted(nodes.values(), key=lambda n: n["id"]),
+            "edges": sorted(edges), "start": EXPLORER_START}
+
+
+def explorer_html() -> str:
+    """docs/lineage_explorer.html: the template with the lineage filled in. Works offline
+    (no libraries from the internet)."""
+    import json
+    from pathlib import Path
+    template = (Path(__file__).resolve().parent / EXPLORER_TEMPLATE).read_text(encoding="utf-8")
+    data = json.dumps(explorer_data(), ensure_ascii=False, separators=(",", ":"))
+    return template.replace("__DATA__", data.replace("</", "<\\/"))
+
+
 if __name__ == "__main__":
     from pathlib import Path
     docs = Path(__file__).resolve().parent / "docs"
     (docs / "lineage.md").write_text(markdown(), encoding="utf-8")
     (docs / "lineage.html").write_text(html(), encoding="utf-8")
-    print(f"Wrote {docs / 'lineage.md'} and lineage.html "
+    (docs / "lineage_explorer.html").write_text(explorer_html(), encoding="utf-8")
+    print(f"Wrote {docs / 'lineage.md'}, lineage.html and lineage_explorer.html "
           f"({sum(len(c) for c in SILVER_LINEAGE.values())} columns, {len(SILVER_LINEAGE)} tables)")

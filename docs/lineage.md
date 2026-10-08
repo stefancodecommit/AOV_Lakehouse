@@ -14,7 +14,7 @@ How to read a source:
 | `kvk/basis_bedrijfsgegevens.Actief` | a column of the KVK file |
 | `silver:map_characteristic.member_type` | another silver table (its own lineage is listed below) |
 
-Diagrams of the same lineage: below in this file (drawn by GitHub), or all on one page in [lineage.html](lineage.html) (open it in a browser).
+Diagrams of the same lineage: below in this file (drawn by GitHub), or all on one page in [lineage.html](lineage.html) (open it in a browser). Interactive, to follow one column or field through all steps: [lineage_explorer.html](lineage_explorer.html).
 
 ## Overview: bronze tables → silver tables
 
