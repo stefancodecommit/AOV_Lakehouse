@@ -5,17 +5,25 @@ Open work, in the order of `PROJECT.md`. Each phase builds on the one before it.
 Rule for every phase: run each new layer on real data and check it before building the
 next layer on top of it.
 
-## Where to continue (status 2026-10-05)
+## Where to continue (status 2026-10-08)
 
 Built and run on real data: bronze (CBS, KVK, SBI crosswalk) with checks and quarantine,
 silver (CBS, KVK), gold (5 tables), the Streamlit dashboard, Dagster orchestration,
-Docker Compose, config, run log, 286 tests.
-All committed.
+Docker Compose (including the KVK chat agent), config, run log, 287 tests. All
+committed; no containers or servers left running. See the README for how to start
+everything (locally, or with `docker compose up -d`).
 
-**Next step: 7. Tests and CI** (the remaining items). Sections 4-6 are built; see the
-README for how to start everything (locally or with `docker compose up -d`). Open
-question for the *local* dashboard: limit it to this machine (see section 4; in Docker
-it already is).
+**Next steps:**
+1. **Verify CI** (section 7): the GitHub Actions workflow is written but has never run,
+   because the repository has no GitHub remote. Either create a GitHub repository and
+   push (the real test; your choice whether and how to publish), or first run the test
+   suite in a clean Python 3.12 container (the workflow's version; locally it's 3.10).
+2. **Open question:** limit the *local* dashboard to this machine (section 4; one line
+   in `.streamlit/config.toml`). In Docker it already is.
+3. **When CBS publishes a new SBI crosswalk version:** update
+   `reference.sbi_crosswalk_url` in config.yaml (section 1, Reference).
+4. Optional: email/Slack alerts (section 5), re-run the palette validator (needs
+   Node.js, section 4), report the deltalake exit race upstream (Known issues).
 
 Run order (from the project folder, with the virtualenv):
 
