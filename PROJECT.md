@@ -345,7 +345,7 @@ vary. A single run per quarter can therefore miss a release by a few days. Becau
 without new data cost one small request per dataset, running more often (e.g. weekly) is a
 safe alternative if that happens.
 
-## Deployment — Docker Compose (to do)
+## Deployment — Docker Compose (built)
 
 Services:
 
@@ -361,8 +361,11 @@ Services:
 Volumes: one shared volume for `lakehouse/` (the data moves with the project) and the
 `inbox/` folder for KVK uploads.
 
-Minimum machine: 8 GB RAM for the Ollama model (7B, CPU), plus about 4 GB for the other
-services; disk space depends mostly on the KVK retention policy.
+Minimum machine (measured 2026-10-08): about 3 GB of Docker memory for the pipeline,
+about 8 GB with the KVK chat agent (its 7B model needs ~5 GB on CPU); disk ~1.3 GB for
+the image plus the lakehouse, which grows mostly with the KVK snapshots kept. Ollama and
+the agent are an optional Compose profile, because Dagster can load KVK files without
+them. Ports are published on 127.0.0.1 only. Details in the README.
 
 ## Development
 
@@ -392,8 +395,9 @@ tests/                  pytest
 inspect_lakehouse.py    overview of all Delta tables and problems after a run
 inbox/                  kvk/: KVK zip uploads for the agent; reference/: downloaded
                         reference files (not in git)
-docker-compose.yml      (to do)
-Dockerfile              (to do)
+docker-compose.yml      the services (Dagster, Postgres, dashboard; optional Ollama + agent)
+Dockerfile              one image for all Python services
+.env.example            Docker settings to copy to .env (user id, Postgres, model)
 .github/workflows/      CI: tests.yml runs pytest on every push
 requirements.txt
 requirements-dev.txt
@@ -415,10 +419,10 @@ TODO.md                 open work
 | Data checks before ingestion (CBS) | Built (`checks/cbs.py`) |
 | Quarantine | Built for CBS, KVK and reference files; monthly cleanup in `maintenance.py` |
 | Alerting, freshness checks | To do |
-| pytest | 283 tests incl. real Delta tables, the dashboard pages and Dagster; one opt-in live CBS test |
+| pytest | 286 tests incl. real Delta tables, the dashboard pages and Dagster; one opt-in live CBS test |
 | Configuration file | Built (`config.yaml` + `config.py`) |
 | Gold | Built: 5 tables; provisional figures marked |
 | Streamlit dashboard | Built: 6 pages incl. data dictionary; provisional marked, "final only" switch |
 | Dagster orchestration and maintenance | Built: monthly CBS, automatic rebuilds after blocking checks, freshness, maintenance |
-| Docker Compose | To do |
-| CI | Stage 1 built: pytest on every push; Docker build step to do |
+| Docker Compose | Built and tested (pipeline, Dagster, dashboard); chat agent not yet tried in Docker |
+| CI | pytest on every push, then the Docker image is built and smoke-tested |

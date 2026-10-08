@@ -1,0 +1,6 @@
+# Where Dagster finds the pipeline definitions inside the container.
+load_from:
+  - python_file:
+      relative_path: ../definitions.py
+      working_directory: /app
+      location_name: lakehouse

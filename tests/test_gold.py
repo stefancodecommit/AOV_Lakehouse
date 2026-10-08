@@ -184,3 +184,17 @@ def test_gold_refuses_silver_tables_from_different_runs(bronze_delta):
 def test_gold_fails_when_silver_is_missing():
     with pytest.raises(publish.RunFailed, match="silver table missing"):
         g.run()
+
+
+def test_gold_reads_only_the_latest_kvk_snapshot_and_the_columns_it_needs():
+    """kvk_company is large: gold reads seven columns of the latest snapshot only."""
+    import pyarrow as pa
+    rows = pd.DataFrame({"snapshot_date": [pd.Timestamp("2026-10-01").date()] * 3,
+                         "batch_id": ["old", "new", "new"], "is_latest": [False, True, True],
+                         "is_active": [True, True, False], "start_date": [None] * 3,
+                         "legal_form": ["BV"] * 3, "sbi2008_section": ["A"] * 3,
+                         "sbi_mapping": ["1:1"] * 3, "run_id": "silver_kvk_1"})
+    publish.write_table(g.SILVER_ROOT / "kvk_company", rows)
+    df = g.read_silver(["kvk_company"])["kvk_company"]
+    assert list(df["batch_id"]) == ["new", "new"]
+    assert "sbi_mapping" not in df and set(g.PARTIAL_READS["kvk_company"]["columns"]) == set(df)

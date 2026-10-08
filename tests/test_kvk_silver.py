@@ -155,3 +155,15 @@ def test_missing_bronze_fails_the_run_and_is_logged():
     with pytest.raises(publish.RunFailed, match="required tables came out empty: kvk_company"):
         k.run()
     assert runlog.read_runs(k.RUN_LOG).iloc[-1].status == "failed"
+
+
+def test_reader_returns_a_fixed_order_and_only_needed_columns(kvk_lakehouse):
+    df = k.read_kvk_bronze()
+    assert list(df["_row_number"]) == [1, 2, 3]
+    assert "SBI_activiteiten" not in df and "_source_file" not in df   # not needed: saves memory
+    assert str(df["_batch_id"].dtype) == "category"
+
+
+def test_categories_are_written_as_plain_text():
+    table = publish.to_arrow(pd.DataFrame({"batch": pd.Categorical(["a", "b", "a"])}))
+    assert table.schema.field("batch").type == pa.string()

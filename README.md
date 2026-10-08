@@ -23,14 +23,15 @@ as [Delta Lake](https://delta.io) tables in the folder `lakehouse/`.
 3. [Setup](#setup)
 4. [Running the pipeline](#running-the-pipeline)
 5. [Running it automatically: Dagster](#running-it-automatically-dagster)
-6. [The dashboard](#the-dashboard)
-7. [The scripts one by one](#the-scripts-one-by-one)
-8. [What ends up in `lakehouse/`](#what-ends-up-in-lakehouse)
-9. [Configuration](#configuration)
-10. [Data quality: checks, quarantine and the run log](#data-quality-checks-quarantine-and-the-run-log)
-11. [Tests](#tests)
-12. [Status and known limitations](#status-and-known-limitations)
-13. [Sources and licence](#sources-and-licence)
+6. [Running everything in Docker](#running-everything-in-docker)
+7. [The dashboard](#the-dashboard)
+8. [The scripts one by one](#the-scripts-one-by-one)
+9. [What ends up in `lakehouse/`](#what-ends-up-in-lakehouse)
+10. [Configuration](#configuration)
+11. [Data quality: checks, quarantine and the run log](#data-quality-checks-quarantine-and-the-run-log)
+12. [Tests](#tests)
+13. [Status and known limitations](#status-and-known-limitations)
+14. [Sources and licence](#sources-and-licence)
 
 ## Concepts in two minutes
 
@@ -93,8 +94,8 @@ Reading the diagram:
 
 ## Setup
 
-Requirements: Linux or macOS, Python 3.10 or newer, about 3 GB free memory (silver KVK
-peaks at ~2.3 GB) and ~100 MB disk for the data.
+Requirements: Linux or macOS, Python 3.10 or newer, about 2 GB free memory (silver KVK
+peaks at ~1.3 GB) and ~100 MB disk for the data.
 
 ```bash
 python3 -m venv .venv
@@ -187,6 +188,47 @@ Then open <http://localhost:3000>. Dagster only acts while this command runs.
 `.venv/bin/dagster job execute -f orchestration/definitions.py -j register_existing_data`).
 Dagster only rebuilds a layer automatically when every input was materialized in Dagster
 at least once; this records the existing bronze data as such.
+
+## Running everything in Docker
+
+The same project in containers, so it runs the same on any machine with Docker. Only
+Docker is needed (no Python setup).
+
+```bash
+docker compose up -d                       # build (first time ~3 min) and start
+                                           #   Dagster:   http://localhost:3000
+                                           #   dashboard: http://localhost:8501
+docker compose down                        # stop (data and run history stay)
+```
+
+| Service | What it is |
+|---|---|
+| `dagster-webserver` | the Dagster UI |
+| `dagster-daemon` | schedules, automatic rebuilds; the pipeline runs execute here |
+| `postgres` | Dagster's run history (not the data) |
+| `dashboard` | the Streamlit dashboard |
+| `ollama`, `kvk-agent` | optional, profile `agent`: the KVK chat agent and its model server |
+
+- **The data stays in this project folder.** `lakehouse/` and `inbox/` are mounted into
+  the containers, so Docker and local runs work on the same lakehouse. Containers run as
+  your user (`HOST_UID`/`HOST_GID`, see `.env.example`), so the files they write are yours.
+- **Only reachable from this machine:** the ports are published on 127.0.0.1.
+- **First time** on an existing lakehouse: run the job `register_existing_data` once in
+  the Dagster UI (Jobs), as described in the Dagster section.
+- **Record the code version** in the run log: `docker compose build --build-arg
+  CODE_VERSION=$(git rev-parse --short HEAD)` (the image has no git).
+- **KVK chat agent** (optional; needs ~5 GB more memory for the model):
+  `docker compose --profile agent up -d` starts Ollama and downloads the model once
+  (~4.7 GB; or set `OLLAMA_DIR=~/.ollama` in `.env` to reuse models already on this
+  machine), then `docker compose run --rm kvk-agent`. Without it, load KVK files from
+  the Dagster UI (`kvk_bronze`).
+
+**Minimum machine** (measured): Docker needs about **3 GB of memory** for the pipeline
+(the services use ~0.7 GB idle; the largest steps, silver KVK and gold, peak at ~1.3 and
+~1.1 GB, and only one runs at a time), or about **8 GB** with the KVK chat agent (its
+7B model needs ~5 GB). On Docker Desktop, set this under Settings → Resources → Memory.
+Disk: ~1.3 GB for the image, ~115 MB for the lakehouse so far plus ~22 MB per kept KVK
+snapshot (about 300 MB a year with monthly uploads), and ~4.7 GB for the agent's model.
 
 ## The dashboard
 
@@ -349,7 +391,7 @@ A misspelled setting name stops the script with an error instead of being ignore
 ## Tests
 
 ```bash
-.venv/bin/pytest              # 283 tests, ~50 s, no internet needed
+.venv/bin/pytest              # 286 tests, ~55 s, no internet needed
 .venv/bin/pytest -m live      # one extra test against the real CBS API
 ```
 
@@ -374,8 +416,9 @@ at the real `lakehouse/`. GitHub Actions runs the tests on every push
 ## Status and known limitations
 
 Built and run on real data: bronze, silver and gold, with checks, quarantine and the run
-log, the Streamlit dashboard, and Dagster orchestration. Still to do (see
-[`TODO.md`](TODO.md)): Docker Compose.
+log, the Streamlit dashboard, Dagster orchestration, and Docker Compose. The KVK chat
+agent in Docker is set up but not yet tried (it needs more Docker memory); see
+[`TODO.md`](TODO.md) for what's open.
 
 Limitations worth knowing when reading the results:
 
@@ -383,6 +426,8 @@ Limitations worth knowing when reading the results:
   never per combination, so "small construction companies" can't be shown.
 - **KVK has no company number** in the open dataset: companies can't be followed between
   snapshots, only counted.
+- **Docker memory:** with Docker Desktop's default memory (here 3.67 GB) the pipeline
+  fits, but not the KVK chat agent's model; see the Docker section.
 - **KVK sector for 10% of active companies is not determined**, because their codes can't
   be translated to SBI 2008 unambiguously; they are marked, not guessed.
 - **Provisional figures** (the latest CBS periods) can still change.

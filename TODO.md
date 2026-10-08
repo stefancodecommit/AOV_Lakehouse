@@ -9,12 +9,14 @@ next layer on top of it.
 
 Built and run on real data: bronze (CBS, KVK, SBI crosswalk) with checks and quarantine,
 silver (CBS, KVK), gold (5 tables), the Streamlit dashboard, Dagster orchestration,
-config, run log, 283 tests.
+Docker Compose, config, run log, 286 tests.
 All committed.
 
-**Next step: 6. Deployment (Docker Compose).** Sections 4 (dashboard) and 5 (Dagster)
-are built; see the README for how to start them. One open question for the dashboard:
-limit it to this machine (see section 4).
+**Next step: 7. Tests and CI** (the remaining items), and trying the KVK chat agent in
+Docker once Docker Desktop has more memory (section 6). Sections 4-6 are built; see the
+README for how to start everything (locally or with `docker compose up -d`). Open
+question for the *local* dashboard: limit it to this machine (see section 4; in Docker
+it already is).
 
 Run order (from the project folder, with the virtualenv):
 
@@ -280,7 +282,8 @@ Planned columns:
       the flags explain why
 - Result on the real file (2026-10-05): 1,277,560 active companies, 90.2% with an SBI
   2008 section and division, 72.1% with a single SBI 2008 code. Section filled per
-  mapping: 1:1 100%, ambiguous_version 90%, merge 71%. 12 s, ~2.3 GB peak memory
+  mapping: 1:1 100%, ambiguous_version 90%, merge 71%. 12 s, ~1.3 GB peak memory
+  (2.3 GB before the memory fix of 2026-10-08)
   (matters for Docker sizing), 23 MB per snapshot in silver
 - [x] Decision (2026-10-05): 4-digit KVK codes such as 7111 (SBI 2008 class codes without
       a subclass, not in the crosswalk) stay `unknown_code`; no extra mapping rule
@@ -384,15 +387,34 @@ Run: `DAGSTER_HOME=$PWD/orchestration .venv/bin/dagster dev -f orchestration/def
   runs the real `dagster` command to catch this
 - [ ] Optional later: email or Slack alerts (a run failure sensor)
 
-## 6. Deployment (Docker Compose)
-- [ ] `Dockerfile` for the Python code
-- [ ] `docker-compose.yml` with dagster-webserver, dagster-daemon, postgres, streamlit,
-      ollama and an on-demand kvk-agent service
-- [ ] Volumes: shared `lakehouse/`, and `inbox/` for KVK uploads
-- [ ] Pull the Ollama model on first start
-- [ ] Document the minimum machine (about 12 GB RAM in total; disk depends on KVK
-      retention)
-- [ ] README: how to configure, start the stack and run the KVK agent
+## 6. Deployment (Docker Compose) (built 2026-10-08)
+Run: `docker compose up -d` (Dagster http://localhost:3000, dashboard :8501)
+- [x] `Dockerfile`: one image (python 3.12, 1.3 GB) for Dagster, the dashboard and the
+      agent; `CODE_VERSION` build arg for the run log (no git in the image)
+- [x] `docker-compose.yml`: dagster-webserver, dagster-daemon, postgres (Dagster's run
+      history; `orchestration/docker/dagster.yaml`), dashboard; ollama, ollama-pull and
+      kvk-agent behind the profile `agent` (the model is a 4.7 GB download)
+- [x] Volumes: `lakehouse/` and `inbox/` bind-mounted from the project folder (Docker
+      and local runs share the data); containers run as the host user, so files stay
+      yours; ports on 127.0.0.1 only (answers the open question for Docker)
+- [x] Pull the Ollama model on first start (`ollama-pull`), or reuse the host's models
+      with `OLLAMA_DIR=~/.ollama`
+- [x] Minimum machine documented (README), measured: Docker ~3 GB memory for the
+      pipeline, ~8 GB with the chat agent; disk ~1.3 GB image + lakehouse
+- [x] README: Docker section (start, stop, first time, agent, minimum machine)
+- Tested in Docker (2026-10-08): jobs through the queue (register_existing_data,
+  freshness), silver CBS, silver KVK and gold with all checks passing, the automatic
+  rebuild of gold after silver KVK, every dashboard page inside its container
+- Found while testing, fixed:
+  - dagster-postgres needs a driver it doesn't install, and with SQLAlchemy 2.1 queued
+    runs failed with an SQL syntax error: the image pins SQLAlchemy 2.0 + psycopg2
+  - Docker Desktop here has 3.67 GB: silver KVK (2.3 GB) and gold (1.6 GB) were killed
+    for lack of memory. Silver KVK now reads only the columns it needs and keeps
+    repeated text as categories (1.3 GB); gold reads only the latest KVK snapshot's
+    columns (1.1 GB). Output checked identical; silver KVK rows now in a fixed order
+- [ ] Raise Docker Desktop's memory (Settings → Resources → Memory, e.g. 8 GB), then try
+      the KVK chat agent in Docker (`docker compose --profile agent up -d`,
+      `docker compose run --rm kvk-agent`); not tested yet
 
 ## Known issues
 - [ ] deltalake aborts at interpreter exit ("terminate called without an active
@@ -410,7 +432,7 @@ crosswalk; `tests/test_checks.py` the CBS and KVK checks and quarantine;
 `tests/test_maintenance.py` the quarantine cleanup; `tests/test_config.py` the
 configuration; `tests/test_kvk_silver.py` silver KVK; `tests/test_gold.py` gold;
 `tests/test_dashboard.py` the dashboard (every page headless); `tests/test_orchestration.py`
-Dagster; `tests/test_delta.py` writes real Delta tables in `tmp_path` (283 tests, ~50 s). `conftest.py` fails a test when any module still points at the real
+Dagster; `tests/test_delta.py` writes real Delta tables in `tmp_path` (286 tests, ~55 s). `conftest.py` fails a test when any module still points at the real
 lakehouse or inbox. Checked by breaking the code on purpose:
 removing the delete-before-write, an empty `done_keys()` and non-UTC silver timestamps
 each make the right tests fail.
@@ -431,5 +453,5 @@ Later, as each part is built:
 - [ ] Tests for the data checks, quarantine, scope cleanup, silver KVK, gold, the
       dashboard's data loading and the Dagster definitions
 - [x] GitHub Actions stage 1: run pytest on every push (`.github/workflows/tests.yml`)
-- [ ] GitHub Actions stage 3: build the Docker image after the tests pass (once the
-      Dockerfile exists)
+- [x] GitHub Actions stage 3: build the Docker image after the tests pass, and check the
+      code and the Dagster definitions load in it (2026-10-08)

@@ -1,6 +1,5 @@
-# Stage 1 CI: run the test suite on every push and pull request.
-# Later stages (see TODO.md): Delta tests run here automatically once added;
-# a Docker build step is added after the Dockerfile exists.
+# CI: run the test suite on every push and pull request, then check that the Docker
+# image still builds (it is not pushed anywhere).
 name: tests
 
 on:
@@ -37,3 +36,20 @@ jobs:
 
       - name: Run tests
         run: pytest -m "not live"            # live CBS tests stay off in CI
+
+  docker-build:
+    needs: pytest                 # only when the tests passed
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v4
+
+      - name: Build the image
+        run: docker build --build-arg CODE_VERSION=${GITHUB_SHA::7} -t cbs-kvk-lakehouse:ci .
+
+      - name: Smoke test - the code loads inside the image
+        run: |
+          docker run --rm cbs-kvk-lakehouse:ci python -c "import cbs_bronze, cbs_silver, gold, kvk_silver, publish, runlog"
+          # without DAGSTER_HOME: validating needs no Postgres (it uses a temporary folder)
+          docker run --rm cbs-kvk-lakehouse:ci env -u DAGSTER_HOME dagster definitions validate -f orchestration/definitions.py

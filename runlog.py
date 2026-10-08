@@ -21,6 +21,7 @@ code_version  git commit of the code that ran ("-dirty" with uncommitted changes
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
@@ -37,7 +38,10 @@ def new_run_id(pipeline: str, now: datetime | None = None) -> str:
 
 
 def code_version() -> str | None:
-    """Short git commit of the project, with -dirty when there are uncommitted changes."""
+    """Short git commit of the project, with -dirty when there are uncommitted changes.
+    In Docker there is no git: the image carries the version in CODE_VERSION instead."""
+    if os.environ.get("CODE_VERSION"):
+        return os.environ["CODE_VERSION"]
     try:
         commit = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=PROJECT_DIR,
                                 capture_output=True, text=True, timeout=5, check=True).stdout.strip()

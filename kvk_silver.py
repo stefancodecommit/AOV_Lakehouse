@@ -88,8 +88,22 @@ def read_kvk_bronze(versions: dict | None = None) -> pd.DataFrame:
         versions["bronze/kvk/basis_bedrijfsgegevens"] = data_dt.version()
     batches = log_dt.to_pandas(columns=["batch_id", "ingested_at", "status"])
     good = set(batches.loc[batches["status"] == "success", "batch_id"])
-    df = data_dt.to_pandas()
-    return df[df["_batch_id"].isin(good)].reset_index(drop=True)
+
+    # Memory: 1.9M rows per snapshot. Read only the columns kvk_company uses (not the
+    # long lineage texts _source_file/_source_sha256 or SBI_activiteiten), and keep
+    # repeated text as pandas categories (each distinct value stored once). This took
+    # silver KVK's peak memory from ~2.3 GB to ~1.3 GB; Docker's memory is limited.
+    names = data_dt.schema().to_arrow().names if hasattr(data_dt.schema(), "to_arrow") \
+        else [f.name for f in data_dt.schema().fields]
+    found, _ = match_columns(names, REQUIRED_COLUMNS, OPTIONAL_COLUMNS)
+    keep = [names[i] for k, i in found.items() if k != "sbi"]
+    keep += ["_batch_id", "_ingested_at", "_row_number"]
+    table = data_dt.to_pyarrow_table(columns=keep)
+    df = table.to_pandas(strings_to_categorical=True)
+    df = df[df["_batch_id"].isin(good)]
+    df["_batch_id"] = df["_batch_id"].cat.remove_unused_categories()
+    # a fixed row order: reading the Delta files doesn't guarantee one
+    return df.sort_values(["_batch_id", "_row_number"], ignore_index=True)
 
 
 def read_crosswalk(versions: dict | None = None) -> pd.DataFrame:
@@ -180,7 +194,7 @@ def build_kvk_company(bronze: pd.DataFrame, crosswalk: pd.DataFrame) -> pd.DataF
         raise ValueError(f"KVK bronze columns not recognised: {missing}")
     col = {k: bronze.columns[i] for k, i in found.items()}
 
-    batches = (bronze.groupby("_batch_id")["_ingested_at"].min().sort_values())
+    batches = (bronze.groupby("_batch_id", observed=True)["_ingested_at"].min().sort_values())
     raw_start = _blank_to_null(bronze[col["start_date"]])
     start = pd.to_datetime(raw_start, format="%Y%m%d", errors="coerce")
     active = bronze[col["active"]].str.strip().str.upper().map({"J": True, "N": False})
@@ -202,14 +216,20 @@ def build_kvk_company(bronze: pd.DataFrame, crosswalk: pd.DataFrame) -> pd.DataF
         "main_activity_codes": (_blank_to_null(bronze[col["main_activity"]])
                                 if "main_activity" in col else pd.NA),
     })
-    # SBI logic once per distinct value, then joined back
-    sbi = classify_main_activities(out["main_activity_codes"].dropna().unique(), crosswalk)
-    out = out.merge(sbi, on="main_activity_codes", how="left")
+    # SBI logic once per distinct value, then looked up per row. A lookup (map) per
+    # column instead of a merge: a merge would copy the whole 1.9M-row table at once.
+    codes = out["main_activity_codes"]
+    sbi = classify_main_activities(codes.dropna().unique(), crosswalk).set_index(
+        "main_activity_codes")
     # companies without any main activity aren't in `sbi` (nothing to classify)
-    none = out["main_activity_codes"].isna()
-    out.loc[none, ["main_activity_count", "has_multiple_main_activities", "has_no_main_activity",
-                   "is_kvk_subcode", "sbi_mapping", "sbi2008_candidates"]] = \
-        [0, False, True, False, "none", 0]
+    no_codes = {"main_activity_count": 0, "has_multiple_main_activities": False,
+                "has_no_main_activity": True, "is_kvk_subcode": False,
+                "sbi_mapping": "none", "sbi2008_candidates": 0}
+    for c in sbi.columns:
+        values = codes.map(sbi[c])
+        if c in no_codes:
+            values = values.where(codes.notna(), no_codes[c])
+        out[c] = values
     for c in ("main_activity_count", "sbi2008_candidates"):
         out[c] = out[c].astype("int64")
     for c in ("has_multiple_main_activities", "has_no_main_activity", "is_kvk_subcode"):

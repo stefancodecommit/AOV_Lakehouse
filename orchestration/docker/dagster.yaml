@@ -1,0 +1,27 @@
+# Dagster instance settings inside Docker (copied to DAGSTER_HOME=/opt/dagster_home).
+# Locally, orchestration/dagster.yaml is used instead (SQLite files in that folder).
+# Here the webserver and the daemon run in separate containers, so they share their
+# state through Postgres (the postgres service in docker-compose.yml).
+
+storage:
+  postgres:
+    postgres_db:
+      hostname: postgres
+      username:
+        env: POSTGRES_USER
+      password:
+        env: POSTGRES_PASSWORD
+      db_name:
+        env: POSTGRES_DB
+      port: 5432
+
+# Same rule as locally: at most one run that writes to the lakehouse at a time.
+concurrency:
+  runs:
+    tag_concurrency_limits:
+      - key: lakehouse
+        value: write
+        limit: 1
+
+telemetry:
+  enabled: false

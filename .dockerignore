@@ -1,0 +1,19 @@
+# Not in the image: data (mounted at runtime), local tooling and Dagster's local state.
+.git
+.venv
+venv
+lakehouse
+inbox
+dashboard/assets/*
+!dashboard/assets/README.md
+**/__pycache__
+.pytest_cache
+orchestration/history
+orchestration/storage
+orchestration/schedules
+orchestration/.logs_queue
+orchestration/.nux
+orchestration/.telemetry
+.tmp_dagster_home_*
+*.zip
+.env

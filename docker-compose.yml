@@ -1,0 +1,118 @@
+# The whole project in containers. From the project folder:
+#
+#   docker compose up -d                  Dagster (http://localhost:3000) + dashboard
+#                                         (http://localhost:8501); first time also builds
+#   docker compose --profile agent up -d  also Ollama, and pulls the model (~4.7 GB, once)
+#   docker compose run --rm kvk-agent     chat with the KVK intake agent (needs the profile)
+#   docker compose down                   stop everything (data and run history stay)
+#
+# The data stays in this project folder: lakehouse/ and inbox/ are mounted into the
+# containers, so local runs and Docker runs see the same lakehouse. Containers run as
+# HOST_UID:HOST_GID (default 1000:1000; see .env.example) so the files they write belong
+# to you. Ports are published on 127.0.0.1 only: reachable from this machine, not from
+# the network.
+
+x-app: &app                      # shared settings of the Python services
+  build: .
+  image: cbs-kvk-lakehouse:latest
+  user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+  environment: &app-env
+    POSTGRES_USER: ${POSTGRES_USER:-dagster}
+    POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dagster}
+    POSTGRES_DB: ${POSTGRES_DB:-dagster}
+  volumes:
+    - ./lakehouse:/app/lakehouse
+    - ./inbox:/app/inbox
+
+services:
+  postgres:                      # Dagster's run history (not the data itself)
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-dagster}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dagster}
+      POSTGRES_DB: ${POSTGRES_DB:-dagster}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-dagster} -d ${POSTGRES_DB:-dagster}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  dagster-webserver:             # the Dagster UI
+    <<: *app
+    command: ["dagster-webserver", "-h", "0.0.0.0", "-p", "3000",
+              "-w", "/app/orchestration/docker/workspace.yaml"]
+    volumes:
+      - ./lakehouse:/app/lakehouse
+      - ./inbox:/app/inbox
+      - dagster_home:/opt/dagster_home
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  dagster-daemon:                # schedules, automatic rebuilds; runs execute here
+    <<: *app
+    command: ["dagster-daemon", "run", "-w", "/app/orchestration/docker/workspace.yaml"]
+    volumes:
+      - ./lakehouse:/app/lakehouse
+      - ./inbox:/app/inbox
+      - dagster_home:/opt/dagster_home
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  dashboard:                     # Streamlit; reads the gold tables only
+    <<: *app
+    command: ["streamlit", "run", "dashboard/app.py", "--server.address", "0.0.0.0",
+              "--server.port", "8501", "--server.headless", "true",
+              "--browser.gatherUsageStats", "false"]
+    volumes:
+      - ./lakehouse:/app/lakehouse:ro
+      - ./dashboard/assets:/app/dashboard/assets:ro      # the logo (not in git)
+    ports:
+      - "127.0.0.1:8501:8501"
+    restart: unless-stopped
+
+  # --- optional: the KVK chat agent (docker compose --profile agent ...) -------------
+  ollama:                        # model server for the agent
+    image: ollama/ollama:latest
+    profiles: ["agent"]
+    volumes:
+      # by default a Docker volume (the model is downloaded once, ~4.7 GB); set
+      # OLLAMA_DIR=~/.ollama in .env to reuse models already downloaded on this machine
+      - ${OLLAMA_DIR:-ollama_models}:/root/.ollama
+    restart: unless-stopped
+
+  ollama-pull:                   # one-off: downloads the model on first start
+    image: ollama/ollama:latest
+    profiles: ["agent"]
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    entrypoint: ["ollama", "pull", "${OLLAMA_MODEL:-qwen2.5:7b}"]
+    depends_on:
+      - ollama
+    restart: "no"
+
+  kvk-agent:                     # docker compose run --rm kvk-agent
+    <<: *app
+    profiles: ["agent"]
+    command: ["python", "kvk_bronze_agent.py"]
+    environment:
+      <<: *app-env
+      LAKEHOUSE__OLLAMA__HOST: http://ollama:11434
+      LAKEHOUSE__OLLAMA__MODEL: ${OLLAMA_MODEL:-qwen2.5:7b}
+    stdin_open: true
+    tty: true
+    depends_on:
+      - ollama
+
+volumes:
+  postgres_data:                 # Dagster's run history
+  dagster_home:                  # Dagster's run logs, shared by webserver and daemon
+  ollama_models:                 # the downloaded model (only with the agent profile)

@@ -61,6 +61,17 @@ FINAL = "Definitief"
 SILVER_CBS_TABLES = ["dim_period", "dim_sector", "dim_company_size", "dim_survey_measure",
                      "fct_absence_rate", "fct_absence_survey", "fct_business_count"]
 
+# Tables gold reads only partly. kvk_company has 1.9M rows per snapshot; gold needs
+# seven columns of the latest snapshot only. Reading all of it doubled gold's memory
+# use, which made it run out of memory in Docker.
+PARTIAL_READS = {
+    "kvk_company": {
+        "columns": ["snapshot_date", "batch_id", "is_latest", "is_active", "start_date",
+                    "legal_form", "sbi2008_section", "run_id"],
+        "filters": [("is_latest", "=", True)],
+    },
+}
+
 log = logging.getLogger("gold")
 
 
@@ -84,7 +95,10 @@ def read_silver(names: list[str], inputs: dict | None = None,
                 continue
             raise RunFailed(f"silver table missing: {name} (run the silver pipelines first)")
         dt = DeltaTable(str(path))
-        df = dt.to_pandas()
+        if name in PARTIAL_READS:      # only the columns and rows gold uses (memory)
+            df = dt.to_pyarrow_table(**PARTIAL_READS[name]).to_pandas()
+        else:
+            df = dt.to_pandas()
         ids = sorted(df["run_id"].dropna().unique()) if "run_id" in df else []
         run_ids[name] = ids
         if inputs is not None:

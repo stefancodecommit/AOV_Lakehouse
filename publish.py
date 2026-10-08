@@ -27,12 +27,16 @@ class RunFailed(RuntimeError):
 
 
 def to_arrow(df: pd.DataFrame):
-    """DataFrame -> Arrow table with the types silver stores (strings, UTC timestamps)."""
+    """DataFrame -> Arrow table with the types silver stores (strings, UTC timestamps).
+    Categories (used to save memory) are stored as their plain values, so a table's
+    schema doesn't depend on how a DataFrame was built in memory."""
     import pyarrow as pa
     table = pa.Table.from_pandas(df, preserve_index=False)
     fields = []
     for f in table.schema:
         t = f.type
+        if pa.types.is_dictionary(t):
+            t = t.value_type         # pandas categories: store the plain values
         if pa.types.is_null(t) or pa.types.is_large_string(t):
             t = pa.string()          # all-null columns get a real type
         elif pa.types.is_timestamp(t):
