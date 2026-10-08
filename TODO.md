@@ -12,8 +12,7 @@ silver (CBS, KVK), gold (5 tables), the Streamlit dashboard, Dagster orchestrati
 Docker Compose, config, run log, 286 tests.
 All committed.
 
-**Next step: 7. Tests and CI** (the remaining items), and trying the KVK chat agent in
-Docker once Docker Desktop has more memory (section 6). Sections 4-6 are built; see the
+**Next step: 7. Tests and CI** (the remaining items). Sections 4-6 are built; see the
 README for how to start everything (locally or with `docker compose up -d`). Open
 question for the *local* dashboard: limit it to this machine (see section 4; in Docker
 it already is).
@@ -412,9 +411,15 @@ Run: `docker compose up -d` (Dagster http://localhost:3000, dashboard :8501)
     for lack of memory. Silver KVK now reads only the columns it needs and keeps
     repeated text as categories (1.3 GB); gold reads only the latest KVK snapshot's
     columns (1.1 GB). Output checked identical; silver KVK rows now in a fixed order
-- [ ] Raise Docker Desktop's memory (Settings → Resources → Memory, e.g. 8 GB), then try
-      the KVK chat agent in Docker (`docker compose --profile agent up -d`,
-      `docker compose run --rm kvk-agent`); not tested yet
+- [x] Docker Desktop's memory raised to 8 GB (2026-10-08; `MemoryMiB` in
+      ~/.docker/desktop/settings-store.json, a backup of the old file next to it)
+- [x] KVK chat agent tried in Docker (2026-10-08): Ollama in Docker with the model copied
+      from ~/.ollama (no download), `docker compose --profile agent run --rm kvk-agent`;
+      it read the inbox and lakehouse through the mounts and answered correctly
+- Fixed while trying it: `up` also started the interactive kvk-agent in the background
+  (now its own profile, started only with `run`); mounting ~/.ollama was dropped as an
+  option (Ollama runs as root and could leave root-owned files in the home folder) in
+  favour of copying the model into the Docker volume
 
 ## Known issues
 - [ ] deltalake aborts at interpreter exit ("terminate called without an active

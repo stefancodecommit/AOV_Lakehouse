@@ -3,7 +3,8 @@
 #   docker compose up -d                  Dagster (http://localhost:3000) + dashboard
 #                                         (http://localhost:8501); first time also builds
 #   docker compose --profile agent up -d  also Ollama, and pulls the model (~4.7 GB, once)
-#   docker compose run --rm kvk-agent     chat with the KVK intake agent (needs the profile)
+#   docker compose --profile agent run --rm kvk-agent
+#                                         chat with the KVK intake agent
 #   docker compose down                   stop everything (data and run history stay)
 #
 # The data stays in this project folder: lakehouse/ and inbox/ are mounted into the
@@ -84,9 +85,11 @@ services:
     image: ollama/ollama:latest
     profiles: ["agent"]
     volumes:
-      # by default a Docker volume (the model is downloaded once, ~4.7 GB); set
-      # OLLAMA_DIR=~/.ollama in .env to reuse models already downloaded on this machine
-      - ${OLLAMA_DIR:-ollama_models}:/root/.ollama
+      # a Docker volume: the model is downloaded once (~4.7 GB). To reuse a model already
+      # on this machine instead, copy it in (see README, "Running everything in Docker");
+      # not mounting ~/.ollama directly, because Ollama runs as root and would leave
+      # root-owned files in your home folder
+      - ollama_models:/root/.ollama
     restart: unless-stopped
 
   ollama-pull:                   # one-off: downloads the model on first start
@@ -99,9 +102,11 @@ services:
       - ollama
     restart: "no"
 
-  kvk-agent:                     # docker compose run --rm kvk-agent
+  kvk-agent:                     # docker compose --profile agent run --rm kvk-agent
     <<: *app
-    profiles: ["agent"]
+    # its own profile, so `up` never starts it: it's an interactive chat, started on
+    # demand with `run` (which enables it); --profile agent makes Ollama available
+    profiles: ["kvk-agent"]
     command: ["python", "kvk_bronze_agent.py"]
     environment:
       <<: *app-env

@@ -207,7 +207,7 @@ docker compose down                        # stop (data and run history stay)
 | `dagster-daemon` | schedules, automatic rebuilds; the pipeline runs execute here |
 | `postgres` | Dagster's run history (not the data) |
 | `dashboard` | the Streamlit dashboard |
-| `ollama`, `kvk-agent` | optional, profile `agent`: the KVK chat agent and its model server |
+| `ollama`, `kvk-agent` | optional: the model server (profile `agent`) and the KVK chat agent (started on demand) |
 
 - **The data stays in this project folder.** `lakehouse/` and `inbox/` are mounted into
   the containers, so Docker and local runs work on the same lakehouse. Containers run as
@@ -218,10 +218,17 @@ docker compose down                        # stop (data and run history stay)
 - **Record the code version** in the run log: `docker compose build --build-arg
   CODE_VERSION=$(git rev-parse --short HEAD)` (the image has no git).
 - **KVK chat agent** (optional; needs ~5 GB more memory for the model):
-  `docker compose --profile agent up -d` starts Ollama and downloads the model once
-  (~4.7 GB; or set `OLLAMA_DIR=~/.ollama` in `.env` to reuse models already on this
-  machine), then `docker compose run --rm kvk-agent`. Without it, load KVK files from
-  the Dagster UI (`kvk_bronze`).
+
+  ```bash
+  docker compose --profile agent up -d              # Ollama; downloads the model once (~4.7 GB)
+  docker compose --profile agent run --rm kvk-agent # the chat; type exit to stop
+  ```
+
+  To reuse a model already on this machine instead of downloading it, copy it into
+  Docker's volume once (this only reads your `~/.ollama`):
+  `docker compose --profile agent run --rm --no-deps --entrypoint sh -v ~/.ollama/models:/src:ro ollama -c "mkdir -p /root/.ollama/models && cp -a /src/. /root/.ollama/models/"`.
+  The Ollama image is large (~9 GB, it includes GPU libraries). Without the agent, load
+  KVK files from the Dagster UI (`kvk_bronze`).
 
 **Minimum machine** (measured): Docker needs about **3 GB of memory** for the pipeline
 (the services use ~0.7 GB idle; the largest steps, silver KVK and gold, peak at ~1.3 and
@@ -416,9 +423,8 @@ at the real `lakehouse/`. GitHub Actions runs the tests on every push
 ## Status and known limitations
 
 Built and run on real data: bronze, silver and gold, with checks, quarantine and the run
-log, the Streamlit dashboard, Dagster orchestration, and Docker Compose. The KVK chat
-agent in Docker is set up but not yet tried (it needs more Docker memory); see
-[`TODO.md`](TODO.md) for what's open.
+log, the Streamlit dashboard, Dagster orchestration, and Docker Compose (including the
+KVK chat agent). See [`TODO.md`](TODO.md) for what's open.
 
 Limitations worth knowing when reading the results:
 
@@ -426,8 +432,8 @@ Limitations worth knowing when reading the results:
   never per combination, so "small construction companies" can't be shown.
 - **KVK has no company number** in the open dataset: companies can't be followed between
   snapshots, only counted.
-- **Docker memory:** with Docker Desktop's default memory (here 3.67 GB) the pipeline
-  fits, but not the KVK chat agent's model; see the Docker section.
+- **Docker memory:** with Docker Desktop's default memory (3.67 GB on this machine) the
+  pipeline fits, but not the KVK chat agent's model; this machine now gives Docker 8 GB.
 - **KVK sector for 10% of active companies is not determined**, because their codes can't
   be translated to SBI 2008 unambiguously; they are marked, not guessed.
 - **Provisional figures** (the latest CBS periods) can still change.
