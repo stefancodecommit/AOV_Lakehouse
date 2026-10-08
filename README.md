@@ -16,7 +16,8 @@ as [Delta Lake](https://delta.io) tables in the folder `lakehouse/`.
 | [`PROJECT.md`](PROJECT.md) | The design: sub-questions, data sources, and *why* each choice was made |
 | [`TODO.md`](TODO.md) | Open work, decisions taken, and results of each real run |
 | [`docs/bronze_to_silver.md`](docs/bronze_to_silver.md) | How bronze becomes silver, table by table, with real examples |
-| [`docs/lineage.md`](docs/lineage.md) | Column lineage: for every silver column, the bronze field(s) it comes from (generated from `lineage.py`) |
+| [`docs/lineage.md`](docs/lineage.md) | Column lineage: for every silver column, the bronze field(s) it comes from, as diagrams and tables (generated from `lineage.py`) |
+| [`docs/lineage.html`](docs/lineage.html) | The same lineage diagrams on one page, to open in a browser |
 
 ## Contents
 
@@ -356,7 +357,7 @@ instance settings (one writing run at a time).
 | `checks/quarantine.py` | Saves failed batches with a report; monthly cleanup |
 | `publish.py` | Silver and gold: write all tables to a staging folder first, replace the live tables only when all succeeded |
 | `runlog.py` | One row per silver/gold run in `lakehouse/_run_log`: when, what, status, which inputs |
-| `lineage.py` | Column lineage bronze → silver: the source of `docs/lineage.md` and of the lineage in Dagster; a test keeps it complete |
+| `lineage.py` | Column lineage bronze → silver: the source of `docs/lineage.md`, `docs/lineage.html` (diagrams) and the lineage in Dagster; a test keeps it complete |
 | `inspect_lakehouse.py` | One-screen overview: rows, periods, freshness per table; warnings; problems (exit code 1) |
 | `maintenance.py` | Monthly maintenance: quarantine cleanup, KVK retention, Delta optimize/vacuum |
 
@@ -408,7 +409,7 @@ A misspelled setting name stops the script with an error instead of being ignore
 ## Tests
 
 ```bash
-.venv/bin/pytest              # 308 tests, ~70 s, no internet needed
+.venv/bin/pytest              # 321 tests, ~65 s, no internet needed
 .venv/bin/pytest -m live      # one extra test against the real CBS API
 ```
 

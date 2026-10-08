@@ -97,9 +97,24 @@ def test_silver_to_silver_steps_are_followed_back_to_bronze():
 
 
 # =========================================================================== outputs
-def test_docs_lineage_md_is_up_to_date():
+def test_docs_lineage_md_and_html_are_up_to_date():
     """Regenerate with: python lineage.py"""
     assert (ROOT / "docs" / "lineage.md").read_text(encoding="utf-8") == L.markdown()
+    assert (ROOT / "docs" / "lineage.html").read_text(encoding="utf-8") == L.html()
+
+
+@pytest.mark.parametrize("table", sorted(L.SILVER_LINEAGE))
+def test_every_column_is_drawn_with_an_arrow(table):
+    diagram = L.mermaid_table(table)
+    for column in L.SILVER_LINEAGE[table]:
+        assert f"--> {L._id('col', column)}" in diagram, column
+    assert "‹br" not in diagram                     # line breaks not escaped by mistake
+
+
+def test_overview_links_every_silver_table():
+    diagram = L.mermaid_overview()
+    for table in L.SILVER_LINEAGE:
+        assert f"--> {L._id('silver', table)}" in diagram, table
 
 
 def test_dagster_shows_the_lineage():

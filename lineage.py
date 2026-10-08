@@ -3,7 +3,8 @@ Column lineage, bronze -> silver: for every silver column, the bronze table(s) a
 field(s) it comes from, and what happens to it on the way.
 
 This file is the single source of truth. From it:
-- `python lineage.py` writes docs/lineage.md (a readable table per silver table)
+- `python lineage.py` writes docs/lineage.md (a diagram and a table per silver table) and
+  docs/lineage.html (all diagrams on one page, for a browser)
 - orchestration/definitions.py shows the same lineage in the Dagster UI: in the free
   (open-source) Dagster, as the column list of the silver_cbs and silver_kvk assets,
   each description starting with "From <bronze field>"; the lineage is also stored in
@@ -343,6 +344,154 @@ def bronze_sources(table: str, column: str, _seen=None) -> set[Source]:
     return out
 
 
+# --------------------------------------------------------------------------- diagrams
+# Mermaid flowcharts (text that GitHub and the HTML page draw as diagrams). Where several
+# bronze tables feed a column through the same field (e.g. the five code lists' Title),
+# they are drawn as one box, named after the group, so the diagrams stay readable.
+GROUPS = {
+    frozenset(CODE_LISTS): "5 code lists of sectors and size classes",
+    frozenset(TYPED.values()): "the 5 data tables (TypedDataSet)",
+    frozenset(SURVEY): "survey data: 86009NED + 83130NED",
+    frozenset(SURVEY_PROPS): "survey DataProperties: 86009NED + 83130NED",
+    frozenset(COUNT_PROPS): "DataProperties of 81589NED + 81644NED",
+    frozenset(CATEGORY_GROUPS): "3 category-group lists",
+}
+
+
+def _source_label(table: str) -> str:
+    """Which source a bronze table belongs to, for the overview's groups."""
+    if table.startswith("kvk/"):
+        return "KVK file"
+    if table.startswith("reference/"):
+        return "CBS SBI crosswalk (xlsx)"
+    return f"CBS {table.split('_')[0].upper()}"
+
+
+def _text(s: str) -> str:
+    """Text that is safe inside a quoted Mermaid label."""
+    return (s.replace('"', "'").replace("<measure>", "(each measure)")
+            .replace("<", "‹").replace(">", "›"))
+
+
+def _id(*parts: str) -> str:
+    return "n_" + "".join(ch if ch.isalnum() else "_" for ch in "_".join(parts))
+
+
+def mermaid_overview() -> str:
+    """Sources -> silver tables: one box per source (CBS table, KVK file, crosswalk),
+    listing the bronze tables of that source it uses. The per-table diagrams show the
+    fields; here only which source feeds which silver table."""
+    edges, bronze = set(), {}
+    for table, columns in SILVER_LINEAGE.items():
+        for c in columns.values():
+            for s in c.sources:
+                if s.is_silver:
+                    edges.add((_id("silver", s.table.removeprefix("silver:")), _id("silver", table)))
+                else:
+                    label = _source_label(s.table)
+                    bronze.setdefault(label, set()).add(s.table)
+                    edges.add((_id("source", label), _id("silver", table)))
+    lines = ["flowchart LR", '  subgraph bronze_layer["bronze"]']
+    for label, tables in sorted(bronze.items()):
+        listed = "<br/>".join(_text(t) for t in sorted(tables))
+        lines.append(f'    {_id("source", label)}["<b>{_text(label)}</b><br/>{listed}"]:::bronze')
+    lines.append("  end")
+    lines.append('  subgraph silver_layer["silver"]')
+    lines += [f'    {_id("silver", t)}["{t}"]:::silver' for t in SILVER_LINEAGE]
+    lines.append("  end")
+    lines += [f"  {a} --> {b}" for a, b in sorted(edges)]
+    return "\n".join(lines + _CLASSES)
+
+
+def mermaid_table(table: str) -> str:
+    """One silver table: the bronze fields (and other silver columns) each column comes
+    from. Sources that differ only in their bronze table are grouped into one box."""
+    lines = ["flowchart LR"]
+    nodes, edges = {}, []
+    for column, c in SILVER_LINEAGE[table].items():
+        by_field: dict[tuple[bool, str], set[str]] = {}
+        for s in c.sources:
+            by_field.setdefault((s.is_silver, s.field), set()).add(s.table)
+        for (is_silver, fld), tables in by_field.items():
+            if is_silver:
+                (other,) = tables
+                label, cls = f"{_text(other.removeprefix('silver:'))}<br/>{_text(fld)}", "silverref"
+            else:
+                group = GROUPS.get(frozenset(tables))
+                name = group if group and len(tables) > 1 else ", ".join(sorted(tables))
+                label, cls = f"{_text(name)}<br/>{_text(fld)}", "bronze"
+            node = _id("src", *sorted(tables), fld)
+            nodes[node] = f'  {node}["{label}"]:::{cls}'
+            edges.append(f"  {node} --> {_id('col', column)}")
+        if not c.sources:
+            nodes["run"] = '  run(["the silver run (publish.py)"]):::run'
+            edges.append(f"  run --> {_id('col', column)}")
+    lines += sorted(nodes.values())
+    lines.append(f'  subgraph {_id("tbl", table)}["silver: {table}"]')
+    lines += [f'    {_id("col", col)}["{col}"]:::silver' for col in SILVER_LINEAGE[table]]
+    lines.append("  end")
+    return "\n".join(lines + edges + _CLASSES)
+
+
+_CLASSES = [
+    "  classDef bronze fill:#f3e3c9,stroke:#a8743a,color:#1d1d1d",
+    "  classDef silver fill:#e4e7ec,stroke:#6b7480,color:#1d1d1d",
+    "  classDef silverref fill:#f2f3f5,stroke:#9aa1ab,stroke-dasharray:4 3,color:#1d1d1d",
+    "  classDef run fill:#ffffff,stroke:#9aa1ab,color:#52514e",
+]
+
+
+def html() -> str:
+    """docs/lineage.html: all diagrams on one page (opens in any browser; loads the
+    Mermaid library from the internet to draw them)."""
+    sections = [("Overview: bronze tables → silver tables", mermaid_overview())]
+    sections += [(f"silver: {t}", mermaid_table(t)) for t in SILVER_LINEAGE]
+    body = "\n".join(
+        f'<section id="{_id("s", title)}"><h2>{title}</h2>'
+        f'<pre class="mermaid">\n{diagram}\n</pre></section>' for title, diagram in sections)
+    toc = "\n".join(f'<li><a href="#{_id("s", title)}">{title}</a></li>' for title, _ in sections)
+    return f"""<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Column lineage</title>
+<style>
+  :root {{ --bg: #fcfcfb; --ink: #0b0b0b; --muted: #52514e; --line: #e1e0d9; }}
+  body {{ margin: 0; padding: 24px 16px 64px; background: var(--bg); color: var(--ink);
+         font-family: system-ui, -apple-system, "Segoe UI", sans-serif; line-height: 1.5; }}
+  main {{ max-width: 1200px; margin: 0 auto; }}
+  h1 {{ font-size: 1.6rem; margin: 0 0 4px; }}
+  h2 {{ font-size: 1.15rem; margin: 40px 0 8px; padding-top: 16px; border-top: 1px solid var(--line); }}
+  p, li {{ color: var(--muted); }}
+  .mermaid {{ background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 12px;
+              overflow-x: auto; }}
+  .legend span {{ display: inline-block; padding: 2px 8px; margin-right: 8px; border-radius: 4px;
+                  border: 1px solid; font-size: .85rem; color: var(--ink); }}
+</style>
+</head>
+<body>
+<main>
+<h1>Column lineage: bronze → silver</h1>
+<p>Where every silver column comes from in bronze. Generated from <code>lineage.py</code>
+by <code>python lineage.py</code>; the same lineage as a table:
+<a href="lineage.md">lineage.md</a>; explained with examples:
+<a href="bronze_to_silver.md">bronze_to_silver.md</a>.</p>
+<p class="legend"><span style="background:#f3e3c9;border-color:#a8743a">bronze field</span>
+<span style="background:#e4e7ec;border-color:#6b7480">silver column</span>
+<span style="background:#f2f3f5;border-color:#9aa1ab;border-style:dashed">column of another silver table</span></p>
+<ul>
+{toc}
+</ul>
+{body}
+</main>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({{ startOnLoad: true, theme: "neutral", flowchart: {{ useMaxWidth: false }} }});</script>
+</body>
+</html>
+"""
+
+
 # --------------------------------------------------------------------------- the document
 def markdown() -> str:
     """docs/lineage.md: one table per silver table."""
@@ -371,6 +520,15 @@ def markdown() -> str:
         "| `silver:map_characteristic.member_type` | another silver table (its own lineage "
         "is listed below) |",
         "",
+        "Diagrams of the same lineage: below in this file (drawn by GitHub), or all on one page "
+        "in [lineage.html](lineage.html) (open it in a browser).",
+        "",
+        "## Overview: bronze tables → silver tables",
+        "",
+        "```mermaid",
+        mermaid_overview(),
+        "```",
+        "",
         "## Contents",
         "",
     ]
@@ -379,6 +537,7 @@ def markdown() -> str:
     for table, columns in SILVER_LINEAGE.items():
         script = "kvk_silver.py" if table in SILVER_KVK_TABLES else "cbs_silver.py"
         lines += ["", f"## {table}", "", f"Built by `{script}`.", "",
+                  "```mermaid", mermaid_table(table), "```", "",
                   "| Column | Comes from | How |", "|---|---|---|"]
         for column, c in columns.items():
             from_ = "<br>".join(f"`{s}`" for s in c.sources) or "*(the run)*"
@@ -427,7 +586,8 @@ def dagster_lineage(asset_tables: set[str]) -> dict:
 
 if __name__ == "__main__":
     from pathlib import Path
-    path = Path(__file__).resolve().parent / "docs" / "lineage.md"
-    path.write_text(markdown(), encoding="utf-8")
-    print(f"Wrote {path} ({sum(len(c) for c in SILVER_LINEAGE.values())} columns, "
-          f"{len(SILVER_LINEAGE)} tables)")
+    docs = Path(__file__).resolve().parent / "docs"
+    (docs / "lineage.md").write_text(markdown(), encoding="utf-8")
+    (docs / "lineage.html").write_text(html(), encoding="utf-8")
+    print(f"Wrote {docs / 'lineage.md'} and lineage.html "
+          f"({sum(len(c) for c in SILVER_LINEAGE.values())} columns, {len(SILVER_LINEAGE)} tables)")
