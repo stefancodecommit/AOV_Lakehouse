@@ -398,7 +398,7 @@ tools/                   run by hand (some also scheduled by Dagster); python -m
   inspect_lakehouse.py   overview of all Delta tables and problems after a run
   lakehouse_viewer.py    browse any Delta table, with data quality statistics
   maintenance.py         monthly tasks: quarantine cleanup, KVK retention, optimize/vacuum
-  lineage.py             column lineage bronze -> silver (docs/lineage.*, Dagster UI);
+  lineage.py             column lineage bronze -> silver -> gold (docs/lineage.*, Dagster UI);
                          lineage_explorer_template.html is the explorer's page layout
 dashboard/               Streamlit app: app.py, views/ (pages), charts.py, data.py
 orchestration/           Dagster definitions (assets, checks, schedules, maintenance job) and dagster.yaml
@@ -430,7 +430,7 @@ TODO.md                  open work
 | Data checks before ingestion (CBS) | Built (`checks/cbs.py`) |
 | Quarantine | Built for CBS, KVK and reference files; monthly cleanup in `tools/maintenance.py` |
 | Alerting, freshness checks | To do |
-| pytest | 335 tests incl. real Delta tables, the dashboard pages and Dagster; one opt-in live CBS test |
+| pytest | 348 tests incl. real Delta tables, the dashboard pages and Dagster; one opt-in live CBS test |
 | Configuration file | Built (`config.yaml` + `pipeline/common/config.py`) |
 | Gold | Built: 5 tables; provisional figures marked |
 | Streamlit dashboard | Built: 6 pages incl. data dictionary; provisional marked, "final only" switch |

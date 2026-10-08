@@ -12,6 +12,7 @@
     --page: #f9f9f7; --surface: #fcfcfb; --ink: #0b0b0b; --ink2: #52514e; --muted: #898781;
     --line: #e1e0d9; --edge: #b9b7af; --edge-hot: #52514e;
     --bronze-bg: #f3e3c9; --bronze-bd: #a8743a; --silver-bg: #e4e7ec; --silver-bd: #6b7480;
+    --gold-bg: #f6ecb8; --gold-bd: #9c7f12;
     --accent: #2a78d6; --accent-bg: #dbe8f8; --run-bd: #9aa1ab;
   }
   @media (prefers-color-scheme: dark) {
@@ -20,6 +21,7 @@
       --page: #0d0d0d; --surface: #1a1a19; --ink: #ffffff; --ink2: #c3c2b7; --muted: #898781;
       --line: #2c2c2a; --edge: #4a4a46; --edge-hot: #c3c2b7;
       --bronze-bg: #3a2c19; --bronze-bd: #b9874d; --silver-bg: #262a30; --silver-bd: #8a93a0;
+      --gold-bg: #3a3313; --gold-bd: #c9a92e;
       --accent: #3987e5; --accent-bg: #1c2c42; --run-bd: #6b7480;
     }
   }
@@ -62,6 +64,7 @@
   .node .t2 { fill: var(--ink); font-size: 12.5px; font-weight: 600; }
   .bronze rect { fill: var(--bronze-bg); stroke: var(--bronze-bd); }
   .silver rect { fill: var(--silver-bg); stroke: var(--silver-bd); }
+  .gold rect { fill: var(--gold-bg); stroke: var(--gold-bd); }
   .run rect { fill: var(--surface); stroke: var(--run-bd); stroke-dasharray: 4 3; }
   .selected rect { stroke: var(--accent); stroke-width: 3; }
   .edge { fill: none; stroke: var(--edge); stroke-width: 1.5; }
@@ -76,9 +79,9 @@
 </head>
 <body>
 <header>
-  <h1>Lineage explorer: bronze → silver</h1>
-  <p>Pick a silver column to see everything it comes from, back to the bronze fields; or pick
-  a bronze field to see everything that depends on it. Click a box to follow the path.
+  <h1>Lineage explorer: bronze → silver → gold</h1>
+  <p>Pick a gold or silver column to see everything it comes from, back to the bronze fields;
+  or pick a bronze field to see every silver and gold column that depends on it. Click a box to follow the path.
   Generated from <code>tools/lineage.py</code>; the same lineage as tables and static diagrams:
   <a href="lineage.md">lineage.md</a>, <a href="lineage.html">lineage.html</a>.</p>
 </header>
@@ -92,6 +95,7 @@
     <div class="legend">
       <span style="background:var(--bronze-bg);border-color:var(--bronze-bd)">bronze field</span>
       <span style="background:var(--silver-bg);border-color:var(--silver-bd)">silver column</span>
+      <span style="background:var(--gold-bg);border-color:var(--gold-bd)">gold column</span>
       <span style="border-color:var(--accent);border-width:2px">selected</span>
       <span class="note">Left: where it comes from. Right: what depends on it.</span>
     </div>
@@ -112,7 +116,7 @@ function buildList(filter) {
   const list = document.getElementById("list");
   list.innerHTML = "";
   const f = filter.trim().toLowerCase();
-  for (const layer of ["silver", "bronze"]) {
+  for (const layer of ["gold", "silver", "bronze"]) {
     const tables = {};
     for (const n of DATA.nodes) {
       if (n.layer !== layer) continue;
@@ -123,7 +127,7 @@ function buildList(filter) {
     if (!names.length) continue;
     const label = document.createElement("div");
     label.className = "group-label";
-    label.textContent = layer === "silver" ? "Silver tables" : "Bronze tables";
+    label.textContent = {gold: "Gold tables", silver: "Silver tables", bronze: "Bronze tables"}[layer];
     list.appendChild(label);
     for (const t of names) {
       const d = document.createElement("details");
@@ -184,7 +188,9 @@ function draw(sel) {
   const fit = (s, n) => s.length > n ? s.slice(0, n - 1) + "…" : s;
   let out = "";
   for (let c = 0; c <= maxRank; c++) {
-    const label = c === 0 ? "bronze" : (c === rank[sel] ? "" : "silver");
+    // a column's heading: its layer, when all its boxes are of one layer (runs don't count)
+    const layers = new Set((cols[c] || []).map(id => byId[id].layer).filter(l => l !== "run"));
+    const label = layers.size === 1 ? [...layers][0] : "";
     if (label) out += `<text class="colhead" x="${PAD + c * (W + GX)}" y="20">${label}</text>`;
   }
   for (const [a, b] of DATA.edges) {
@@ -218,18 +224,27 @@ function select(id) {
   current = id;
   const n = byId[id];
   const { up, down } = draw(id);
-  const bronzeUp = [...up].filter(x => byId[x].layer === "bronze").length;
-  const silverDown = [...down].filter(x => byId[x].layer === "silver").length;
+  const count = (set, layer) => [...set].filter(x => byId[x].layer === layer).length;
+  const many = (k, word) => `${k} ${word}${k === 1 ? "" : "s"}`;
+  const bronzeUp = count(up, "bronze"), silverUp = count(up, "silver");
+  const silverDown = count(down, "silver"), goldDown = count(down, "gold");
   const info = document.getElementById("info");
-  const kind = n.layer === "bronze" ? "bronze field" : (n.layer === "run" ? "added by the run" : "silver column");
+  const kind = {bronze: "bronze field", silver: "silver column", gold: "gold column",
+                run: "added by the run"}[n.layer];
+  const dependents = [silverDown && many(silverDown, "silver column"),
+                      goldDown && many(goldDown, "gold column")].filter(Boolean);
   let summary;
   if (n.layer === "bronze") {
-    summary = `${silverDown} silver column${silverDown === 1 ? "" : "s"} depend${silverDown === 1 ? "s" : ""} on this field.`;
+    summary = dependents.length ? `${dependents.join(" and ")} depend on this field.`
+                                : "Nothing depends on this field.";
   } else if (n.layer === "run") {
-    summary = "Every silver table gets the run_id of the run that published it.";
+    summary = n.name.endsWith("build.py") ? "A value gold sets itself, not taken from silver."
+                                          : "Every table gets the run_id of the run that published it.";
+  } else if (n.layer === "gold") {
+    summary = `Made from ${many(silverUp, "silver column")}, which come${silverUp === 1 ? "s" : ""} from ${many(bronzeUp, "bronze field")}.`;
   } else {
-    summary = `Comes from ${bronzeUp} bronze field${bronzeUp === 1 ? "" : "s"}` +
-      (silverDown ? `; ${silverDown} other silver column${silverDown === 1 ? "" : "s"} depend${silverDown === 1 ? "s" : ""} on it.` : ".");
+    summary = `Comes from ${many(bronzeUp, "bronze field")}` +
+      (dependents.length ? `; ${dependents.join(" and ")} depend on it.` : ".");
   }
   info.innerHTML = `<div class="kind">${kind}</div><h2></h2>` +
     (n.how ? '<p class="how"></p>' : "") + `<p class="summary">${summary}</p>`;

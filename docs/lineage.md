@@ -1,8 +1,8 @@
-# Column lineage: bronze → silver
+# Column lineage: bronze → silver → gold
 
-Where every silver column comes from in bronze, and what happens to it on the way.
+Where every silver column comes from in bronze, where every gold column comes from in silver, and what happens to it on the way. To follow a gold column all the way back to the bronze fields, use the [lineage explorer](lineage_explorer.html).
 
-> Generated from `tools/lineage.py` by `python -m tools.lineage`; don't edit by hand. `tests/test_lineage.py` fails when a silver column is missing here or a named bronze field doesn't exist. The same lineage is visible in the Dagster UI: assets `silver_cbs` and `silver_kvk`, the *Columns* list on their overview page (each description starts with *From …*). For the steps explained with real examples, see [bronze_to_silver.md](bronze_to_silver.md).
+> Generated from `tools/lineage.py` by `python -m tools.lineage`; don't edit by hand. `tests/test_lineage.py` fails when a silver or gold column is missing here or a named bronze field or silver column doesn't exist. The same lineage is visible in the Dagster UI: assets `silver_cbs` and `silver_kvk`, the *Columns* list on their overview page (each description starts with *From …*). For the steps explained with real examples, see [bronze_to_silver.md](bronze_to_silver.md).
 
 How to read a source:
 
@@ -12,11 +12,11 @@ How to read a source:
 | `80072ned_typeddataset._period_status` | a column bronze added when loading |
 | `86009ned_typeddataset.<measure>` | every measure field of the record (silver has one row per measure) |
 | `kvk/basis_bedrijfsgegevens.Actief` | a column of the KVK file |
-| `silver:map_characteristic.member_type` | another silver table (its own lineage is listed below) |
+| `silver:map_characteristic.member_type` | a silver column (its own lineage is listed below) |
 
 Diagrams of the same lineage: below in this file (drawn by GitHub), or all on one page in [lineage.html](lineage.html) (open it in a browser). Interactive, to follow one column or field through all steps: [lineage_explorer.html](lineage_explorer.html).
 
-## Overview: bronze tables → silver tables
+## Overview: bronze → silver → gold
 
 ```mermaid
 flowchart LR
@@ -43,7 +43,32 @@ flowchart LR
     n_silver_fct_establishment_count["fct_establishment_count"]:::silver
     n_silver_kvk_company["kvk_company"]:::silver
   end
+  subgraph gold_layer["gold"]
+    n_gold_gold_absence_by_sector["gold_absence_by_sector"]:::gold
+    n_gold_gold_absence_by_size["gold_absence_by_size"]:::gold
+    n_gold_gold_absence_profile["gold_absence_profile"]:::gold
+    n_gold_gold_business_context["gold_business_context"]:::gold
+    n_gold_gold_kvk_context["gold_kvk_context"]:::gold
+  end
+  n_silver_dim_company_size --> n_gold_gold_absence_by_size
+  n_silver_dim_company_size --> n_gold_gold_absence_profile
+  n_silver_dim_period --> n_gold_gold_absence_by_sector
+  n_silver_dim_period --> n_gold_gold_absence_by_size
+  n_silver_dim_period --> n_gold_gold_absence_profile
+  n_silver_dim_period --> n_gold_gold_business_context
+  n_silver_dim_sector --> n_gold_gold_absence_by_sector
+  n_silver_dim_sector --> n_gold_gold_absence_profile
+  n_silver_dim_sector --> n_gold_gold_business_context
+  n_silver_dim_sector --> n_gold_gold_kvk_context
+  n_silver_dim_survey_measure --> n_gold_gold_absence_by_size
+  n_silver_dim_survey_measure --> n_gold_gold_absence_profile
   n_silver_dim_survey_measure --> n_silver_fct_absence_survey
+  n_silver_fct_absence_rate --> n_gold_gold_absence_by_sector
+  n_silver_fct_absence_rate --> n_gold_gold_absence_by_size
+  n_silver_fct_absence_survey --> n_gold_gold_absence_by_size
+  n_silver_fct_absence_survey --> n_gold_gold_absence_profile
+  n_silver_fct_business_count --> n_gold_gold_business_context
+  n_silver_kvk_company --> n_gold_gold_kvk_context
   n_silver_map_characteristic --> n_silver_dim_sector
   n_silver_map_characteristic --> n_silver_fct_absence_rate
   n_silver_map_characteristic --> n_silver_fct_absence_survey
@@ -82,28 +107,20 @@ flowchart LR
   n_source_KVK_file --> n_silver_kvk_company
   classDef bronze fill:#f3e3c9,stroke:#a8743a,color:#1d1d1d
   classDef silver fill:#e4e7ec,stroke:#6b7480,color:#1d1d1d
+  classDef gold fill:#f6ecb8,stroke:#9c7f12,color:#1d1d1d
   classDef silverref fill:#f2f3f5,stroke:#9aa1ab,stroke-dasharray:4 3,color:#1d1d1d
   classDef run fill:#ffffff,stroke:#9aa1ab,color:#52514e
 ```
 
 ## Contents
 
-- [`map_characteristic`](#map_characteristic)
-- [`dim_sector`](#dim_sector)
-- [`dim_company_size`](#dim_company_size)
-- [`dim_period`](#dim_period)
-- [`dim_region`](#dim_region)
-- [`dim_survey_measure`](#dim_survey_measure)
-- [`map_sbi2008_sbi2025`](#map_sbi2008_sbi2025)
-- [`fct_absence_rate`](#fct_absence_rate)
-- [`fct_absence_survey`](#fct_absence_survey)
-- [`fct_business_count`](#fct_business_count)
-- [`fct_establishment_count`](#fct_establishment_count)
-- [`kvk_company`](#kvk_company)
+Silver: [`map_characteristic`](#map_characteristic), [`dim_sector`](#dim_sector), [`dim_company_size`](#dim_company_size), [`dim_period`](#dim_period), [`dim_region`](#dim_region), [`dim_survey_measure`](#dim_survey_measure), [`map_sbi2008_sbi2025`](#map_sbi2008_sbi2025), [`fct_absence_rate`](#fct_absence_rate), [`fct_absence_survey`](#fct_absence_survey), [`fct_business_count`](#fct_business_count), [`fct_establishment_count`](#fct_establishment_count), [`kvk_company`](#kvk_company)
+
+Gold: [`gold_absence_by_sector`](#gold_absence_by_sector), [`gold_absence_by_size`](#gold_absence_by_size), [`gold_absence_profile`](#gold_absence_profile), [`gold_business_context`](#gold_business_context), [`gold_kvk_context`](#gold_kvk_context)
 
 ## map_characteristic
 
-Built by `pipeline/silver/cbs.py`.
+A silver table, built by `pipeline/silver/cbs.py`.
 
 ```mermaid
 flowchart LR
@@ -142,6 +159,7 @@ flowchart LR
   run --> n_col_run_id
   classDef bronze fill:#f3e3c9,stroke:#a8743a,color:#1d1d1d
   classDef silver fill:#e4e7ec,stroke:#6b7480,color:#1d1d1d
+  classDef gold fill:#f6ecb8,stroke:#9c7f12,color:#1d1d1d
   classDef silverref fill:#f2f3f5,stroke:#9aa1ab,stroke-dasharray:4 3,color:#1d1d1d
   classDef run fill:#ffffff,stroke:#9aa1ab,color:#52514e
 ```
@@ -161,7 +179,7 @@ flowchart LR
 
 ## dim_sector
 
-Built by `pipeline/silver/cbs.py`.
+A silver table, built by `pipeline/silver/cbs.py`.
 
 ```mermaid
 flowchart LR
@@ -186,6 +204,7 @@ flowchart LR
   run --> n_col_run_id
   classDef bronze fill:#f3e3c9,stroke:#a8743a,color:#1d1d1d
   classDef silver fill:#e4e7ec,stroke:#6b7480,color:#1d1d1d
+  classDef gold fill:#f6ecb8,stroke:#9c7f12,color:#1d1d1d
   classDef silverref fill:#f2f3f5,stroke:#9aa1ab,stroke-dasharray:4 3,color:#1d1d1d
   classDef run fill:#ffffff,stroke:#9aa1ab,color:#52514e
 ```
@@ -201,7 +220,7 @@ flowchart LR
 
 ## dim_company_size
 
-Built by `pipeline/silver/cbs.py`.
+A silver table, built by `pipeline/silver/cbs.py`.
 
 ```mermaid
 flowchart LR
@@ -227,6 +246,7 @@ flowchart LR
   run --> n_col_run_id
   classDef bronze fill:#f3e3c9,stroke:#a8743a,color:#1d1d1d
   classDef silver fill:#e4e7ec,stroke:#6b7480,color:#1d1d1d
+  classDef gold fill:#f6ecb8,stroke:#9c7f12,color:#1d1d1d
   classDef silverref fill:#f2f3f5,stroke:#9aa1ab,stroke-dasharray:4 3,color:#1d1d1d
   classDef run fill:#ffffff,stroke:#9aa1ab,color:#52514e
 ```
@@ -244,7 +264,7 @@ flowchart LR
 
 ## dim_period
 
-Built by `pipeline/silver/cbs.py`.
+A silver table, built by `pipeline/silver/cbs.py`.
 
 ```mermaid
 flowchart LR
@@ -272,6 +292,7 @@ flowchart LR
   run --> n_col_run_id
   classDef bronze fill:#f3e3c9,stroke:#a8743a,color:#1d1d1d
   classDef silver fill:#e4e7ec,stroke:#6b7480,color:#1d1d1d
+  classDef gold fill:#f6ecb8,stroke:#9c7f12,color:#1d1d1d
   classDef silverref fill:#f2f3f5,stroke:#9aa1ab,stroke-dasharray:4 3,color:#1d1d1d
   classDef run fill:#ffffff,stroke:#9aa1ab,color:#52514e
 ```
@@ -290,7 +311,7 @@ flowchart LR
 
 ## dim_region
 
-Built by `pipeline/silver/cbs.py`.
+A silver table, built by `pipeline/silver/cbs.py`.
 
 ```mermaid
 flowchart LR
@@ -312,6 +333,7 @@ flowchart LR
   run --> n_col_run_id
   classDef bronze fill:#f3e3c9,stroke:#a8743a,color:#1d1d1d
   classDef silver fill:#e4e7ec,stroke:#6b7480,color:#1d1d1d
+  classDef gold fill:#f6ecb8,stroke:#9c7f12,color:#1d1d1d
   classDef silverref fill:#f2f3f5,stroke:#9aa1ab,stroke-dasharray:4 3,color:#1d1d1d
   classDef run fill:#ffffff,stroke:#9aa1ab,color:#52514e
 ```
@@ -326,7 +348,7 @@ flowchart LR
 
 ## dim_survey_measure
 
-Built by `pipeline/silver/cbs.py`.
+A silver table, built by `pipeline/silver/cbs.py`.
 
 ```mermaid
 flowchart LR
@@ -359,6 +381,7 @@ flowchart LR
   run --> n_col_run_id
   classDef bronze fill:#f3e3c9,stroke:#a8743a,color:#1d1d1d
   classDef silver fill:#e4e7ec,stroke:#6b7480,color:#1d1d1d
+  classDef gold fill:#f6ecb8,stroke:#9c7f12,color:#1d1d1d
   classDef silverref fill:#f2f3f5,stroke:#9aa1ab,stroke-dasharray:4 3,color:#1d1d1d
   classDef run fill:#ffffff,stroke:#9aa1ab,color:#52514e
 ```
@@ -375,7 +398,7 @@ flowchart LR
 
 ## map_sbi2008_sbi2025
 
-Built by `pipeline/silver/cbs.py`.
+A silver table, built by `pipeline/silver/cbs.py`.
 
 ```mermaid
 flowchart LR
@@ -423,6 +446,7 @@ flowchart LR
   run --> n_col_run_id
   classDef bronze fill:#f3e3c9,stroke:#a8743a,color:#1d1d1d
   classDef silver fill:#e4e7ec,stroke:#6b7480,color:#1d1d1d
+  classDef gold fill:#f6ecb8,stroke:#9c7f12,color:#1d1d1d
   classDef silverref fill:#f2f3f5,stroke:#9aa1ab,stroke-dasharray:4 3,color:#1d1d1d
   classDef run fill:#ffffff,stroke:#9aa1ab,color:#52514e
 ```
@@ -446,7 +470,7 @@ flowchart LR
 
 ## fct_absence_rate
 
-Built by `pipeline/silver/cbs.py`.
+A silver table, built by `pipeline/silver/cbs.py`.
 
 ```mermaid
 flowchart LR
@@ -481,6 +505,7 @@ flowchart LR
   run --> n_col_run_id
   classDef bronze fill:#f3e3c9,stroke:#a8743a,color:#1d1d1d
   classDef silver fill:#e4e7ec,stroke:#6b7480,color:#1d1d1d
+  classDef gold fill:#f6ecb8,stroke:#9c7f12,color:#1d1d1d
   classDef silverref fill:#f2f3f5,stroke:#9aa1ab,stroke-dasharray:4 3,color:#1d1d1d
   classDef run fill:#ffffff,stroke:#9aa1ab,color:#52514e
 ```
@@ -499,7 +524,7 @@ flowchart LR
 
 ## fct_absence_survey
 
-Built by `pipeline/silver/cbs.py`.
+A silver table, built by `pipeline/silver/cbs.py`.
 
 ```mermaid
 flowchart LR
@@ -553,6 +578,7 @@ flowchart LR
   run --> n_col_run_id
   classDef bronze fill:#f3e3c9,stroke:#a8743a,color:#1d1d1d
   classDef silver fill:#e4e7ec,stroke:#6b7480,color:#1d1d1d
+  classDef gold fill:#f6ecb8,stroke:#9c7f12,color:#1d1d1d
   classDef silverref fill:#f2f3f5,stroke:#9aa1ab,stroke-dasharray:4 3,color:#1d1d1d
   classDef run fill:#ffffff,stroke:#9aa1ab,color:#52514e
 ```
@@ -577,7 +603,7 @@ flowchart LR
 
 ## fct_business_count
 
-Built by `pipeline/silver/cbs.py`.
+A silver table, built by `pipeline/silver/cbs.py`.
 
 ```mermaid
 flowchart LR
@@ -621,6 +647,7 @@ flowchart LR
   run --> n_col_run_id
   classDef bronze fill:#f3e3c9,stroke:#a8743a,color:#1d1d1d
   classDef silver fill:#e4e7ec,stroke:#6b7480,color:#1d1d1d
+  classDef gold fill:#f6ecb8,stroke:#9c7f12,color:#1d1d1d
   classDef silverref fill:#f2f3f5,stroke:#9aa1ab,stroke-dasharray:4 3,color:#1d1d1d
   classDef run fill:#ffffff,stroke:#9aa1ab,color:#52514e
 ```
@@ -643,7 +670,7 @@ flowchart LR
 
 ## fct_establishment_count
 
-Built by `pipeline/silver/cbs.py`.
+A silver table, built by `pipeline/silver/cbs.py`.
 
 ```mermaid
 flowchart LR
@@ -690,6 +717,7 @@ flowchart LR
   run --> n_col_run_id
   classDef bronze fill:#f3e3c9,stroke:#a8743a,color:#1d1d1d
   classDef silver fill:#e4e7ec,stroke:#6b7480,color:#1d1d1d
+  classDef gold fill:#f6ecb8,stroke:#9c7f12,color:#1d1d1d
   classDef silverref fill:#f2f3f5,stroke:#9aa1ab,stroke-dasharray:4 3,color:#1d1d1d
   classDef run fill:#ffffff,stroke:#9aa1ab,color:#52514e
 ```
@@ -713,7 +741,7 @@ flowchart LR
 
 ## kvk_company
 
-Built by `pipeline/silver/kvk.py`.
+A silver table, built by `pipeline/silver/kvk.py`.
 
 ```mermaid
 flowchart LR
@@ -795,6 +823,7 @@ flowchart LR
   run --> n_col_run_id
   classDef bronze fill:#f3e3c9,stroke:#a8743a,color:#1d1d1d
   classDef silver fill:#e4e7ec,stroke:#6b7480,color:#1d1d1d
+  classDef gold fill:#f6ecb8,stroke:#9c7f12,color:#1d1d1d
   classDef silverref fill:#f2f3f5,stroke:#9aa1ab,stroke-dasharray:4 3,color:#1d1d1d
   classDef run fill:#ffffff,stroke:#9aa1ab,color:#52514e
 ```
@@ -824,3 +853,533 @@ flowchart LR
 | `sbi2008_division` | `kvk/basis_bedrijfsgegevens.Hoofdactiviteiten`<br>`silver:map_sbi2008_sbi2025.sbi2008_code`<br>`silver:map_sbi2008_sbi2025.sbi2025_code` | filled only when all candidates share their first two digits |
 | `sbi2008_section` | `kvk/basis_bedrijfsgegevens.Hoofdactiviteiten`<br>`silver:map_sbi2008_sbi2025.sbi2008_code`<br>`silver:map_sbi2008_sbi2025.sbi2025_code` | the SBI 2008 section (letter) of that division |
 | `run_id` | *(the run)* | added when the run publishes the table: the silver run that made the row; joins to lakehouse/_run_log (when, which code, which bronze versions) |
+
+## gold_absence_by_sector
+
+A gold table, built by `pipeline/gold/build.py`.
+
+```mermaid
+flowchart LR
+  n_src_silver_dim_period_period_label["dim_period<br/>period_label"]:::silverref
+  n_src_silver_dim_period_quarter["dim_period<br/>quarter"]:::silverref
+  n_src_silver_dim_period_year["dim_period<br/>year"]:::silverref
+  n_src_silver_dim_sector_sbi_code["dim_sector<br/>sbi_code"]:::silverref
+  n_src_silver_dim_sector_sbi_level["dim_sector<br/>sbi_level"]:::silverref
+  n_src_silver_dim_sector_sector_name["dim_sector<br/>sector_name"]:::silverref
+  n_src_silver_fct_absence_rate_absence_pct["fct_absence_rate<br/>absence_pct"]:::silverref
+  n_src_silver_fct_absence_rate_ingested_at["fct_absence_rate<br/>ingested_at"]:::silverref
+  n_src_silver_fct_absence_rate_period_key["fct_absence_rate<br/>period_key"]:::silverref
+  n_src_silver_fct_absence_rate_period_status["fct_absence_rate<br/>period_status"]:::silverref
+  n_src_silver_fct_absence_rate_sector_key["fct_absence_rate<br/>sector_key"]:::silverref
+  run(["the gold run (pipeline/common/publish.py)"]):::run
+  subgraph n_tbl_gold_absence_by_sector["gold: gold_absence_by_sector"]
+    n_col_period_key["period_key"]:::gold
+    n_col_period_label["period_label"]:::gold
+    n_col_year["year"]:::gold
+    n_col_quarter["quarter"]:::gold
+    n_col_period_status["period_status"]:::gold
+    n_col_is_provisional["is_provisional"]:::gold
+    n_col_sector_key["sector_key"]:::gold
+    n_col_sbi_code["sbi_code"]:::gold
+    n_col_sbi_level["sbi_level"]:::gold
+    n_col_sector_name["sector_name"]:::gold
+    n_col_absence_pct["absence_pct"]:::gold
+    n_col_national_pct["national_pct"]:::gold
+    n_col_diff_from_national_pp["diff_from_national_pp"]:::gold
+    n_col_rank_in_level["rank_in_level"]:::gold
+    n_col_sectors_in_level["sectors_in_level"]:::gold
+    n_col_last_year_pct["last_year_pct"]:::gold
+    n_col_last_year_status["last_year_status"]:::gold
+    n_col_change_vs_last_year_pp["change_vs_last_year_pp"]:::gold
+    n_col_yoy_mixes_status["yoy_mixes_status"]:::gold
+    n_col_rolling_4q_pct["rolling_4q_pct"]:::gold
+    n_col_rolling_4q_has_provisional["rolling_4q_has_provisional"]:::gold
+    n_col_data_as_of["data_as_of"]:::gold
+    n_col_run_id["run_id"]:::gold
+  end
+  n_src_silver_fct_absence_rate_period_key --> n_col_period_key
+  n_src_silver_dim_period_period_label --> n_col_period_label
+  n_src_silver_dim_period_year --> n_col_year
+  n_src_silver_dim_period_quarter --> n_col_quarter
+  n_src_silver_fct_absence_rate_period_status --> n_col_period_status
+  n_src_silver_fct_absence_rate_period_status --> n_col_is_provisional
+  n_src_silver_fct_absence_rate_sector_key --> n_col_sector_key
+  n_src_silver_dim_sector_sbi_code --> n_col_sbi_code
+  n_src_silver_dim_sector_sbi_level --> n_col_sbi_level
+  n_src_silver_dim_sector_sector_name --> n_col_sector_name
+  n_src_silver_fct_absence_rate_absence_pct --> n_col_absence_pct
+  n_src_silver_fct_absence_rate_absence_pct --> n_col_national_pct
+  n_src_silver_fct_absence_rate_absence_pct --> n_col_diff_from_national_pp
+  n_src_silver_fct_absence_rate_absence_pct --> n_col_rank_in_level
+  n_src_silver_fct_absence_rate_absence_pct --> n_col_sectors_in_level
+  n_src_silver_fct_absence_rate_absence_pct --> n_col_last_year_pct
+  n_src_silver_fct_absence_rate_period_status --> n_col_last_year_status
+  n_src_silver_fct_absence_rate_absence_pct --> n_col_change_vs_last_year_pp
+  n_src_silver_fct_absence_rate_period_status --> n_col_yoy_mixes_status
+  n_src_silver_fct_absence_rate_absence_pct --> n_col_rolling_4q_pct
+  n_src_silver_fct_absence_rate_period_status --> n_col_rolling_4q_has_provisional
+  n_src_silver_fct_absence_rate_ingested_at --> n_col_data_as_of
+  run --> n_col_run_id
+  classDef bronze fill:#f3e3c9,stroke:#a8743a,color:#1d1d1d
+  classDef silver fill:#e4e7ec,stroke:#6b7480,color:#1d1d1d
+  classDef gold fill:#f6ecb8,stroke:#9c7f12,color:#1d1d1d
+  classDef silverref fill:#f2f3f5,stroke:#9aa1ab,stroke-dasharray:4 3,color:#1d1d1d
+  classDef run fill:#ffffff,stroke:#9aa1ab,color:#52514e
+```
+
+| Column | Comes from | How |
+|---|---|---|
+| `period_key` | `silver:fct_absence_rate.period_key` | as in silver |
+| `period_label` | `silver:dim_period.period_label` | looked up in dim_period |
+| `year` | `silver:dim_period.year` | looked up in dim_period |
+| `quarter` | `silver:dim_period.quarter` | looked up in dim_period |
+| `period_status` | `silver:fct_absence_rate.period_status` | as in silver |
+| `is_provisional` | `silver:fct_absence_rate.period_status` | true unless the status is Definitief (final) |
+| `sector_key` | `silver:fct_absence_rate.sector_key` | as in silver |
+| `sbi_code` | `silver:dim_sector.sbi_code` | looked up in dim_sector |
+| `sbi_level` | `silver:dim_sector.sbi_level` | looked up in dim_sector |
+| `sector_name` | `silver:dim_sector.sector_name` | looked up in dim_sector |
+| `absence_pct` | `silver:fct_absence_rate.absence_pct` | as in silver; rows of sectors and the national total (member_type sector or total) |
+| `national_pct` | `silver:fct_absence_rate.absence_pct` | the value of the national total (member_type 'total') in the same period |
+| `diff_from_national_pp` | `silver:fct_absence_rate.absence_pct` | value minus the national value, in percentage points |
+| `rank_in_level` | `silver:fct_absence_rate.absence_pct` | rank within the same period (1 = highest); totals and aggregate classes are not ranked |
+| `sectors_in_level` | `silver:fct_absence_rate.absence_pct` | how many were ranked together |
+| `last_year_pct` | `silver:fct_absence_rate.absence_pct` | the value in the same period one year earlier |
+| `last_year_status` | `silver:fct_absence_rate.period_status` | the status of that period one year earlier |
+| `change_vs_last_year_pp` | `silver:fct_absence_rate.absence_pct` | value minus last year's value, in percentage points |
+| `yoy_mixes_status` | `silver:fct_absence_rate.period_status` | true when the comparison with last year mixes a provisional and a final figure |
+| `rolling_4q_pct` | `silver:fct_absence_rate.absence_pct` | average of four consecutive quarters (empty when one is missing) |
+| `rolling_4q_has_provisional` | `silver:fct_absence_rate.period_status` | true when one of those four quarters is provisional |
+| `data_as_of` | `silver:fct_absence_rate.ingested_at` | when the bronze row behind it was loaded |
+| `run_id` | *(the run)* | added when the run publishes the table: the gold run that made the row; joins to lakehouse/_run_log (which silver run_ids were read) |
+
+## gold_absence_by_size
+
+A gold table, built by `pipeline/gold/build.py`.
+
+```mermaid
+flowchart LR
+  build(["a fixed value set by pipeline/gold/build.py"]):::run
+  n_src_silver_dim_company_size_lower_bound["dim_company_size<br/>lower_bound"]:::silverref
+  n_src_silver_dim_company_size_size_band["dim_company_size<br/>size_band"]:::silverref
+  n_src_silver_dim_company_size_size_range["dim_company_size<br/>size_range"]:::silverref
+  n_src_silver_dim_company_size_size_unit["dim_company_size<br/>size_unit"]:::silverref
+  n_src_silver_dim_period_period_label["dim_period<br/>period_label"]:::silverref
+  n_src_silver_dim_period_quarter["dim_period<br/>quarter"]:::silverref
+  n_src_silver_dim_period_year["dim_period<br/>year"]:::silverref
+  n_src_silver_dim_survey_measure_measure_name["dim_survey_measure<br/>measure_name"]:::silverref
+  n_src_silver_fct_absence_rate_absence_pct["fct_absence_rate<br/>absence_pct"]:::silverref
+  n_src_silver_fct_absence_rate_ingested_at["fct_absence_rate<br/>ingested_at"]:::silverref
+  n_src_silver_fct_absence_rate_member_type["fct_absence_rate<br/>member_type"]:::silverref
+  n_src_silver_fct_absence_rate_period_key["fct_absence_rate<br/>period_key"]:::silverref
+  n_src_silver_fct_absence_rate_period_status["fct_absence_rate<br/>period_status"]:::silverref
+  n_src_silver_fct_absence_rate_size_key["fct_absence_rate<br/>size_key"]:::silverref
+  n_src_silver_fct_absence_survey_ingested_at["fct_absence_survey<br/>ingested_at"]:::silverref
+  n_src_silver_fct_absence_survey_lower_95["fct_absence_survey<br/>lower_95"]:::silverref
+  n_src_silver_fct_absence_survey_measure_key["fct_absence_survey<br/>measure_key"]:::silverref
+  n_src_silver_fct_absence_survey_member_type["fct_absence_survey<br/>member_type"]:::silverref
+  n_src_silver_fct_absence_survey_period_key["fct_absence_survey<br/>period_key"]:::silverref
+  n_src_silver_fct_absence_survey_period_status["fct_absence_survey<br/>period_status"]:::silverref
+  n_src_silver_fct_absence_survey_size_is_aggregate["fct_absence_survey<br/>size_is_aggregate"]:::silverref
+  n_src_silver_fct_absence_survey_size_key["fct_absence_survey<br/>size_key"]:::silverref
+  n_src_silver_fct_absence_survey_source_table["fct_absence_survey<br/>source_table"]:::silverref
+  n_src_silver_fct_absence_survey_upper_95["fct_absence_survey<br/>upper_95"]:::silverref
+  n_src_silver_fct_absence_survey_value["fct_absence_survey<br/>value"]:::silverref
+  run(["the gold run (pipeline/common/publish.py)"]):::run
+  subgraph n_tbl_gold_absence_by_size["gold: gold_absence_by_size"]
+    n_col_source_table["source_table"]:::gold
+    n_col_measure["measure"]:::gold
+    n_col_period_type["period_type"]:::gold
+    n_col_period_key["period_key"]:::gold
+    n_col_period_label["period_label"]:::gold
+    n_col_year["year"]:::gold
+    n_col_quarter["quarter"]:::gold
+    n_col_period_status["period_status"]:::gold
+    n_col_is_provisional["is_provisional"]:::gold
+    n_col_member_type["member_type"]:::gold
+    n_col_size_key["size_key"]:::gold
+    n_col_size_range["size_range"]:::gold
+    n_col_size_unit["size_unit"]:::gold
+    n_col_lower_bound["lower_bound"]:::gold
+    n_col_size_band["size_band"]:::gold
+    n_col_size_is_aggregate["size_is_aggregate"]:::gold
+    n_col_value["value"]:::gold
+    n_col_lower_95["lower_95"]:::gold
+    n_col_upper_95["upper_95"]:::gold
+    n_col_national_value["national_value"]:::gold
+    n_col_diff_from_national_pp["diff_from_national_pp"]:::gold
+    n_col_rank_in_source["rank_in_source"]:::gold
+    n_col_classes_ranked["classes_ranked"]:::gold
+    n_col_last_year_value["last_year_value"]:::gold
+    n_col_last_year_status["last_year_status"]:::gold
+    n_col_change_vs_last_year_pp["change_vs_last_year_pp"]:::gold
+    n_col_yoy_mixes_status["yoy_mixes_status"]:::gold
+    n_col_rolling_4q_value["rolling_4q_value"]:::gold
+    n_col_rolling_4q_has_provisional["rolling_4q_has_provisional"]:::gold
+    n_col_data_as_of["data_as_of"]:::gold
+    n_col_run_id["run_id"]:::gold
+  end
+  n_src_silver_fct_absence_survey_source_table --> n_col_source_table
+  build --> n_col_measure
+  n_src_silver_fct_absence_survey_source_table --> n_col_period_type
+  n_src_silver_fct_absence_rate_period_key --> n_col_period_key
+  n_src_silver_fct_absence_survey_period_key --> n_col_period_key
+  n_src_silver_dim_period_period_label --> n_col_period_label
+  n_src_silver_dim_period_year --> n_col_year
+  n_src_silver_dim_period_quarter --> n_col_quarter
+  n_src_silver_fct_absence_rate_period_status --> n_col_period_status
+  n_src_silver_fct_absence_survey_period_status --> n_col_period_status
+  n_src_silver_fct_absence_rate_period_status --> n_col_is_provisional
+  n_src_silver_fct_absence_survey_period_status --> n_col_is_provisional
+  n_src_silver_fct_absence_rate_member_type --> n_col_member_type
+  n_src_silver_fct_absence_survey_member_type --> n_col_member_type
+  n_src_silver_fct_absence_rate_size_key --> n_col_size_key
+  n_src_silver_fct_absence_survey_size_key --> n_col_size_key
+  n_src_silver_dim_company_size_size_range --> n_col_size_range
+  n_src_silver_dim_company_size_size_unit --> n_col_size_unit
+  n_src_silver_dim_company_size_lower_bound --> n_col_lower_bound
+  n_src_silver_dim_company_size_size_band --> n_col_size_band
+  n_src_silver_fct_absence_survey_size_is_aggregate --> n_col_size_is_aggregate
+  n_src_silver_fct_absence_rate_absence_pct --> n_col_value
+  n_src_silver_fct_absence_survey_value --> n_col_value
+  n_src_silver_fct_absence_survey_measure_key --> n_col_value
+  n_src_silver_dim_survey_measure_measure_name --> n_col_value
+  n_src_silver_fct_absence_survey_lower_95 --> n_col_lower_95
+  n_src_silver_fct_absence_survey_upper_95 --> n_col_upper_95
+  n_src_silver_fct_absence_rate_absence_pct --> n_col_national_value
+  n_src_silver_fct_absence_survey_value --> n_col_national_value
+  n_src_silver_fct_absence_rate_absence_pct --> n_col_diff_from_national_pp
+  n_src_silver_fct_absence_survey_value --> n_col_diff_from_national_pp
+  n_src_silver_fct_absence_rate_absence_pct --> n_col_rank_in_source
+  n_src_silver_fct_absence_survey_value --> n_col_rank_in_source
+  n_src_silver_fct_absence_rate_absence_pct --> n_col_classes_ranked
+  n_src_silver_fct_absence_survey_value --> n_col_classes_ranked
+  n_src_silver_fct_absence_rate_absence_pct --> n_col_last_year_value
+  n_src_silver_fct_absence_survey_value --> n_col_last_year_value
+  n_src_silver_fct_absence_rate_period_status --> n_col_last_year_status
+  n_src_silver_fct_absence_survey_period_status --> n_col_last_year_status
+  n_src_silver_fct_absence_rate_absence_pct --> n_col_change_vs_last_year_pp
+  n_src_silver_fct_absence_survey_value --> n_col_change_vs_last_year_pp
+  n_src_silver_fct_absence_rate_period_status --> n_col_yoy_mixes_status
+  n_src_silver_fct_absence_survey_period_status --> n_col_yoy_mixes_status
+  n_src_silver_fct_absence_rate_absence_pct --> n_col_rolling_4q_value
+  n_src_silver_fct_absence_survey_value --> n_col_rolling_4q_value
+  n_src_silver_fct_absence_rate_period_status --> n_col_rolling_4q_has_provisional
+  n_src_silver_fct_absence_survey_period_status --> n_col_rolling_4q_has_provisional
+  n_src_silver_fct_absence_rate_ingested_at --> n_col_data_as_of
+  n_src_silver_fct_absence_survey_ingested_at --> n_col_data_as_of
+  run --> n_col_run_id
+  classDef bronze fill:#f3e3c9,stroke:#a8743a,color:#1d1d1d
+  classDef silver fill:#e4e7ec,stroke:#6b7480,color:#1d1d1d
+  classDef gold fill:#f6ecb8,stroke:#9c7f12,color:#1d1d1d
+  classDef silverref fill:#f2f3f5,stroke:#9aa1ab,stroke-dasharray:4 3,color:#1d1d1d
+  classDef run fill:#ffffff,stroke:#9aa1ab,color:#52514e
+```
+
+| Column | Comes from | How |
+|---|---|---|
+| `source_table` | `silver:fct_absence_survey.source_table` | '80072NED' for the quarterly rows from fct_absence_rate; 86009NED for the survey rows |
+| `measure` | *(set by gold)* | fixed by gold: absence_pct (80072NED) or share_employees_absent (86009NED) |
+| `period_type` | `silver:fct_absence_survey.source_table` | quarter for 80072NED, year for 86009NED |
+| `period_key` | `silver:fct_absence_rate.period_key`<br>`silver:fct_absence_survey.period_key` | as in silver |
+| `period_label` | `silver:dim_period.period_label` | looked up in dim_period |
+| `year` | `silver:dim_period.year` | looked up in dim_period |
+| `quarter` | `silver:dim_period.quarter` | looked up in dim_period (empty for years) |
+| `period_status` | `silver:fct_absence_rate.period_status`<br>`silver:fct_absence_survey.period_status` | as in silver |
+| `is_provisional` | `silver:fct_absence_rate.period_status`<br>`silver:fct_absence_survey.period_status` | true unless the status is Definitief (final) |
+| `member_type` | `silver:fct_absence_rate.member_type`<br>`silver:fct_absence_survey.member_type` | as in silver: size or total |
+| `size_key` | `silver:fct_absence_rate.size_key`<br>`silver:fct_absence_survey.size_key` | as in silver |
+| `size_range` | `silver:dim_company_size.size_range` | looked up in dim_company_size |
+| `size_unit` | `silver:dim_company_size.size_unit` | looked up in dim_company_size |
+| `lower_bound` | `silver:dim_company_size.lower_bound` | looked up in dim_company_size |
+| `size_band` | `silver:dim_company_size.size_band` | looked up in dim_company_size |
+| `size_is_aggregate` | `silver:fct_absence_survey.size_is_aggregate` | as in silver for the survey; false for 80072NED |
+| `value` | `silver:fct_absence_rate.absence_pct`<br>`silver:fct_absence_survey.value`<br>`silver:fct_absence_survey.measure_key`<br>`silver:dim_survey_measure.measure_name` | absence % (80072NED); for 86009NED the share of employees absent, the survey measure picked by its name in dim_survey_measure |
+| `lower_95` | `silver:fct_absence_survey.lower_95` | as in silver (survey only) |
+| `upper_95` | `silver:fct_absence_survey.upper_95` | as in silver (survey only) |
+| `national_value` | `silver:fct_absence_rate.absence_pct`<br>`silver:fct_absence_survey.value` | the value of the national total (member_type 'total') in the same period |
+| `diff_from_national_pp` | `silver:fct_absence_rate.absence_pct`<br>`silver:fct_absence_survey.value` | value minus the national value, in percentage points |
+| `rank_in_source` | `silver:fct_absence_rate.absence_pct`<br>`silver:fct_absence_survey.value` | rank within the same period (1 = highest); totals and aggregate classes are not ranked |
+| `classes_ranked` | `silver:fct_absence_rate.absence_pct`<br>`silver:fct_absence_survey.value` | how many were ranked together |
+| `last_year_value` | `silver:fct_absence_rate.absence_pct`<br>`silver:fct_absence_survey.value` | the value in the same period one year earlier |
+| `last_year_status` | `silver:fct_absence_rate.period_status`<br>`silver:fct_absence_survey.period_status` | the status of that period one year earlier |
+| `change_vs_last_year_pp` | `silver:fct_absence_rate.absence_pct`<br>`silver:fct_absence_survey.value` | value minus last year's value, in percentage points |
+| `yoy_mixes_status` | `silver:fct_absence_rate.period_status`<br>`silver:fct_absence_survey.period_status` | true when the comparison with last year mixes a provisional and a final figure |
+| `rolling_4q_value` | `silver:fct_absence_rate.absence_pct`<br>`silver:fct_absence_survey.value` | average of four consecutive quarters (empty when one is missing) |
+| `rolling_4q_has_provisional` | `silver:fct_absence_rate.period_status`<br>`silver:fct_absence_survey.period_status` | true when one of those four quarters is provisional |
+| `data_as_of` | `silver:fct_absence_rate.ingested_at`<br>`silver:fct_absence_survey.ingested_at` | when the bronze row behind it was loaded |
+| `run_id` | *(the run)* | added when the run publishes the table: the gold run that made the row; joins to lakehouse/_run_log (which silver run_ids were read) |
+
+## gold_absence_profile
+
+A gold table, built by `pipeline/gold/build.py`.
+
+```mermaid
+flowchart LR
+  n_src_silver_dim_company_size_lower_bound["dim_company_size<br/>lower_bound"]:::silverref
+  n_src_silver_dim_company_size_size_range["dim_company_size<br/>size_range"]:::silverref
+  n_src_silver_dim_company_size_size_unit["dim_company_size<br/>size_unit"]:::silverref
+  n_src_silver_dim_period_year["dim_period<br/>year"]:::silverref
+  n_src_silver_dim_sector_sbi_code["dim_sector<br/>sbi_code"]:::silverref
+  n_src_silver_dim_sector_sbi_level["dim_sector<br/>sbi_level"]:::silverref
+  n_src_silver_dim_sector_sector_name["dim_sector<br/>sector_name"]:::silverref
+  n_src_silver_dim_survey_measure_title["dim_survey_measure<br/>title"]:::silverref
+  n_src_silver_dim_survey_measure_topic_group["dim_survey_measure<br/>topic_group"]:::silverref
+  n_src_silver_dim_survey_measure_unit["dim_survey_measure<br/>unit"]:::silverref
+  n_src_silver_fct_absence_survey_characteristic_key["fct_absence_survey<br/>characteristic_key"]:::silverref
+  n_src_silver_fct_absence_survey_ingested_at["fct_absence_survey<br/>ingested_at"]:::silverref
+  n_src_silver_fct_absence_survey_lower_95["fct_absence_survey<br/>lower_95"]:::silverref
+  n_src_silver_fct_absence_survey_measure_key["fct_absence_survey<br/>measure_key"]:::silverref
+  n_src_silver_fct_absence_survey_measure_name["fct_absence_survey<br/>measure_name"]:::silverref
+  n_src_silver_fct_absence_survey_member_type["fct_absence_survey<br/>member_type"]:::silverref
+  n_src_silver_fct_absence_survey_period_key["fct_absence_survey<br/>period_key"]:::silverref
+  n_src_silver_fct_absence_survey_period_status["fct_absence_survey<br/>period_status"]:::silverref
+  n_src_silver_fct_absence_survey_sector_key["fct_absence_survey<br/>sector_key"]:::silverref
+  n_src_silver_fct_absence_survey_size_is_aggregate["fct_absence_survey<br/>size_is_aggregate"]:::silverref
+  n_src_silver_fct_absence_survey_size_key["fct_absence_survey<br/>size_key"]:::silverref
+  n_src_silver_fct_absence_survey_upper_95["fct_absence_survey<br/>upper_95"]:::silverref
+  n_src_silver_fct_absence_survey_value["fct_absence_survey<br/>value"]:::silverref
+  run(["the gold run (pipeline/common/publish.py)"]):::run
+  subgraph n_tbl_gold_absence_profile["gold: gold_absence_profile"]
+    n_col_period_key["period_key"]:::gold
+    n_col_year["year"]:::gold
+    n_col_period_status["period_status"]:::gold
+    n_col_is_provisional["is_provisional"]:::gold
+    n_col_member_type["member_type"]:::gold
+    n_col_characteristic_key["characteristic_key"]:::gold
+    n_col_sector_key["sector_key"]:::gold
+    n_col_sbi_code["sbi_code"]:::gold
+    n_col_sbi_level["sbi_level"]:::gold
+    n_col_sector_name["sector_name"]:::gold
+    n_col_size_key["size_key"]:::gold
+    n_col_size_range["size_range"]:::gold
+    n_col_size_unit["size_unit"]:::gold
+    n_col_lower_bound["lower_bound"]:::gold
+    n_col_size_is_aggregate["size_is_aggregate"]:::gold
+    n_col_measure_key["measure_key"]:::gold
+    n_col_measure_name["measure_name"]:::gold
+    n_col_measure_title["measure_title"]:::gold
+    n_col_topic_group["topic_group"]:::gold
+    n_col_unit["unit"]:::gold
+    n_col_value["value"]:::gold
+    n_col_lower_95["lower_95"]:::gold
+    n_col_upper_95["upper_95"]:::gold
+    n_col_national_value["national_value"]:::gold
+    n_col_diff_from_national["diff_from_national"]:::gold
+    n_col_differs_from_national["differs_from_national"]:::gold
+    n_col_direction["direction"]:::gold
+    n_col_rank_in_topic["rank_in_topic"]:::gold
+    n_col_data_as_of["data_as_of"]:::gold
+    n_col_run_id["run_id"]:::gold
+  end
+  n_src_silver_fct_absence_survey_period_key --> n_col_period_key
+  n_src_silver_dim_period_year --> n_col_year
+  n_src_silver_fct_absence_survey_period_status --> n_col_period_status
+  n_src_silver_fct_absence_survey_period_status --> n_col_is_provisional
+  n_src_silver_fct_absence_survey_member_type --> n_col_member_type
+  n_src_silver_fct_absence_survey_characteristic_key --> n_col_characteristic_key
+  n_src_silver_fct_absence_survey_sector_key --> n_col_sector_key
+  n_src_silver_dim_sector_sbi_code --> n_col_sbi_code
+  n_src_silver_dim_sector_sbi_level --> n_col_sbi_level
+  n_src_silver_dim_sector_sector_name --> n_col_sector_name
+  n_src_silver_fct_absence_survey_size_key --> n_col_size_key
+  n_src_silver_dim_company_size_size_range --> n_col_size_range
+  n_src_silver_dim_company_size_size_unit --> n_col_size_unit
+  n_src_silver_dim_company_size_lower_bound --> n_col_lower_bound
+  n_src_silver_fct_absence_survey_size_is_aggregate --> n_col_size_is_aggregate
+  n_src_silver_fct_absence_survey_measure_key --> n_col_measure_key
+  n_src_silver_fct_absence_survey_measure_name --> n_col_measure_name
+  n_src_silver_dim_survey_measure_title --> n_col_measure_title
+  n_src_silver_dim_survey_measure_topic_group --> n_col_topic_group
+  n_src_silver_dim_survey_measure_unit --> n_col_unit
+  n_src_silver_fct_absence_survey_value --> n_col_value
+  n_src_silver_fct_absence_survey_lower_95 --> n_col_lower_95
+  n_src_silver_fct_absence_survey_upper_95 --> n_col_upper_95
+  n_src_silver_fct_absence_survey_value --> n_col_national_value
+  n_src_silver_fct_absence_survey_value --> n_col_diff_from_national
+  n_src_silver_fct_absence_survey_lower_95 --> n_col_differs_from_national
+  n_src_silver_fct_absence_survey_upper_95 --> n_col_differs_from_national
+  n_src_silver_fct_absence_survey_value --> n_col_differs_from_national
+  n_src_silver_fct_absence_survey_lower_95 --> n_col_direction
+  n_src_silver_fct_absence_survey_upper_95 --> n_col_direction
+  n_src_silver_fct_absence_survey_value --> n_col_direction
+  n_src_silver_fct_absence_survey_value --> n_col_rank_in_topic
+  n_src_silver_dim_survey_measure_topic_group --> n_col_rank_in_topic
+  n_src_silver_fct_absence_survey_ingested_at --> n_col_data_as_of
+  run --> n_col_run_id
+  classDef bronze fill:#f3e3c9,stroke:#a8743a,color:#1d1d1d
+  classDef silver fill:#e4e7ec,stroke:#6b7480,color:#1d1d1d
+  classDef gold fill:#f6ecb8,stroke:#9c7f12,color:#1d1d1d
+  classDef silverref fill:#f2f3f5,stroke:#9aa1ab,stroke-dasharray:4 3,color:#1d1d1d
+  classDef run fill:#ffffff,stroke:#9aa1ab,color:#52514e
+```
+
+| Column | Comes from | How |
+|---|---|---|
+| `period_key` | `silver:fct_absence_survey.period_key` | as in silver |
+| `year` | `silver:dim_period.year` | looked up in dim_period |
+| `period_status` | `silver:fct_absence_survey.period_status` | as in silver |
+| `is_provisional` | `silver:fct_absence_survey.period_status` | true unless the status is Definitief (final) |
+| `member_type` | `silver:fct_absence_survey.member_type` | as in silver |
+| `characteristic_key` | `silver:fct_absence_survey.characteristic_key` | as in silver |
+| `sector_key` | `silver:fct_absence_survey.sector_key` | as in silver |
+| `sbi_code` | `silver:dim_sector.sbi_code` | looked up in dim_sector |
+| `sbi_level` | `silver:dim_sector.sbi_level` | looked up in dim_sector |
+| `sector_name` | `silver:dim_sector.sector_name` | looked up in dim_sector |
+| `size_key` | `silver:fct_absence_survey.size_key` | as in silver |
+| `size_range` | `silver:dim_company_size.size_range` | looked up in dim_company_size |
+| `size_unit` | `silver:dim_company_size.size_unit` | looked up in dim_company_size |
+| `lower_bound` | `silver:dim_company_size.lower_bound` | looked up in dim_company_size |
+| `size_is_aggregate` | `silver:fct_absence_survey.size_is_aggregate` | as in silver |
+| `measure_key` | `silver:fct_absence_survey.measure_key` | as in silver (86009NED only) |
+| `measure_name` | `silver:fct_absence_survey.measure_name` | as in silver |
+| `measure_title` | `silver:dim_survey_measure.title` | looked up in dim_survey_measure |
+| `topic_group` | `silver:dim_survey_measure.topic_group` | looked up in dim_survey_measure |
+| `unit` | `silver:dim_survey_measure.unit` | looked up in dim_survey_measure |
+| `value` | `silver:fct_absence_survey.value` | as in silver |
+| `lower_95` | `silver:fct_absence_survey.lower_95` | as in silver |
+| `upper_95` | `silver:fct_absence_survey.upper_95` | as in silver |
+| `national_value` | `silver:fct_absence_survey.value` | the national total's value for the same measure and period |
+| `diff_from_national` | `silver:fct_absence_survey.value` | value minus the national value |
+| `differs_from_national` | `silver:fct_absence_survey.lower_95`<br>`silver:fct_absence_survey.upper_95`<br>`silver:fct_absence_survey.value` | true when the whole 95% interval lies above or below the national value |
+| `direction` | `silver:fct_absence_survey.lower_95`<br>`silver:fct_absence_survey.upper_95`<br>`silver:fct_absence_survey.value` | above or below, when it differs from the national value |
+| `rank_in_topic` | `silver:fct_absence_survey.value`<br>`silver:dim_survey_measure.topic_group` | rank of the value among the measures of the same topic group (1 = highest) |
+| `data_as_of` | `silver:fct_absence_survey.ingested_at` | when the bronze row behind it was loaded |
+| `run_id` | *(the run)* | added when the run publishes the table: the gold run that made the row; joins to lakehouse/_run_log (which silver run_ids were read) |
+
+## gold_business_context
+
+A gold table, built by `pipeline/gold/build.py`.
+
+```mermaid
+flowchart LR
+  n_src_silver_dim_period_period_label["dim_period<br/>period_label"]:::silverref
+  n_src_silver_dim_period_quarter["dim_period<br/>quarter"]:::silverref
+  n_src_silver_dim_period_year["dim_period<br/>year"]:::silverref
+  n_src_silver_dim_sector_sbi_code["dim_sector<br/>sbi_code"]:::silverref
+  n_src_silver_dim_sector_sbi_level["dim_sector<br/>sbi_level"]:::silverref
+  n_src_silver_dim_sector_sector_name["dim_sector<br/>sector_name"]:::silverref
+  n_src_silver_fct_business_count_breakdown["fct_business_count<br/>breakdown"]:::silverref
+  n_src_silver_fct_business_count_count["fct_business_count<br/>count"]:::silverref
+  n_src_silver_fct_business_count_ingested_at["fct_business_count<br/>ingested_at"]:::silverref
+  n_src_silver_fct_business_count_period_key["fct_business_count<br/>period_key"]:::silverref
+  n_src_silver_fct_business_count_period_status["fct_business_count<br/>period_status"]:::silverref
+  n_src_silver_fct_business_count_sector_key["fct_business_count<br/>sector_key"]:::silverref
+  n_src_silver_fct_business_count_size_band["fct_business_count<br/>size_band"]:::silverref
+  n_src_silver_fct_business_count_size_is_aggregate["fct_business_count<br/>size_is_aggregate"]:::silverref
+  run(["the gold run (pipeline/common/publish.py)"]):::run
+  subgraph n_tbl_gold_business_context["gold: gold_business_context"]
+    n_col_period_key["period_key"]:::gold
+    n_col_period_label["period_label"]:::gold
+    n_col_year["year"]:::gold
+    n_col_quarter["quarter"]:::gold
+    n_col_period_status["period_status"]:::gold
+    n_col_is_provisional["is_provisional"]:::gold
+    n_col_sector_key["sector_key"]:::gold
+    n_col_sbi_code["sbi_code"]:::gold
+    n_col_sbi_level["sbi_level"]:::gold
+    n_col_sector_name["sector_name"]:::gold
+    n_col_size_band["size_band"]:::gold
+    n_col_businesses["businesses"]:::gold
+    n_col_data_as_of["data_as_of"]:::gold
+    n_col_run_id["run_id"]:::gold
+  end
+  n_src_silver_fct_business_count_period_key --> n_col_period_key
+  n_src_silver_dim_period_period_label --> n_col_period_label
+  n_src_silver_dim_period_year --> n_col_year
+  n_src_silver_dim_period_quarter --> n_col_quarter
+  n_src_silver_fct_business_count_period_status --> n_col_period_status
+  n_src_silver_fct_business_count_period_status --> n_col_is_provisional
+  n_src_silver_fct_business_count_sector_key --> n_col_sector_key
+  n_src_silver_dim_sector_sbi_code --> n_col_sbi_code
+  n_src_silver_dim_sector_sbi_level --> n_col_sbi_level
+  n_src_silver_dim_sector_sector_name --> n_col_sector_name
+  n_src_silver_fct_business_count_size_band --> n_col_size_band
+  n_src_silver_fct_business_count_breakdown --> n_col_size_band
+  n_src_silver_fct_business_count_count --> n_col_businesses
+  n_src_silver_fct_business_count_size_is_aggregate --> n_col_businesses
+  n_src_silver_fct_business_count_ingested_at --> n_col_data_as_of
+  run --> n_col_run_id
+  classDef bronze fill:#f3e3c9,stroke:#a8743a,color:#1d1d1d
+  classDef silver fill:#e4e7ec,stroke:#6b7480,color:#1d1d1d
+  classDef gold fill:#f6ecb8,stroke:#9c7f12,color:#1d1d1d
+  classDef silverref fill:#f2f3f5,stroke:#9aa1ab,stroke-dasharray:4 3,color:#1d1d1d
+  classDef run fill:#ffffff,stroke:#9aa1ab,color:#52514e
+```
+
+| Column | Comes from | How |
+|---|---|---|
+| `period_key` | `silver:fct_business_count.period_key` | as in silver |
+| `period_label` | `silver:dim_period.period_label` | looked up in dim_period |
+| `year` | `silver:dim_period.year` | looked up in dim_period |
+| `quarter` | `silver:dim_period.quarter` | looked up in dim_period |
+| `period_status` | `silver:fct_business_count.period_status` | as in silver |
+| `is_provisional` | `silver:fct_business_count.period_status` | true unless the status is Definitief (final) |
+| `sector_key` | `silver:fct_business_count.sector_key` | as in silver |
+| `sbi_code` | `silver:dim_sector.sbi_code` | looked up in dim_sector |
+| `sbi_level` | `silver:dim_sector.sbi_level` | looked up in dim_sector |
+| `sector_name` | `silver:dim_sector.sector_name` | looked up in dim_sector |
+| `size_band` | `silver:fct_business_count.size_band`<br>`silver:fct_business_count.breakdown` | the size band; 'all' for CBS's total (breakdown total) |
+| `businesses` | `silver:fct_business_count.count`<br>`silver:fct_business_count.size_is_aggregate` | sum of the counts of the band's size classes (aggregate classes left out); empty when one class is missing |
+| `data_as_of` | `silver:fct_business_count.ingested_at` | the newest ingest time in the group |
+| `run_id` | *(the run)* | added when the run publishes the table: the gold run that made the row; joins to lakehouse/_run_log (which silver run_ids were read) |
+
+## gold_kvk_context
+
+A gold table, built by `pipeline/gold/build.py`.
+
+```mermaid
+flowchart LR
+  n_src_silver_dim_sector_sector_name["dim_sector<br/>sector_name"]:::silverref
+  n_src_silver_kvk_company_batch_id["kvk_company<br/>batch_id"]:::silverref
+  n_src_silver_kvk_company_is_active["kvk_company<br/>is_active"]:::silverref
+  n_src_silver_kvk_company_is_latest["kvk_company<br/>is_latest"]:::silverref
+  n_src_silver_kvk_company_legal_form["kvk_company<br/>legal_form"]:::silverref
+  n_src_silver_kvk_company_sbi2008_section["kvk_company<br/>sbi2008_section"]:::silverref
+  n_src_silver_kvk_company_snapshot_date["kvk_company<br/>snapshot_date"]:::silverref
+  n_src_silver_kvk_company_start_date["kvk_company<br/>start_date"]:::silverref
+  run(["the gold run (pipeline/common/publish.py)"]):::run
+  subgraph n_tbl_gold_kvk_context["gold: gold_kvk_context"]
+    n_col_snapshot_date["snapshot_date"]:::gold
+    n_col_batch_id["batch_id"]:::gold
+    n_col_sbi2008_section["sbi2008_section"]:::gold
+    n_col_sector_name["sector_name"]:::gold
+    n_col_legal_form["legal_form"]:::gold
+    n_col_active_companies["active_companies"]:::gold
+    n_col_companies_with_age["companies_with_age"]:::gold
+    n_col_median_age_years["median_age_years"]:::gold
+    n_col_is_small_group["is_small_group"]:::gold
+    n_col_run_id["run_id"]:::gold
+  end
+  n_src_silver_kvk_company_snapshot_date --> n_col_snapshot_date
+  n_src_silver_kvk_company_batch_id --> n_col_batch_id
+  n_src_silver_kvk_company_sbi2008_section --> n_col_sbi2008_section
+  n_src_silver_dim_sector_sector_name --> n_col_sector_name
+  n_src_silver_kvk_company_legal_form --> n_col_legal_form
+  n_src_silver_kvk_company_is_active --> n_col_active_companies
+  n_src_silver_kvk_company_is_latest --> n_col_active_companies
+  n_src_silver_kvk_company_start_date --> n_col_companies_with_age
+  n_src_silver_kvk_company_start_date --> n_col_median_age_years
+  n_src_silver_kvk_company_snapshot_date --> n_col_median_age_years
+  n_src_silver_kvk_company_is_active --> n_col_is_small_group
+  n_src_silver_kvk_company_is_latest --> n_col_is_small_group
+  run --> n_col_run_id
+  classDef bronze fill:#f3e3c9,stroke:#a8743a,color:#1d1d1d
+  classDef silver fill:#e4e7ec,stroke:#6b7480,color:#1d1d1d
+  classDef gold fill:#f6ecb8,stroke:#9c7f12,color:#1d1d1d
+  classDef silverref fill:#f2f3f5,stroke:#9aa1ab,stroke-dasharray:4 3,color:#1d1d1d
+  classDef run fill:#ffffff,stroke:#9aa1ab,color:#52514e
+```
+
+| Column | Comes from | How |
+|---|---|---|
+| `snapshot_date` | `silver:kvk_company.snapshot_date` | of the latest snapshot (is_latest) |
+| `batch_id` | `silver:kvk_company.batch_id` | of the latest snapshot |
+| `sbi2008_section` | `silver:kvk_company.sbi2008_section` | as in silver; 'unknown' when not determined |
+| `sector_name` | `silver:dim_sector.sector_name` | the section's name, looked up in dim_sector |
+| `legal_form` | `silver:kvk_company.legal_form` | as in silver; 'all' for every legal form together |
+| `active_companies` | `silver:kvk_company.is_active`<br>`silver:kvk_company.is_latest` | number of active companies in the latest snapshot |
+| `companies_with_age` | `silver:kvk_company.start_date` | how many of them have a valid start date |
+| `median_age_years` | `silver:kvk_company.start_date`<br>`silver:kvk_company.snapshot_date` | median of (snapshot date - start date), in years |
+| `is_small_group` | `silver:kvk_company.is_active`<br>`silver:kvk_company.is_latest` | true under 10 companies (KVK re-identification rule) |
+| `run_id` | *(the run)* | added when the run publishes the table: the gold run that made the row; joins to lakehouse/_run_log (which silver run_ids were read) |

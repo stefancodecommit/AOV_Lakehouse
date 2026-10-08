@@ -1,5 +1,5 @@
-"""tools/lineage.py: the bronze -> silver column lineage is complete, points at fields that
-exist, and docs/lineage.md matches it."""
+"""tools/lineage.py: the bronze -> silver -> gold column lineage is complete, points at
+fields and columns that exist, and docs/lineage.md matches it."""
 import json
 import sys
 from pathlib import Path
@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from pipeline.bronze import cbs as b
+from pipeline.gold import build as g
 from pipeline.silver import kvk as k
 from tools import lineage as L
 from pipeline.bronze import reference as r
@@ -23,6 +24,14 @@ def silver_columns(silver):
     out = {name: [*df.columns, "run_id"] for name, df in silver.items()}
     out["kvk_company"] = [*k.build_kvk_company(kvk_bronze(), CROSSWALK).columns, "run_id"]
     return out
+
+
+@pytest.fixture
+def gold_columns(silver):
+    """Columns of every gold table as built from the sample data (+ run_id)."""
+    kvk = k.build_kvk_company(kvk_bronze(), CROSSWALK)
+    return {name: [*df.columns, "run_id"]
+            for name, df in g.build_all({**silver, "kvk_company": kvk}).items()}
 
 
 def bronze_fields() -> dict[str, set[str]]:
@@ -55,6 +64,22 @@ def test_every_column_has_lineage_in_the_same_order(silver_columns, table):
     assert list(L.SILVER_LINEAGE[table]) == silver_columns[table]
 
 
+def test_every_gold_table_has_lineage(gold_columns):
+    assert set(L.GOLD_LINEAGE) == set(gold_columns)
+
+
+@pytest.mark.parametrize("table", sorted(L.GOLD_LINEAGE))
+def test_every_gold_column_has_lineage_in_the_same_order(gold_columns, table):
+    """A new gold column fails here until its origin is written down in tools/lineage.py."""
+    assert list(L.GOLD_LINEAGE[table]) == gold_columns[table]
+
+
+def test_gold_reads_only_silver():
+    for table, columns in L.GOLD_LINEAGE.items():
+        for column, c in columns.items():
+            assert all(s.is_silver for s in c.sources), f"{table}.{column}"
+
+
 # =========================================================================== correctness
 def test_every_bronze_source_table_is_a_real_bronze_table():
     configured = {e.name for e in b.ENDPOINTS} | {L.KVK, L.CROSSWALK}
@@ -76,7 +101,7 @@ def test_every_named_bronze_field_exists():
 
 
 def test_silver_sources_point_at_documented_silver_columns():
-    for table, columns in L.SILVER_LINEAGE.items():
+    for table, columns in L.LINEAGE.items():
         for column, c in columns.items():
             for s in c.sources:
                 if s.is_silver:
@@ -84,16 +109,26 @@ def test_silver_sources_point_at_documented_silver_columns():
                     assert s.field in L.SILVER_LINEAGE[other], f"{table}.{column}: {s}"
 
 
-def test_only_run_id_has_no_source():
-    for table, columns in L.SILVER_LINEAGE.items():
+def test_only_run_id_and_fixed_gold_values_have_no_source():
+    fixed = {("gold_absence_by_size", "measure")}
+    for table, columns in L.LINEAGE.items():
         for column, c in columns.items():
-            assert bool(c.sources) or column == "run_id", f"{table}.{column}"
+            assert bool(c.sources) or column == "run_id" or (table, column) in fixed, \
+                f"{table}.{column}"
 
 
 def test_silver_to_silver_steps_are_followed_back_to_bronze():
     origin = L.bronze_sources("fct_absence_rate", "member_type")
     assert L.Source("80072ned_bedrijfskenmerkensbi2008", "Title") in origin
     assert not any(s.is_silver for s in origin)
+
+
+def test_gold_is_followed_back_to_the_bronze_field_columns():
+    assert L.bronze_sources("gold_absence_by_sector", "absence_pct") == {
+        L.Source("80072ned_typeddataset", "Ziekteverzuimpercentage_1")}
+    # through dim_sector back to the five code lists' Title
+    names = L.bronze_sources("gold_business_context", "sector_name")
+    assert {s.field for s in names} == {"Title"} and len(names) == 5
 
 
 # =========================================================================== outputs
@@ -108,16 +143,19 @@ def test_explorer_has_every_column_and_only_known_nodes():
     data = L.explorer_data()
     ids = {n["id"] for n in data["nodes"]}
     columns = {f"silver:{t}.{c}" for t, cols in L.SILVER_LINEAGE.items() for c in cols}
+    columns |= {f"gold:{t}.{c}" for t, cols in L.GOLD_LINEAGE.items() for c in cols}
     assert columns <= ids and data["start"] in ids
     assert all(a in ids and b in ids for a, b in data["edges"])
-    # every silver column has at least one incoming edge (from bronze, silver or the run)
+    # every column has at least one incoming edge (from bronze, silver or the run)
     assert columns <= {b for _, b in data["edges"]}
+    # gold columns get their edges from silver columns (or the run), never from bronze
+    assert not any(a.startswith("bronze:") and b.startswith("gold:") for a, b in data["edges"])
 
 
-@pytest.mark.parametrize("table", sorted(L.SILVER_LINEAGE))
+@pytest.mark.parametrize("table", sorted(L.LINEAGE))
 def test_every_column_is_drawn_with_an_arrow(table):
     diagram = L.mermaid_table(table)
-    for column in L.SILVER_LINEAGE[table]:
+    for column in L.LINEAGE[table]:
         assert f"--> {L._id('col', column)}" in diagram, column
     assert "‹br" not in diagram                     # line breaks not escaped by mistake
 
@@ -126,6 +164,8 @@ def test_overview_links_every_silver_table():
     diagram = L.mermaid_overview()
     for table in L.SILVER_LINEAGE:
         assert f"--> {L._id('silver', table)}" in diagram, table
+    for table in L.GOLD_LINEAGE:
+        assert f"--> {L._id('gold', table)}" in diagram, table
 
 
 def test_dagster_shows_the_lineage():
@@ -142,6 +182,13 @@ def test_dagster_shows_the_lineage():
     kvk = d.silver_kvk.specs_by_key[dg.AssetKey("silver_kvk")].metadata["dagster/column_lineage"]
     assert {x.asset_key.to_user_string() for x in kvk.deps_by_column["kvk_company.sbi2008_code"]} \
         == {"kvk_bronze", "silver_cbs"}
+    # gold points at the silver assets it reads
+    gold = d.gold.specs_by_key[dg.AssetKey("gold")].metadata["dagster/column_lineage"]
+    assert [(x.asset_key.to_user_string(), x.column_name)
+            for x in gold.deps_by_column["gold_absence_by_sector.absence_pct"]] == [
+        ("silver_cbs", "fct_absence_rate.absence_pct")]
+    assert {x.asset_key.to_user_string() for x in gold.deps_by_column["gold_kvk_context.legal_form"]} \
+        == {"silver_kvk"}
 
 
 def test_dagster_column_descriptions_start_with_their_origin():

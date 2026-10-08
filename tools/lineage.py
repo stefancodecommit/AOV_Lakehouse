@@ -1,6 +1,7 @@
 """
-Column lineage, bronze -> silver: for every silver column, the bronze table(s) and
-field(s) it comes from, and what happens to it on the way.
+Column lineage, bronze -> silver -> gold: for every silver column, the bronze table(s)
+and field(s) it comes from; for every gold column, the silver column(s) it is made from;
+and what happens to it on the way.
 
 This file is the single source of truth. From it:
 - `python -m tools.lineage` writes docs/lineage.md (a diagram and a table per silver table),
@@ -330,16 +331,201 @@ SILVER_LINEAGE: dict[str, dict[str, Column]] = {
 SILVER_KVK_TABLES = {"kvk_company"}
 
 
+# --------------------------------------------------------------------------- silver -> gold
+# Gold reads only silver, so every source is a silver column. A column computed from
+# others (a difference, a rank, last year's value) lists the silver columns it is computed
+# from; the "how" says what is done. A fixed value set by gold has no source.
+def sv(table: str, *columns: str) -> tuple[Source, ...]:
+    return src(f"silver:{table}", *columns)
+
+
+GOLD_RUN_ID = Column((), "added when the run publishes the table: the gold run that made the "
+                         "row; joins to lakehouse/_run_log (which silver run_ids were read)")
+RATE, SURVEY_FCT, COUNT_FCT = "fct_absence_rate", "fct_absence_survey", "fct_business_count"
+
+
+def gold_period(fact: str, quarterly: bool = True, label: bool = True) -> dict[str, Column]:
+    """period_key, its label/year/quarter from dim_period, period_status and is_provisional."""
+    out = {"period_key": Column(sv(fact, "period_key"), "as in silver")}
+    if label:
+        out["period_label"] = Column(sv("dim_period", "period_label"), "looked up in dim_period")
+    out["year"] = Column(sv("dim_period", "year"), "looked up in dim_period")
+    if quarterly:
+        out["quarter"] = Column(sv("dim_period", "quarter"), "looked up in dim_period")
+    out["period_status"] = Column(sv(fact, "period_status"), "as in silver")
+    out["is_provisional"] = Column(sv(fact, "period_status"),
+                                   "true unless the status is Definitief (final)")
+    return out
+
+
+def gold_sector(fact: str) -> dict[str, Column]:
+    """sector_key from the fact, its code, level and name from dim_sector."""
+    return {
+        "sector_key": Column(sv(fact, "sector_key"), "as in silver"),
+        "sbi_code": Column(sv("dim_sector", "sbi_code"), "looked up in dim_sector"),
+        "sbi_level": Column(sv("dim_sector", "sbi_level"), "looked up in dim_sector"),
+        "sector_name": Column(sv("dim_sector", "sector_name"), "looked up in dim_sector"),
+    }
+
+
+def comparisons(values: tuple[Source, ...], statuses: tuple[Source, ...], names: dict[str, str],
+                rolling: bool = True) -> dict[str, Column]:
+    """The comparison columns of add_comparisons (pipeline/gold/build.py); `names` maps its
+    generic column names to the ones the table uses."""
+    out = {
+        "national": Column(values, "the value of the national total (member_type 'total') "
+                                   "in the same period"),
+        "diff": Column(values, "value minus the national value, in percentage points"),
+        "rank": Column(values, "rank within the same period (1 = highest); totals and "
+                               "aggregate classes are not ranked"),
+        "rank_of": Column(values, "how many were ranked together"),
+        "last_year": Column(values, "the value in the same period one year earlier"),
+        "last_year_status": Column(statuses, "the status of that period one year earlier"),
+        "change": Column(values, "value minus last year's value, in percentage points"),
+        "yoy_mixes_status": Column(statuses, "true when the comparison with last year mixes "
+                                             "a provisional and a final figure"),
+    }
+    if rolling:
+        out["rolling"] = Column(values, "average of four consecutive quarters (empty "
+                                        "when one is missing)")
+        out["rolling_has_provisional"] = Column(statuses, "true when one of those four "
+                                                          "quarters is provisional")
+    return {names.get(k, k): v for k, v in out.items() if names.get(k, k)}
+
+
+GOLD_LINEAGE: dict[str, dict[str, Column]] = {
+    "gold_absence_by_sector": {
+        **gold_period(RATE),
+        **gold_sector(RATE),
+        "absence_pct": Column(sv(RATE, "absence_pct"), "as in silver; rows of sectors and "
+                              "the national total (member_type sector or total)"),
+        **comparisons(sv(RATE, "absence_pct"), sv(RATE, "period_status"), {
+            "national": "national_pct", "diff": "diff_from_national_pp", "rank": "rank_in_level",
+            "rank_of": "sectors_in_level", "last_year": "last_year_pct",
+            "change": "change_vs_last_year_pp", "rolling": "rolling_4q_pct",
+            "rolling_has_provisional": "rolling_4q_has_provisional"}),
+        "data_as_of": Column(sv(RATE, "ingested_at"), "when the bronze row behind it was loaded"),
+        "run_id": GOLD_RUN_ID,
+    },
+    "gold_absence_by_size": {
+        "source_table": Column(sv(SURVEY_FCT, "source_table"), "'80072NED' for the quarterly "
+                               "rows from fct_absence_rate; 86009NED for the survey rows"),
+        "measure": Column((), "fixed by gold: absence_pct (80072NED) or "
+                              "share_employees_absent (86009NED)"),
+        "period_type": Column(sv(SURVEY_FCT, "source_table"), "quarter for 80072NED, "
+                              "year for 86009NED"),
+        "period_key": Column(sv(RATE, "period_key") + sv(SURVEY_FCT, "period_key"), "as in silver"),
+        "period_label": Column(sv("dim_period", "period_label"), "looked up in dim_period"),
+        "year": Column(sv("dim_period", "year"), "looked up in dim_period"),
+        "quarter": Column(sv("dim_period", "quarter"), "looked up in dim_period (empty for years)"),
+        "period_status": Column(sv(RATE, "period_status") + sv(SURVEY_FCT, "period_status"),
+                                "as in silver"),
+        "is_provisional": Column(sv(RATE, "period_status") + sv(SURVEY_FCT, "period_status"),
+                                 "true unless the status is Definitief (final)"),
+        "member_type": Column(sv(RATE, "member_type") + sv(SURVEY_FCT, "member_type"),
+                              "as in silver: size or total"),
+        "size_key": Column(sv(RATE, "size_key") + sv(SURVEY_FCT, "size_key"), "as in silver"),
+        "size_range": Column(sv("dim_company_size", "size_range"), "looked up in dim_company_size"),
+        "size_unit": Column(sv("dim_company_size", "size_unit"), "looked up in dim_company_size"),
+        "lower_bound": Column(sv("dim_company_size", "lower_bound"), "looked up in dim_company_size"),
+        "size_band": Column(sv("dim_company_size", "size_band"), "looked up in dim_company_size"),
+        "size_is_aggregate": Column(sv(SURVEY_FCT, "size_is_aggregate"),
+                                    "as in silver for the survey; false for 80072NED"),
+        "value": Column(sv(RATE, "absence_pct") + sv(SURVEY_FCT, "value", "measure_key")
+                        + sv("dim_survey_measure", "measure_name"),
+                        "absence % (80072NED); for 86009NED the share of employees absent, "
+                        "the survey measure picked by its name in dim_survey_measure"),
+        "lower_95": Column(sv(SURVEY_FCT, "lower_95"), "as in silver (survey only)"),
+        "upper_95": Column(sv(SURVEY_FCT, "upper_95"), "as in silver (survey only)"),
+        **comparisons(sv(RATE, "absence_pct") + sv(SURVEY_FCT, "value"),
+                      sv(RATE, "period_status") + sv(SURVEY_FCT, "period_status"), {
+            "national": "national_value", "diff": "diff_from_national_pp",
+            "rank": "rank_in_source", "rank_of": "classes_ranked",
+            "last_year": "last_year_value", "change": "change_vs_last_year_pp",
+            "rolling": "rolling_4q_value", "rolling_has_provisional": "rolling_4q_has_provisional"}),
+        "data_as_of": Column(sv(RATE, "ingested_at") + sv(SURVEY_FCT, "ingested_at"),
+                             "when the bronze row behind it was loaded"),
+        "run_id": GOLD_RUN_ID,
+    },
+    "gold_absence_profile": {
+        **gold_period(SURVEY_FCT, quarterly=False, label=False),
+        "member_type": Column(sv(SURVEY_FCT, "member_type"), "as in silver"),
+        "characteristic_key": Column(sv(SURVEY_FCT, "characteristic_key"), "as in silver"),
+        **gold_sector(SURVEY_FCT),
+        "size_key": Column(sv(SURVEY_FCT, "size_key"), "as in silver"),
+        "size_range": Column(sv("dim_company_size", "size_range"), "looked up in dim_company_size"),
+        "size_unit": Column(sv("dim_company_size", "size_unit"), "looked up in dim_company_size"),
+        "lower_bound": Column(sv("dim_company_size", "lower_bound"), "looked up in dim_company_size"),
+        "size_is_aggregate": Column(sv(SURVEY_FCT, "size_is_aggregate"), "as in silver"),
+        "measure_key": Column(sv(SURVEY_FCT, "measure_key"), "as in silver (86009NED only)"),
+        "measure_name": Column(sv(SURVEY_FCT, "measure_name"), "as in silver"),
+        "measure_title": Column(sv("dim_survey_measure", "title"), "looked up in dim_survey_measure"),
+        "topic_group": Column(sv("dim_survey_measure", "topic_group"), "looked up in dim_survey_measure"),
+        "unit": Column(sv("dim_survey_measure", "unit"), "looked up in dim_survey_measure"),
+        "value": Column(sv(SURVEY_FCT, "value"), "as in silver"),
+        "lower_95": Column(sv(SURVEY_FCT, "lower_95"), "as in silver"),
+        "upper_95": Column(sv(SURVEY_FCT, "upper_95"), "as in silver"),
+        "national_value": Column(sv(SURVEY_FCT, "value"), "the national total's value for the "
+                                 "same measure and period"),
+        "diff_from_national": Column(sv(SURVEY_FCT, "value"), "value minus the national value"),
+        "differs_from_national": Column(sv(SURVEY_FCT, "lower_95", "upper_95", "value"),
+                                        "true when the whole 95% interval lies above or "
+                                        "below the national value"),
+        "direction": Column(sv(SURVEY_FCT, "lower_95", "upper_95", "value"),
+                            "above or below, when it differs from the national value"),
+        "rank_in_topic": Column(sv(SURVEY_FCT, "value") + sv("dim_survey_measure", "topic_group"),
+                                "rank of the value among the measures of the same topic "
+                                "group (1 = highest)"),
+        "data_as_of": Column(sv(SURVEY_FCT, "ingested_at"), "when the bronze row behind it was loaded"),
+        "run_id": GOLD_RUN_ID,
+    },
+    "gold_business_context": {
+        **gold_period(COUNT_FCT),
+        **gold_sector(COUNT_FCT),
+        "size_band": Column(sv(COUNT_FCT, "size_band", "breakdown"),
+                            "the size band; 'all' for CBS's total (breakdown total)"),
+        "businesses": Column(sv(COUNT_FCT, "count", "size_is_aggregate"),
+                             "sum of the counts of the band's size classes (aggregate "
+                             "classes left out); empty when one class is missing"),
+        "data_as_of": Column(sv(COUNT_FCT, "ingested_at"), "the newest ingest time in the group"),
+        "run_id": GOLD_RUN_ID,
+    },
+    "gold_kvk_context": {
+        "snapshot_date": Column(sv("kvk_company", "snapshot_date"), "of the latest snapshot "
+                                "(is_latest)"),
+        "batch_id": Column(sv("kvk_company", "batch_id"), "of the latest snapshot"),
+        "sbi2008_section": Column(sv("kvk_company", "sbi2008_section"),
+                                  "as in silver; 'unknown' when not determined"),
+        "sector_name": Column(sv("dim_sector", "sector_name"), "the section's name, looked "
+                              "up in dim_sector"),
+        "legal_form": Column(sv("kvk_company", "legal_form"), "as in silver; 'all' for "
+                             "every legal form together"),
+        "active_companies": Column(sv("kvk_company", "is_active", "is_latest"),
+                                   "number of active companies in the latest snapshot"),
+        "companies_with_age": Column(sv("kvk_company", "start_date"),
+                                     "how many of them have a valid start date"),
+        "median_age_years": Column(sv("kvk_company", "start_date", "snapshot_date"),
+                                   "median of (snapshot date - start date), in years"),
+        "is_small_group": Column(sv("kvk_company", "is_active", "is_latest"),
+                                 "true under 10 companies (KVK re-identification rule)"),
+        "run_id": GOLD_RUN_ID,
+    },
+}
+
+# Every table, silver and gold, for following a column back to bronze
+LINEAGE: dict[str, dict[str, Column]] = {**SILVER_LINEAGE, **GOLD_LINEAGE}
+
+
 # --------------------------------------------------------------------------- following back
 def bronze_sources(table: str, column: str, _seen=None) -> set[Source]:
-    """The bronze fields a silver column comes from, following silver-to-silver steps
+    """The bronze fields a silver or gold column comes from, following every silver step
     (e.g. fct_absence_rate.member_type -> map_characteristic -> the code lists)."""
     seen = _seen if _seen is not None else set()
     if (table, column) in seen:
         return set()
     seen.add((table, column))
     out = set()
-    for s in SILVER_LINEAGE[table][column].sources:
+    for s in LINEAGE[table][column].sources:
         if s.is_silver:
             out |= bronze_sources(s.table.removeprefix("silver:"), s.field, seen)
         else:
@@ -381,15 +567,16 @@ def _id(*parts: str) -> str:
 
 
 def mermaid_overview() -> str:
-    """Sources -> silver tables: one box per source (CBS table, KVK file, crosswalk),
-    listing the bronze tables of that source it uses. The per-table diagrams show the
-    fields; here only which source feeds which silver table."""
+    """Sources -> silver tables -> gold tables: one box per source (CBS table, KVK file,
+    crosswalk), listing the bronze tables of that source it uses. The per-table diagrams
+    show the columns; here only which table feeds which."""
     edges, bronze = set(), {}
-    for table, columns in SILVER_LINEAGE.items():
+    for table, columns in LINEAGE.items():
+        layer = "gold" if table in GOLD_LINEAGE else "silver"
         for c in columns.values():
             for s in c.sources:
                 if s.is_silver:
-                    edges.add((_id("silver", s.table.removeprefix("silver:")), _id("silver", table)))
+                    edges.add((_id("silver", s.table.removeprefix("silver:")), _id(layer, table)))
                 else:
                     label = _source_label(s.table)
                     bronze.setdefault(label, set()).add(s.table)
@@ -402,20 +589,26 @@ def mermaid_overview() -> str:
     lines.append('  subgraph silver_layer["silver"]')
     lines += [f'    {_id("silver", t)}["{t}"]:::silver' for t in SILVER_LINEAGE]
     lines.append("  end")
+    lines.append('  subgraph gold_layer["gold"]')
+    lines += [f'    {_id("gold", t)}["{t}"]:::gold' for t in GOLD_LINEAGE]
+    lines.append("  end")
     lines += [f"  {a} --> {b}" for a, b in sorted(edges)]
     return "\n".join(lines + _CLASSES)
 
 
 def mermaid_table(table: str) -> str:
-    """One silver table: the bronze fields (and other silver columns) each column comes
+    """One silver or gold table: the bronze fields and silver columns each column comes
     from. Sources that differ only in their bronze table are grouped into one box."""
+    layer = "gold" if table in GOLD_LINEAGE else "silver"
     lines = ["flowchart LR"]
     nodes, edges = {}, []
-    for column, c in SILVER_LINEAGE[table].items():
-        by_field: dict[tuple[bool, str], set[str]] = {}
+    for column, c in LINEAGE[table].items():
+        # bronze sources are grouped by field; each silver column is its own box
+        by_field: dict[tuple, set[str]] = {}
         for s in c.sources:
-            by_field.setdefault((s.is_silver, s.field), set()).add(s.table)
-        for (is_silver, fld), tables in by_field.items():
+            key = (True, s.table, s.field) if s.is_silver else (False, s.field)
+            by_field.setdefault(key, set()).add(s.table)
+        for (is_silver, *_, fld), tables in by_field.items():
             if is_silver:
                 (other,) = tables
                 label, cls = f"{_text(other.removeprefix('silver:'))}<br/>{_text(fld)}", "silverref"
@@ -426,12 +619,15 @@ def mermaid_table(table: str) -> str:
             node = _id("src", *sorted(tables), fld)
             nodes[node] = f'  {node}["{label}"]:::{cls}'
             edges.append(f"  {node} --> {_id('col', column)}")
-        if not c.sources:
-            nodes["run"] = '  run(["the silver run (pipeline/common/publish.py)"]):::run'
+        if not c.sources and column == "run_id":
+            nodes["run"] = f'  run(["the {layer} run (pipeline/common/publish.py)"]):::run'
             edges.append(f"  run --> {_id('col', column)}")
+        elif not c.sources:
+            nodes["build"] = '  build(["a fixed value set by pipeline/gold/build.py"]):::run'
+            edges.append(f"  build --> {_id('col', column)}")
     lines += sorted(nodes.values())
-    lines.append(f'  subgraph {_id("tbl", table)}["silver: {table}"]')
-    lines += [f'    {_id("col", col)}["{col}"]:::silver' for col in SILVER_LINEAGE[table]]
+    lines.append(f'  subgraph {_id("tbl", table)}["{layer}: {table}"]')
+    lines += [f'    {_id("col", col)}["{col}"]:::{layer}' for col in LINEAGE[table]]
     lines.append("  end")
     return "\n".join(lines + edges + _CLASSES)
 
@@ -439,6 +635,7 @@ def mermaid_table(table: str) -> str:
 _CLASSES = [
     "  classDef bronze fill:#f3e3c9,stroke:#a8743a,color:#1d1d1d",
     "  classDef silver fill:#e4e7ec,stroke:#6b7480,color:#1d1d1d",
+    "  classDef gold fill:#f6ecb8,stroke:#9c7f12,color:#1d1d1d",
     "  classDef silverref fill:#f2f3f5,stroke:#9aa1ab,stroke-dasharray:4 3,color:#1d1d1d",
     "  classDef run fill:#ffffff,stroke:#9aa1ab,color:#52514e",
 ]
@@ -447,8 +644,9 @@ _CLASSES = [
 def html() -> str:
     """docs/lineage.html: all diagrams on one page (opens in any browser; loads the
     Mermaid library from the internet to draw them)."""
-    sections = [("Overview: bronze tables → silver tables", mermaid_overview())]
+    sections = [("Overview: bronze → silver → gold", mermaid_overview())]
     sections += [(f"silver: {t}", mermaid_table(t)) for t in SILVER_LINEAGE]
+    sections += [(f"gold: {t}", mermaid_table(t)) for t in GOLD_LINEAGE]
     body = "\n".join(
         f'<section id="{_id("s", title)}"><h2>{title}</h2>'
         f'<pre class="mermaid">\n{diagram}\n</pre></section>' for title, diagram in sections)
@@ -475,14 +673,15 @@ def html() -> str:
 </head>
 <body>
 <main>
-<h1>Column lineage: bronze → silver</h1>
-<p>Where every silver column comes from in bronze. Generated from <code>tools/lineage.py</code>
+<h1>Column lineage: bronze → silver → gold</h1>
+<p>Where every silver column comes from in bronze, and every gold column in silver. Generated from <code>tools/lineage.py</code>
 by <code>python -m tools.lineage</code>; the same lineage as a table:
 <a href="lineage.md">lineage.md</a>; explained with examples:
 <a href="bronze_to_silver.md">bronze_to_silver.md</a>.</p>
 <p class="legend"><span style="background:#f3e3c9;border-color:#a8743a">bronze field</span>
 <span style="background:#e4e7ec;border-color:#6b7480">silver column</span>
-<span style="background:#f2f3f5;border-color:#9aa1ab;border-style:dashed">column of another silver table</span></p>
+<span style="background:#f6ecb8;border-color:#9c7f12">gold column</span>
+<span style="background:#f2f3f5;border-color:#9aa1ab;border-style:dashed">silver column it is made from</span></p>
 <ul>
 {toc}
 </ul>
@@ -499,13 +698,15 @@ by <code>python -m tools.lineage</code>; the same lineage as a table:
 def markdown() -> str:
     """docs/lineage.md: one table per silver table."""
     lines = [
-        "# Column lineage: bronze → silver",
+        "# Column lineage: bronze → silver → gold",
         "",
-        "Where every silver column comes from in bronze, and what happens to it on the way.",
+        "Where every silver column comes from in bronze, where every gold column comes from "
+        "in silver, and what happens to it on the way. To follow a gold column all the way "
+        "back to the bronze fields, use the [lineage explorer](lineage_explorer.html).",
         "",
         "> Generated from `tools/lineage.py` by `python -m tools.lineage`; don't edit by hand. "
-        "`tests/test_lineage.py` fails when a silver column is missing here or a named "
-        "bronze field doesn't exist. The same lineage is visible in the Dagster UI: "
+        "`tests/test_lineage.py` fails when a silver or gold column is missing here or a "
+        "named bronze field or silver column doesn't exist. The same lineage is visible in the Dagster UI: "
         "assets `silver_cbs` and `silver_kvk`, the *Columns* list on their overview page "
         "(each description starts with *From …*). For the steps explained with real "
         "examples, see [bronze_to_silver.md](bronze_to_silver.md).",
@@ -520,14 +721,14 @@ def markdown() -> str:
         "| `86009ned_typeddataset.<measure>` | every measure field of the record "
         "(silver has one row per measure) |",
         "| `kvk/basis_bedrijfsgegevens.Actief` | a column of the KVK file |",
-        "| `silver:map_characteristic.member_type` | another silver table (its own lineage "
+        "| `silver:map_characteristic.member_type` | a silver column (its own lineage "
         "is listed below) |",
         "",
         "Diagrams of the same lineage: below in this file (drawn by GitHub), or all on one page "
         "in [lineage.html](lineage.html) (open it in a browser). Interactive, to follow one "
         "column or field through all steps: [lineage_explorer.html](lineage_explorer.html).",
         "",
-        "## Overview: bronze tables → silver tables",
+        "## Overview: bronze → silver → gold",
         "",
         "```mermaid",
         mermaid_overview(),
@@ -536,23 +737,29 @@ def markdown() -> str:
         "## Contents",
         "",
     ]
-    for table in SILVER_LINEAGE:
-        lines.append(f"- [`{table}`](#{table})")
-    for table, columns in SILVER_LINEAGE.items():
-        script = "pipeline/silver/kvk.py" if table in SILVER_KVK_TABLES else "pipeline/silver/cbs.py"
-        lines += ["", f"## {table}", "", f"Built by `{script}`.", "",
+    lines.append("Silver: " + ", ".join(f"[`{t}`](#{t})" for t in SILVER_LINEAGE))
+    lines += ["", "Gold: " + ", ".join(f"[`{t}`](#{t})" for t in GOLD_LINEAGE)]
+    for table, columns in LINEAGE.items():
+        if table in GOLD_LINEAGE:
+            script = "pipeline/gold/build.py"
+        else:
+            script = "pipeline/silver/kvk.py" if table in SILVER_KVK_TABLES else "pipeline/silver/cbs.py"
+        layer = "gold" if table in GOLD_LINEAGE else "silver"
+        lines += ["", f"## {table}", "", f"A {layer} table, built by `{script}`.", "",
                   "```mermaid", mermaid_table(table), "```", "",
                   "| Column | Comes from | How |", "|---|---|---|"]
         for column, c in columns.items():
-            from_ = "<br>".join(f"`{s}`" for s in c.sources) or "*(the run)*"
+            from_ = "<br>".join(f"`{s}`" for s in c.sources) or (
+                "*(the run)*" if column == "run_id" else "*(set by gold)*")
             lines.append(f"| `{column}` | {from_} | {c.how} |")
     return "\n".join(lines) + "\n"
 
 
 def dagster_lineage(asset_tables: set[str]) -> dict:
-    """Column lineage and column descriptions for one Dagster asset (silver_cbs or
-    silver_kvk), in Dagster's format. Columns are named '<table>.<column>'; bronze
-    sources point at the bronze assets, silver sources outside the asset at silver_cbs.
+    """Column lineage and column descriptions for one Dagster asset (silver_cbs,
+    silver_kvk or gold), in Dagster's format. Columns are named '<table>.<column>'; bronze
+    sources point at the bronze assets, silver sources outside the asset at their
+    silver asset.
 
     The free Dagster UI shows the column list (dagster/column_schema) but not the column
     lineage graph (a Dagster+ feature), so each description starts with its sources."""
@@ -560,7 +767,7 @@ def dagster_lineage(asset_tables: set[str]) -> dict:
 
     def asset_of(s: Source) -> str:
         if s.is_silver:
-            return "silver_cbs"
+            return "silver_kvk" if s.table.removeprefix("silver:") in SILVER_KVK_TABLES else "silver_cbs"
         if s.table.startswith("kvk/"):
             return "kvk_bronze"
         if s.table.startswith("reference/"):
@@ -569,9 +776,10 @@ def dagster_lineage(asset_tables: set[str]) -> dict:
 
     deps, schema = {}, []
     for table in sorted(asset_tables):
-        for column, c in SILVER_LINEAGE[table].items():
+        for column, c in LINEAGE[table].items():
             name = f"{table}.{column}"
-            origin = ", ".join(str(s) for s in c.sources) or "the run"
+            origin = ", ".join(str(s) for s in c.sources) or (
+                "the run" if column == "run_id" else "gold (a fixed value)")
             schema.append(dg.TableColumn(name, description=f"From {origin} — {c.how}"))
             sources = set()
             for s in c.sources:
@@ -590,7 +798,7 @@ def dagster_lineage(asset_tables: set[str]) -> dict:
 
 # --------------------------------------------------------------------------- explorer
 EXPLORER_TEMPLATE = "lineage_explorer_template.html"
-EXPLORER_START = "silver:fct_absence_rate.member_type"   # a column with a silver step
+EXPLORER_START = "gold:gold_absence_by_sector.absence_pct"   # bronze -> silver -> gold
 
 
 def _bronze_how(s: Source) -> str:
@@ -607,17 +815,26 @@ def _bronze_how(s: Source) -> str:
 
 
 def explorer_data() -> dict:
-    """Nodes (silver columns, bronze fields, the run) and edges for the explorer page."""
+    """Nodes (gold and silver columns, bronze fields, the runs) and edges for the
+    explorer page."""
     nodes, edges = {}, []
-    for table, columns in SILVER_LINEAGE.items():
+    for table, columns in LINEAGE.items():
+        layer = "gold" if table in GOLD_LINEAGE else "silver"
         for column, c in columns.items():
-            cid = f"silver:{table}.{column}"
-            nodes[cid] = {"id": cid, "layer": "silver", "table": table, "name": column,
+            cid = f"{layer}:{table}.{column}"
+            nodes[cid] = {"id": cid, "layer": layer, "table": table, "name": column,
                           "how": c.how}
             if not c.sources:
-                nodes["run"] = {"id": "run", "layer": "run", "table": "the silver run",
-                                "name": "pipeline/common/publish.py", "how": "adds run_id to every row it publishes"}
-                edges.append(["run", cid])
+                if column == "run_id":
+                    rid = f"run:{layer}"
+                    nodes[rid] = {"id": rid, "layer": "run", "table": f"the {layer} run",
+                                  "name": "pipeline/common/publish.py",
+                                  "how": "adds run_id to every row it publishes"}
+                else:
+                    rid = "run:gold-build"
+                    nodes[rid] = {"id": rid, "layer": "run", "table": "the gold build",
+                                  "name": "pipeline/gold/build.py", "how": "sets a fixed value"}
+                edges.append([rid, cid])
             for s in c.sources:
                 sid = f"{s.table}.{s.field}" if s.is_silver else f"bronze:{s.table}.{s.field}"
                 if not s.is_silver:
@@ -645,4 +862,5 @@ if __name__ == "__main__":
     (docs / "lineage.html").write_text(html(), encoding="utf-8")
     (docs / "lineage_explorer.html").write_text(explorer_html(), encoding="utf-8")
     print(f"Wrote {docs / 'lineage.md'}, lineage.html and lineage_explorer.html "
-          f"({sum(len(c) for c in SILVER_LINEAGE.values())} columns, {len(SILVER_LINEAGE)} tables)")
+          f"({sum(len(c) for c in LINEAGE.values())} columns, {len(SILVER_LINEAGE)} silver and "
+          f"{len(GOLD_LINEAGE)} gold tables)")

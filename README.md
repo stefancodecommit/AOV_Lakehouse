@@ -16,9 +16,9 @@ as [Delta Lake](https://delta.io) tables in the folder `lakehouse/`.
 | [`docs/PROJECT.md`](docs/PROJECT.md) | The design: sub-questions, data sources, and *why* each choice was made |
 | [`TODO.md`](TODO.md) | Open work, decisions taken, and results of each real run |
 | [`docs/bronze_to_silver.md`](docs/bronze_to_silver.md) | How bronze becomes silver, table by table, with real examples |
-| [`docs/lineage.md`](docs/lineage.md) | Column lineage: for every silver column, the bronze field(s) it comes from, as diagrams and tables (generated from `tools/lineage.py`) |
+| [`docs/lineage.md`](docs/lineage.md) | Column lineage: for every silver column, the bronze field(s) it comes from; for every gold column, the silver column(s) it is made from; as diagrams and tables (generated from `tools/lineage.py`) |
 | [`docs/lineage.html`](docs/lineage.html) | The same lineage diagrams on one page, to open in a browser |
-| [`docs/lineage_explorer.html`](docs/lineage_explorer.html) | Interactive lineage: pick a silver column or bronze field and see its whole chain, in both directions (works offline) |
+| [`docs/lineage_explorer.html`](docs/lineage_explorer.html) | Interactive lineage: pick a gold or silver column or a bronze field and see its whole chain bronze → silver → gold, in both directions (works offline) |
 
 ## Contents
 
@@ -377,7 +377,7 @@ instance settings (one writing run at a time).
 | `checks/quarantine.py` | Saves failed batches with a report; monthly cleanup |
 | `pipeline/common/publish.py` | Silver and gold: write all tables to a staging folder first, replace the live tables only when all succeeded |
 | `pipeline/common/runlog.py` | One row per silver/gold run in `lakehouse/_run_log`: when, what, status, which inputs |
-| `tools/lineage.py` | Column lineage bronze → silver: the source of `docs/lineage.md`, `docs/lineage.html` (diagrams), `docs/lineage_explorer.html` (interactive; layout in `tools/lineage_explorer_template.html`) and the lineage in Dagster; a test keeps it complete |
+| `tools/lineage.py` | Column lineage bronze → silver → gold: the source of `docs/lineage.md`, `docs/lineage.html` (diagrams), `docs/lineage_explorer.html` (interactive; layout in `tools/lineage_explorer_template.html`) and the lineage in Dagster; a test keeps it complete |
 | `tools/inspect_lakehouse.py` | One-screen overview: rows, periods, freshness per table; warnings; problems (exit code 1) |
 | `tools/lakehouse_viewer.py` | Small Streamlit app to look at any Delta table, any version, read-only; its *Data quality* view shows per column how complete it is, padded text, distinct values, min/max and the most common value, the flags' true counts, duplicate rows and duplicate keys |
 | `tools/maintenance.py` | Monthly maintenance: quarantine cleanup, KVK retention, Delta optimize/vacuum |
@@ -430,7 +430,7 @@ A misspelled setting name stops the script with an error instead of being ignore
 ## Tests
 
 ```bash
-.venv/bin/pytest              # 335 tests, ~65 s, no internet needed
+.venv/bin/pytest              # 348 tests, ~65 s, no internet needed
 .venv/bin/pytest -m live      # one extra test against the real CBS API
 ```
 
@@ -450,7 +450,7 @@ repository isn't on GitHub yet.
 | `test_reference.py` | The SBI crosswalk: loading, rejecting, no duplicates |
 | `test_gold.py` | Gold comparisons and tables, end to end from bronze to gold |
 | `test_config.py`, `test_maintenance.py` | Configuration overrides, quarantine cleanup |
-| `test_lineage.py` | The column lineage is complete (every silver column), its bronze fields exist, and `docs/lineage.md` is up to date |
+| `test_lineage.py` | The column lineage is complete (every silver and gold column), its bronze fields and silver columns exist, and `docs/lineage.md` is up to date |
 | `test_dashboard.py` | Dashboard helpers, and every page run headless (both switch states) on gold built from sample data |
 | `test_orchestration.py` | Dagster: the graph and schedules, skipping when nothing is new, the KVK confirmation, blocking checks stopping the next layer, automatic rebuilds, and one run of the real `dagster` command |
 

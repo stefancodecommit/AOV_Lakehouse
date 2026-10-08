@@ -11,7 +11,7 @@ Built and run on real data: bronze (CBS, KVK, SBI crosswalk) with checks and qua
 (CBS bronze with a column per field next to `raw_json`),
 silver (CBS, KVK), gold (5 tables), the Streamlit dashboard, Dagster orchestration,
 Docker Compose (including the KVK chat agent), column lineage, config, run log, the
-lakehouse viewer with data quality statistics (`python -m tools.lakehouse_viewer`), 335
+lakehouse viewer with data quality statistics (`python -m tools.lakehouse_viewer`), 348
 tests. Code is organised in `pipeline/` (per layer) and `tools/` (2026-10-08). All
 committed; no containers or servers left running. See the README for how to start
 everything (locally, or with `docker compose up -d`).
@@ -489,7 +489,12 @@ Run: `docker compose up -d` (Dagster http://localhost:3000, dashboard :8501)
       works offline. Checked by rendering both directions `tests/test_lineage.py` fails when a
       silver column has no entry, a named bronze field doesn't exist, or the document
       is out of date. 133 columns in 12 tables
-- [ ] Optional later: the same column lineage silver -> gold
+- [x] Column lineage silver -> gold (2026-10-08): `GOLD_LINEAGE` in `tools/lineage.py`; every
+      gold column names the silver column(s) it is made from (comparisons such as
+      diff_from_national_pp name the value they compare). docs/lineage.* and the explorer
+      show bronze -> silver -> gold (the explorer now opens on a gold column); the Dagster
+      gold asset lists its columns with their origin; tests check that every gold column
+      is documented, in order, and reads only silver
 
 ## Known issues
 - [x] deltalake aborts at interpreter exit ("terminate called without an active
@@ -509,7 +514,7 @@ crosswalk; `tests/test_checks.py` the CBS and KVK checks and quarantine;
 `tests/test_maintenance.py` the quarantine cleanup; `tests/test_config.py` the
 configuration; `tests/test_kvk_silver.py` silver KVK; `tests/test_gold.py` gold;
 `tests/test_dashboard.py` the dashboard (every page headless); `tests/test_orchestration.py`
-Dagster; `tests/test_delta.py` writes real Delta tables in `tmp_path` (335 tests, ~70 s). `conftest.py` fails a test when any module still points at the real
+Dagster; `tests/test_delta.py` writes real Delta tables in `tmp_path` (348 tests, ~70 s). `conftest.py` fails a test when any module still points at the real
 lakehouse or inbox. Checked by breaking the code on purpose:
 removing the delete-before-write, an empty `done_keys()` and non-UTC silver timestamps
 each make the right tests fail.
