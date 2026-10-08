@@ -10,7 +10,9 @@ next layer on top of it.
 Built and run on real data: bronze (CBS, KVK, SBI crosswalk) with checks and quarantine
 (CBS bronze with a column per field next to `raw_json`),
 silver (CBS, KVK), gold (5 tables), the Streamlit dashboard, Dagster orchestration,
-Docker Compose (including the KVK chat agent), column lineage, config, run log, 335 tests. All
+Docker Compose (including the KVK chat agent), column lineage, config, run log, the
+lakehouse viewer with data quality statistics (`python -m tools.lakehouse_viewer`), 335
+tests. Code is organised in `pipeline/` (per layer) and `tools/` (2026-10-08). All
 committed; no containers or servers left running. See the README for how to start
 everything (locally, or with `docker compose up -d`).
 
@@ -23,7 +25,10 @@ everything (locally, or with `docker compose up -d`).
    in `.streamlit/config.toml`). In Docker it already is.
 3. **When CBS publishes a new SBI crosswalk version:** update
    `reference.sbi_crosswalk_url` in config.yaml (section 1, Reference).
-4. Optional: email/Slack alerts (section 5), re-run the palette validator (needs
+4. **Open question** (Lakehouse viewer section): `CategoryGroupID` in `81644ned_regios`
+   is typed as text because every value is empty; give all-empty fields Arrow's null
+   type so the first real value sets the type?
+5. Optional: email/Slack alerts (section 5), re-run the palette validator (needs
    Node.js, section 4), report the deltalake exit race upstream (Known issues).
 
 Run order (from the project folder, with the virtualenv):
