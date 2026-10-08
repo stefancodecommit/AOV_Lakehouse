@@ -8,6 +8,8 @@ the code; the last section says where each step lives in it.
 - Silver CBS is built by [`cbs_silver.py`](../cbs_silver.py)
 - Silver KVK is built by [`kvk_silver.py`](../kvk_silver.py)
 - For the bigger picture (sources, layers, how to run), see the [README](../README.md)
+- For the origin of every single silver column, see the column lineage:
+  [lineage.md](lineage.md)
 
 ## Contents
 

@@ -65,6 +65,7 @@ import cbs_silver  # noqa: E402
 import gold as gold_layer  # noqa: E402
 import kvk_bronze_agent  # noqa: E402
 import kvk_silver  # noqa: E402
+import lineage  # noqa: E402
 import maintenance  # noqa: E402
 import reference_bronze  # noqa: E402
 from checks import CheckResult  # noqa: E402
@@ -157,14 +158,20 @@ def _published(pipeline_run) -> dg.MaterializeResult:
     return dg.MaterializeResult(metadata={"run_id": run_id})
 
 
+# Column lineage (lineage.py): shown in the UI per asset, tab "Column lineage"
+CBS_SILVER_TABLES = set(lineage.SILVER_LINEAGE) - lineage.SILVER_KVK_TABLES
+
+
 @dg.asset(group_name="silver", deps=["cbs_bronze", "sbi_crosswalk"],
-          automation_condition=AFTER_NEW_DATA, description="cbs_silver.py: 11 tables")
+          automation_condition=AFTER_NEW_DATA, description="cbs_silver.py: 11 tables",
+          metadata=lineage.dagster_lineage(CBS_SILVER_TABLES))
 def silver_cbs() -> dg.MaterializeResult:
     return _published(cbs_silver.run)
 
 
 @dg.asset(group_name="silver", deps=["kvk_bronze", "silver_cbs"],
-          automation_condition=AFTER_NEW_DATA, description="kvk_silver.py: kvk_company")
+          automation_condition=AFTER_NEW_DATA, description="kvk_silver.py: kvk_company",
+          metadata=lineage.dagster_lineage(lineage.SILVER_KVK_TABLES))
 def silver_kvk() -> dg.MaterializeResult:
     return _published(kvk_silver.run)
 

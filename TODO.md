@@ -9,7 +9,7 @@ next layer on top of it.
 
 Built and run on real data: bronze (CBS, KVK, SBI crosswalk) with checks and quarantine,
 silver (CBS, KVK), gold (5 tables), the Streamlit dashboard, Dagster orchestration,
-Docker Compose (including the KVK chat agent), config, run log, 287 tests. All
+Docker Compose (including the KVK chat agent), column lineage, config, run log, 307 tests. All
 committed; no containers or servers left running. See the README for how to start
 everything (locally, or with `docker compose up -d`).
 
@@ -433,6 +433,16 @@ Run: `docker compose up -d` (Dagster http://localhost:3000, dashboard :8501)
   option (Ollama runs as root and could leave root-owned files in the home folder) in
   favour of copying the model into the Docker volume
 
+## Documentation
+- [x] `docs/bronze_to_silver.md`: how each silver table is made, with real examples
+      (2026-10-08)
+- [x] Column lineage bronze -> silver (2026-10-08): `lineage.py` is the source; it
+      generates `docs/lineage.md` (`python lineage.py`) and the column lineage of the
+      Dagster assets silver_cbs and silver_kvk. `tests/test_lineage.py` fails when a
+      silver column has no entry, a named bronze field doesn't exist, or the document
+      is out of date. 133 columns in 12 tables
+- [ ] Optional later: the same column lineage silver -> gold
+
 ## Known issues
 - [x] deltalake aborts at interpreter exit ("terminate called without an active
       exception", exit code 134) in some runs after reading a Delta table; seen with
@@ -451,7 +461,7 @@ crosswalk; `tests/test_checks.py` the CBS and KVK checks and quarantine;
 `tests/test_maintenance.py` the quarantine cleanup; `tests/test_config.py` the
 configuration; `tests/test_kvk_silver.py` silver KVK; `tests/test_gold.py` gold;
 `tests/test_dashboard.py` the dashboard (every page headless); `tests/test_orchestration.py`
-Dagster; `tests/test_delta.py` writes real Delta tables in `tmp_path` (286 tests, ~55 s). `conftest.py` fails a test when any module still points at the real
+Dagster; `tests/test_delta.py` writes real Delta tables in `tmp_path` (307 tests, ~75 s). `conftest.py` fails a test when any module still points at the real
 lakehouse or inbox. Checked by breaking the code on purpose:
 removing the delete-before-write, an empty `done_keys()` and non-UTC silver timestamps
 each make the right tests fail.

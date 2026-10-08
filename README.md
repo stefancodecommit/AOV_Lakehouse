@@ -16,6 +16,7 @@ as [Delta Lake](https://delta.io) tables in the folder `lakehouse/`.
 | [`PROJECT.md`](PROJECT.md) | The design: sub-questions, data sources, and *why* each choice was made |
 | [`TODO.md`](TODO.md) | Open work, decisions taken, and results of each real run |
 | [`docs/bronze_to_silver.md`](docs/bronze_to_silver.md) | How bronze becomes silver, table by table, with real examples |
+| [`docs/lineage.md`](docs/lineage.md) | Column lineage: for every silver column, the bronze field(s) it comes from (generated from `lineage.py`) |
 
 ## Contents
 
@@ -300,7 +301,9 @@ the write. Each upload is a full snapshot, stored as one batch.
 ### Silver
 
 How each silver table is made from bronze, with real before/after examples:
-[`docs/bronze_to_silver.md`](docs/bronze_to_silver.md).
+[`docs/bronze_to_silver.md`](docs/bronze_to_silver.md). Where every single silver column
+comes from: [`docs/lineage.md`](docs/lineage.md), generated from `lineage.py` (also shown
+in the Dagster UI, tab *Column lineage* of `silver_cbs` and `silver_kvk`).
 
 **`cbs_silver.py`** — turns the raw CBS records into dimension tables (`dim_period`,
 `dim_sector`, `dim_company_size`, `dim_region`, `dim_survey_measure`), fact tables
@@ -351,6 +354,7 @@ instance settings (one writing run at a time).
 | `checks/quarantine.py` | Saves failed batches with a report; monthly cleanup |
 | `publish.py` | Silver and gold: write all tables to a staging folder first, replace the live tables only when all succeeded |
 | `runlog.py` | One row per silver/gold run in `lakehouse/_run_log`: when, what, status, which inputs |
+| `lineage.py` | Column lineage bronze → silver: the source of `docs/lineage.md` and of the lineage in Dagster; a test keeps it complete |
 | `inspect_lakehouse.py` | One-screen overview: rows, periods, freshness per table; warnings; problems (exit code 1) |
 | `maintenance.py` | Monthly maintenance: quarantine cleanup, KVK retention, Delta optimize/vacuum |
 
@@ -402,7 +406,7 @@ A misspelled setting name stops the script with an error instead of being ignore
 ## Tests
 
 ```bash
-.venv/bin/pytest              # 286 tests, ~55 s, no internet needed
+.venv/bin/pytest              # 307 tests, ~70 s, no internet needed
 .venv/bin/pytest -m live      # one extra test against the real CBS API
 ```
 
@@ -422,6 +426,7 @@ repository isn't on GitHub yet.
 | `test_reference.py` | The SBI crosswalk: loading, rejecting, no duplicates |
 | `test_gold.py` | Gold comparisons and tables, end to end from bronze to gold |
 | `test_config.py`, `test_maintenance.py` | Configuration overrides, quarantine cleanup |
+| `test_lineage.py` | The column lineage is complete (every silver column), its bronze fields exist, and `docs/lineage.md` is up to date |
 | `test_dashboard.py` | Dashboard helpers, and every page run headless (both switch states) on gold built from sample data |
 | `test_orchestration.py` | Dagster: the graph and schedules, skipping when nothing is new, the KVK confirmation, blocking checks stopping the next layer, automatic rebuilds, and one run of the real `dagster` command |
 
