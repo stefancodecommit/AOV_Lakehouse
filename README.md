@@ -14,6 +14,7 @@ as [Delta Lake](https://delta.io) tables in the folder `lakehouse/`.
 |---|---|
 | `README.md` (this file) | What the project does, how the scripts fit together, how to run it |
 | [`docs/PROJECT.md`](docs/PROJECT.md) | The design: sub-questions, data sources, and *why* each choice was made |
+| [`INSTRUCTIONS.md`](INSTRUCTIONS.md) | Which commands to run: the whole project or one part, by hand, with Dagster or in Docker |
 | [`TODO.md`](TODO.md) | Open work, decisions taken, and results of each real run |
 | [`docs/bronze_to_silver.md`](docs/bronze_to_silver.md) | How bronze becomes silver, table by table, with real examples |
 | [`docs/lineage.md`](docs/lineage.md) | Column lineage: for every silver column, the bronze field(s) it comes from; for every gold column, the silver column(s) it is made from; as diagrams and tables (generated from `tools/lineage.py`) |
