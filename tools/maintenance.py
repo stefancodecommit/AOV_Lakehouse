@@ -15,7 +15,8 @@ KVK retention
 Each KVK upload is a full snapshot (~22 MB). Kept: the newest snapshot, plus the first
 snapshot of every calendar month (so trends over time stay possible). The rows of other
 batches are deleted from bronze; their batch-log entry stays, marked "retired", so the
-history of what was loaded remains. Silver reads only "success" batches.
+history of what was loaded remains. Silver reads only "success" batches: its next run
+deletes the retired snapshots from kvk_company too (they are never the latest one).
 
 Delta optimize and vacuum
 -------------------------

@@ -181,7 +181,7 @@ def test_failed_blocking_check_stops_automation(bronze_delta, monkeypatch):   # 
     monkeypatch.setattr(d.kvk_silver, "run", lambda: "silver_kvk_test")
     monkeypatch.setattr(layers, "check_silver_kvk",
                         lambda df: [CheckResult(n, True) for n in
-                                    ("tables_not_empty", "one_run_id",
+                                    ("tables_not_empty", "one_run_per_snapshot",
                                      "latest_snapshot_present", "valid_sbi_sections")])
     dg.materialize([d.silver_kvk, d.silver_kvk_checks], instance=instance)
     first = evaluate(instance)

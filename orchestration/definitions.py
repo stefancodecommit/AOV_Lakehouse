@@ -210,7 +210,7 @@ def silver_cbs_checks():
 
 
 @dg.multi_asset_check(specs=[dg.AssetCheckSpec(n, asset="silver_kvk", blocking=True)
-                             for n in ["tables_not_empty", "one_run_id",
+                             for n in ["tables_not_empty", "one_run_per_snapshot",
                                        "latest_snapshot_present", "valid_sbi_sections"]])
 def silver_kvk_checks():
     from checks.layers import check_silver_kvk

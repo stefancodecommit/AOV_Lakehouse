@@ -14,7 +14,8 @@ started_at    UTC
 finished_at   UTC
 status        success | failed
 error         what went wrong (failed runs)
-tables        JSON: {table: {"rows": n, "status": "published" | "skipped"}}
+tables        JSON: {table: {"rows": n, "status": "published" | "skipped"}}; silver KVK
+              also: "updated" | "unchanged", mode (full | incremental), reason, added, removed
 inputs        JSON: {input table: Delta version read}, e.g. bronze tables
 code_version  git commit of the code that ran ("-dirty" with uncommitted changes)
 """

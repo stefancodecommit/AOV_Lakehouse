@@ -183,6 +183,18 @@ KVK sub-codes, codes in both SBI lists, codes that came from several SBI 2008 co
 marked with flag columns; derived sector columns are filled only when unambiguous (90% of
 active companies). Built by `pipeline/silver/kvk.py`; see its docstring for every column.
 
+Updated incrementally (decided 2026-10-10), because KVK is the part that grows: with the
+latest snapshot plus one per month kept, a full rebuild every run would need ~1.2 GB more
+memory per month kept. A run compares the successful batches in bronze's batch log with
+the batches in kvk_company and only builds the new ones and deletes the retired ones, one
+snapshot per commit; `is_latest` moves in a single commit. A full rebuild (still one
+snapshot at a time, newest first) happens when a rule for all snapshots changed: the SBI
+crosswalk's content (a fingerprint in the run log) or `LOGIC_VERSION`, or on `--full`.
+The table is partitioned by `batch_id`, so the batches present are read from the Delta
+log without reading data, and a retired snapshot is removed by dropping its folder.
+Consequence: rows of different snapshots carry different run_ids (the run that built that
+snapshot); the layer check is "one run per snapshot" instead of "one run".
+
 ### Gold — `pipeline/gold/build.py` (built)
 
 Built around the main question (column details in the `pipeline/gold/build.py` docstring):
@@ -430,7 +442,7 @@ TODO.md                  open work
 | Data checks before ingestion (CBS) | Built (`checks/cbs.py`) |
 | Quarantine | Built for CBS, KVK and reference files; monthly cleanup in `tools/maintenance.py` |
 | Alerting, freshness checks | To do |
-| pytest | 348 tests incl. real Delta tables, the dashboard pages and Dagster; one opt-in live CBS test |
+| pytest | 359 tests incl. real Delta tables, the dashboard pages and Dagster; one opt-in live CBS test |
 | Configuration file | Built (`config.yaml` + `pipeline/common/config.py`) |
 | Gold | Built: 5 tables; provisional figures marked |
 | Streamlit dashboard | Built: 6 pages incl. data dictionary; provisional marked, "final only" switch |

@@ -1,5 +1,6 @@
 """
-Publishing a silver (later also gold) run: staging, swap and the run log.
+Publishing a silver CBS or gold run: staging, swap and the run log. (Silver KVK is
+updated per snapshot instead and writes its own run log rows: pipeline/silver/kvk.py.)
 
 A run builds all its tables, writes them to <layer>/_staging/<run_id>/, and only when
 every table was staged replaces the live tables, each with a `run_id` column. A run that

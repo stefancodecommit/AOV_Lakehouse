@@ -68,16 +68,65 @@ def isolated_lakehouse(tmp_path, monkeypatch):
         "kvk": tmp_path / "bronze" / "kvk" / "_batch_log",
         "reference": tmp_path / "bronze" / "reference" / "_batch_log"})
 
-    # Safety net: no module-level path may still point into the real lakehouse or inbox
+    # Safety net: no module-level path may still point into the real lakehouse or inbox,
+    # at the start of the test and again at its end (a test that calls monkeypatch.undo()
+    # also undoes the lines above, and from then on would work on the real data)
+    _check_no_real_paths("at the start of the test")
+    yield
+    _check_no_real_paths("at the end of the test (monkeypatch.undo() undoes the isolation "
+                         "too; use monkeypatch.context() instead)")
+
+
+def _real_data() -> list[Path]:
     from pipeline.common import config
-    real = [config.project_path(config.settings["paths"][k]) for k in ("lakehouse", "inbox")]
+    return [config.project_path(config.settings["paths"][k]).resolve() for k in ("lakehouse", "inbox")]
+
+
+def _check_no_real_paths(when: str) -> None:
+    real = _real_data()
     for mod in (cbs_bronze, cbs_silver, reference_bronze, kvk_bronze_agent, maintenance, runlog,
                 kvk_silver, gold, dashboard_data):
         for name, value in vars(mod).items():
             values = value.values() if isinstance(value, dict) else [value]
             for v in values:
                 if isinstance(v, Path) and any(v == r or r in v.parents for r in real):
-                    pytest.fail(f"{mod.__name__}.{name} still points at real data: {v}")
+                    pytest.fail(f"{mod.__name__}.{name} points at real data {when}: {v}")
+
+
+@pytest.fixture(autouse=True, scope="session")
+def no_writes_to_real_data():
+    """Second safety net, for the whole session: every Delta write refuses the real
+    lakehouse and inbox, whatever a test patched or undid. Not done with monkeypatch on
+    purpose: monkeypatch.undo() in a test can't remove it."""
+    import deltalake
+
+    real = _real_data()
+
+    def refuse(target) -> None:
+        uri = str(getattr(target, "table_uri", target)).removeprefix("file://")
+        path = Path(uri).resolve()
+        if any(path == r or r in path.parents for r in real):
+            raise RuntimeError(f"test tried to write to real data: {path}")
+
+    originals = {"write_deltalake": deltalake.write_deltalake}
+
+    def guarded_write(table_or_uri, *a, **kw):
+        refuse(table_or_uri)
+        return originals["write_deltalake"](table_or_uri, *a, **kw)
+
+    deltalake.write_deltalake = guarded_write
+    for method in ("update", "delete", "merge", "vacuum"):
+        original = getattr(deltalake.DeltaTable, method)
+        originals[method] = original
+
+        def guarded(self, *a, _original=original, **kw):
+            refuse(self)
+            return _original(self, *a, **kw)
+        setattr(deltalake.DeltaTable, method, guarded)
+    yield
+    deltalake.write_deltalake = originals.pop("write_deltalake")
+    for method, original in originals.items():
+        setattr(deltalake.DeltaTable, method, original)
 
 
 # --------------------------------------------------------------------------- builders

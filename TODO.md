@@ -5,15 +5,15 @@ Open work, in the order of `docs/PROJECT.md`. Each phase builds on the one befor
 Rule for every phase: run each new layer on real data and check it before building the
 next layer on top of it.
 
-## Where to continue (status 2026-10-08)
+## Where to continue (status 2026-10-10)
 
 Built and run on real data: bronze (CBS, KVK, SBI crosswalk) with checks and quarantine
 (CBS bronze with a column per field next to `raw_json`),
 silver (CBS, KVK), gold (5 tables), the Streamlit dashboard, Dagster orchestration,
 Docker Compose (including the KVK chat agent), column lineage, config, run log, the
-lakehouse viewer with data quality statistics (`python -m tools.lakehouse_viewer`), 348
-tests. Code is organised in `pipeline/` (per layer) and `tools/` (2026-10-08). All
-committed; no containers or servers left running. See the README for how to start
+lakehouse viewer with data quality statistics (`python -m tools.lakehouse_viewer`),
+incremental silver KVK (2026-10-10), 359 tests. Code is organised in `pipeline/` (per
+layer) and `tools/` (2026-10-08). All committed; no containers or servers left running. See the README for how to start
 everything (locally, or with `docker compose up -d`).
 
 **Next steps:**
@@ -29,7 +29,11 @@ everything (locally, or with `docker compose up -d`).
 5. **Open question** (Lakehouse viewer section): `CategoryGroupID` in `81644ned_regios`
    is typed as text because every value is empty; give all-empty fields Arrow's null
    type so the first real value sets the type?
-6. Optional: email/Slack alerts (section 5), re-run the palette validator (needs
+6. **Open question** (Silver KVK): `snapshot_date` is the upload date, not KVK's own date
+   of the file. Check whether the zip or CSV carries KVK's date and use that instead.
+7. Optional, when KVK grows (Silver KVK): move silver KVK (and gold's KVK table) to
+   Polars; CBS stays on pandas.
+8. Optional: email/Slack alerts (section 5), re-run the palette validator (needs
    Node.js, section 4), report the deltalake exit race upstream (Known issues).
 
 Run order (from the project folder, with the virtualenv):
@@ -320,6 +324,42 @@ Planned columns:
 - [x] Decision (2026-10-05): 4-digit KVK codes such as 7111 (SBI 2008 class codes without
       a subclass, not in the crosswalk) stay `unknown_code`; no extra mapping rule
 
+### KVK: incremental updates (done 2026-10-10)
+Why: KVK is the part that grows. With the latest snapshot plus one per month kept, a full
+rebuild every run would need ~1.2 GB more memory per month kept (~23M rows after a year).
+- [x] A run compares the successful batches in bronze's `_batch_log` with the batches in
+      kvk_company: builds only new snapshots, deletes retired ones, one snapshot per
+      commit; `is_latest` moves in one commit (never two latest, never none)
+- [x] Full rebuild (newest snapshot first, then the older ones, one at a time) when the
+      SBI crosswalk's content changed (fingerprint in the run log), when `LOGIC_VERSION`
+      was raised, or with `--full`; `--preview` shows what the next run would do
+- [x] A run that stops halfway is finished by the next one: a snapshot from a run that
+      didn't succeed is rebuilt. `run_id` is now per snapshot; the layer check is "one
+      run per snapshot" (Dagster too); `inspect_lakehouse` flags rows of failed runs
+- [x] Partitioned by `batch_id`: the batches present are read from the Delta log (no
+      data read), a retired snapshot is dropped as a folder
+- [x] Memory, measured on simulated monthly uploads (4 snapshots, 7.7M rows): full
+      rebuild 1.65 GB (3.2 GB before the fixes below), adding one 1.8 GB, nothing new
+      0.18 GB. Real data: full rebuild 1.46 GB, nothing new 0.7 s. Fixes found by
+      measuring: present batches from the Delta log instead of reading two columns of
+      every row; one snapshot per write call (the libraries keep memory in proportion
+      to everything passed through one call); staging before a partitioned write
+      (+400 MB otherwise); Arrow's system allocator and at most 2 glibc arenas, so
+      memory is handed back between snapshots (`lean_memory`)
+- [x] Tests: the plan (full/incremental/redo), a second upload (only that one is read
+      from bronze), nothing new (no new Delta version), a retired batch, a crash before
+      the flag moves, a full rebuild stopped after the first snapshot, a crosswalk
+      change (same content: nothing; other content: full); each time the table equals
+      a full rebuild. Two deliberately broken versions (flag never moves; failed runs
+      never redone) each fail tests. Real data: identical to the table of 2026-10-08
+- [x] Safety net (found while testing): `monkeypatch.undo()` in a test also undid the
+      isolated lakehouse; caught before anything was written, but conftest now checks
+      the paths at the end of every test too, and refuses every Delta write to the real
+      lakehouse or inbox for the whole test session (proven with a probe test)
+- [ ] Optional, later: Polars for silver KVK and gold's KVK table (the one place with
+      millions of rows); not needed for memory any more, a learning exercise
+- [ ] Open question: `snapshot_date` is the upload date; KVK's own date may be in the file
+
 Notes:
 - There is no KVK number or company ID in the open dataset, so individual companies
   can't be tracked across snapshots; compare snapshots only in aggregate.
@@ -515,7 +555,7 @@ crosswalk; `tests/test_checks.py` the CBS and KVK checks and quarantine;
 `tests/test_maintenance.py` the quarantine cleanup; `tests/test_config.py` the
 configuration; `tests/test_kvk_silver.py` silver KVK; `tests/test_gold.py` gold;
 `tests/test_dashboard.py` the dashboard (every page headless); `tests/test_orchestration.py`
-Dagster; `tests/test_delta.py` writes real Delta tables in `tmp_path` (348 tests, ~70 s). `conftest.py` fails a test when any module still points at the real
+Dagster; `tests/test_delta.py` writes real Delta tables in `tmp_path` (359 tests, ~70 s). `conftest.py` fails a test when any module still points at the real
 lakehouse or inbox. Checked by breaking the code on purpose:
 removing the delete-before-write, an empty `done_keys()` and non-UTC silver timestamps
 each make the right tests fail.

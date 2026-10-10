@@ -81,8 +81,8 @@ down. Bronze steps only fetch what is new; silver and gold are rebuilt as a whol
 |---|---|
 | CBS published new figures (about monthly) | `pipeline.bronze.cbs`, `pipeline.silver.cbs`, `pipeline.gold.build` |
 | A new KVK file in `inbox/kvk/` | `pipeline.bronze.kvk_agent --inbox`, `pipeline.silver.kvk`, `pipeline.gold.build` |
-| A new SBI crosswalk version from CBS | `pipeline.bronze.reference --url <url>`, `pipeline.silver.cbs`, `pipeline.silver.kvk`, `pipeline.gold.build` |
-| Code in `pipeline/silver/` | `pipeline.silver.cbs` and/or `pipeline.silver.kvk`, then `pipeline.gold.build` |
+| A new SBI crosswalk version from CBS | `pipeline.bronze.reference --url <url>`, `pipeline.silver.cbs`, `pipeline.silver.kvk` (rebuilds every upload by itself), `pipeline.gold.build` |
+| Code in `pipeline/silver/` | `pipeline.silver.cbs`, and/or `pipeline.silver.kvk --full` (or raise `LOGIC_VERSION` in it), then `pipeline.gold.build` |
 | Code in `pipeline/gold/` | `pipeline.gold.build` |
 | Code in `dashboard/` | nothing; reload the page (restart Streamlit for a new Python module) |
 | `config.yaml`: a table, start year or period type removed | [section 7](#remove-data-outside-the-configuration), then silver and gold |
@@ -114,14 +114,17 @@ Each `pipeline.…` above is run as `.venv/bin/python -m pipeline.…`.
 ```bash
 .venv/bin/python -m pipeline.silver.cbs --preview           # build and summarise, write nothing
 .venv/bin/python -m pipeline.silver.cbs
-.venv/bin/python -m pipeline.silver.kvk --preview
-.venv/bin/python -m pipeline.silver.kvk                     # ~1.3 GB memory at its peak
+.venv/bin/python -m pipeline.silver.kvk --preview           # what the next run would add or remove
+.venv/bin/python -m pipeline.silver.kvk                     # only new uploads (~1.5-1.8 GB when it adds one)
+.venv/bin/python -m pipeline.silver.kvk --full              # rebuild every kept upload, one at a time
 .venv/bin/python -m pipeline.gold.build --preview
 .venv/bin/python -m pipeline.gold.build
 ```
 
-A silver or gold run writes all its tables, or none: if one table fails, the published
-tables stay as they were. Gold refuses to build from silver CBS tables of different runs.
+A silver CBS or gold run writes all its tables, or none: if one table fails, the
+published tables stay as they were. Gold refuses to build from silver CBS tables of
+different runs. Silver KVK is updated per upload instead: a run that stops halfway is
+finished by the next one.
 
 ## 4. Look at the results
 

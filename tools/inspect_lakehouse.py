@@ -12,6 +12,7 @@ Problems reported:
   - batches or files in quarantine (failed their checks; see report.json in each folder)
 
   - silver/gold tables whose run_id isn't the latest successful run of their pipeline
+    (silver kvk_company, updated per snapshot: rows of a run that didn't succeed)
     (silver_cbs, silver_kvk, gold; a publish that stopped halfway), or a latest run
     that failed
 
@@ -118,6 +119,11 @@ def expected_bronze_names() -> list[str]:
         return []
 
 
+# Pipelines that update their table instead of replacing it (silver KVK: one snapshot
+# at a time), so its rows carry the run_ids of several runs
+INCREMENTAL = {"silver_kvk"}
+
+
 def pipeline_layer(pipeline: str) -> str:
     """Layer a pipeline publishes to: 'gold' for gold, 'silver' for silver_cbs/silver_kvk."""
     return "gold" if pipeline.startswith("gold") else "silver"
@@ -144,6 +150,18 @@ def silver_run_problems(root: Path, pipeline: str = "silver_cbs") -> tuple[list[
     if ok.empty:
         return lines, problems
     latest = ok.iloc[-1]
+    if pipeline in INCREMENTAL:
+        # updated one snapshot at a time: rows may come from several runs, each successful
+        for name in json.loads(latest["tables"]):
+            path = root / pipeline_layer(pipeline) / name
+            if not (path / "_delta_log").exists():
+                continue
+            ids = DeltaTable(str(path)).to_pyarrow_dataset().to_table(columns=["run_id"]).column("run_id")
+            bad = set(pc.unique(ids).to_pylist()) - set(ok["run_id"])
+            if bad:
+                problems.append(f"{pipeline_layer(pipeline)}/{name}: rows from runs that didn't "
+                                f"succeed: {sorted(map(str, bad))} (the next run rebuilds them)")
+        return lines, problems
     for name, info in json.loads(latest["tables"]).items():
         path = root / pipeline_layer(pipeline) / name
         if info.get("status") != "published" or not (path / "_delta_log").exists():

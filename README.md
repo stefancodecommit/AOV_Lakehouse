@@ -117,7 +117,7 @@ Reading the diagram:
 ## Setup
 
 Requirements: Linux or macOS, Python 3.10 or newer, about 2 GB free memory (silver KVK
-peaks at ~1.3 GB) and ~100 MB disk for the data.
+peaks at ~1.5–1.8 GB) and ~100 MB disk for the data.
 
 ```bash
 python3 -m venv .venv
@@ -169,7 +169,8 @@ Useful options:
 | `python -m pipeline.bronze.cbs --rebuild-columns` | Rebuild bronze's field columns from `raw_json`, no API calls (after a change in how fields are typed) |
 | `python -m pipeline.bronze.kvk_agent` | Chat with the KVK intake agent (needs Ollama) |
 | `python -m pipeline.bronze.kvk_agent --file <zip>` | Load one specific file without the agent |
-| `python -m pipeline.silver.cbs --preview`, `python -m pipeline.silver.kvk --preview`, `python -m pipeline.gold.build --preview` | Build and summarise, write nothing |
+| `python -m pipeline.silver.cbs --preview`, `python -m pipeline.silver.kvk --preview`, `python -m pipeline.gold.build --preview` | Build and summarise, write nothing (silver KVK: what the next run would add or remove) |
+| `python -m pipeline.silver.kvk --full` | Rebuild every KVK snapshot instead of only the new ones |
 | `python -m tools.inspect_lakehouse --layer silver` | Overview of one layer |
 | `python -m tools.lakehouse_viewer` | Browse every bronze, silver and gold table at http://localhost:8502: rows (with a text filter over the whole table), data quality statistics, history, older versions |
 | `python -m tools.maintenance quarantine --dry-run` | Show which quarantine entries the monthly cleanup would remove |
@@ -259,8 +260,8 @@ docker compose down                        # stop (data and run history stay)
   KVK files from the Dagster UI (`kvk_bronze`).
 
 **Minimum machine** (measured): Docker needs about **3 GB of memory** for the pipeline
-(the services use ~0.7 GB idle; the largest steps, silver KVK and gold, peak at ~1.3 and
-~1.1 GB, and only one runs at a time), or about **8 GB** with the KVK chat agent (its
+(the services use ~0.7 GB idle; the largest steps, silver KVK and gold, peak at ~1.5–1.8
+and ~1.1 GB, and only one runs at a time), or about **8 GB** with the KVK chat agent (its
 7B model needs ~5 GB). On Docker Desktop, set this under Settings → Resources → Memory.
 Disk: ~1.3 GB for the image, ~115 MB for the lakehouse so far plus ~22 MB per kept KVK
 snapshot (about 300 MB a year with monthly uploads), and ~4.7 GB for the agent's model.
@@ -344,6 +345,11 @@ the company's sector taken from its main activity and translated to SBI 2008 via
 crosswalk. Unclear cases (several main activities, unknown codes, codes that exist in
 both classifications) are *marked with flag columns* instead of being guessed; the
 sector is only filled in when there is exactly one answer (90% of active companies).
+It is updated **incrementally**: a run only builds the snapshots that are new in bronze
+and deletes the ones maintenance retired, one snapshot at a time, so its memory stays at
+about one snapshot however many months are kept. Everything is rebuilt (still one
+snapshot at a time) when the SBI crosswalk's content changed, `LOGIC_VERSION` in the
+script was raised, or with `--full`. The table is partitioned by `batch_id`.
 
 ### Gold
 
@@ -435,7 +441,7 @@ A misspelled setting name stops the script with an error instead of being ignore
 ## Tests
 
 ```bash
-.venv/bin/pytest              # 348 tests, ~65 s, no internet needed
+.venv/bin/pytest              # 359 tests, ~65 s, no internet needed
 .venv/bin/pytest -m live      # one extra test against the real CBS API
 ```
 
