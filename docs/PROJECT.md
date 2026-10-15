@@ -291,6 +291,20 @@ Built around the main question (column details in the `pipeline/gold/build.py` d
 - **`gold_kvk_context`** (latest KVK snapshot): active companies and median company age
   per SBI 2008 section and legal form; groups under 10 companies flagged. Answers
   question 6.
+- **`gold_risk_index`** (built 2026-10-15, for the insurer's data analyst): per sector
+  (every SBI level) and size class, the **relative risk** = 4-quarter average absence ÷ the
+  national 4-quarter average (1.00 = national); a **band** = the lowest and highest
+  quarterly relative risk of the last 8 quarters (CBS gives no margin of error for
+  80072NED, so the band shows how stable it is); an **assessment** (band wholly above 1:
+  higher; wholly below: lower; else around national); a **trend** = the slope of a
+  straight line through the 8 quarterly relative risks, per year (rising / falling beyond
+  ±0.05, else stable; dividing by the national figure of the same quarter removes the
+  season); the number of businesses, of which run by natural persons (the self-employed;
+  the KVK open data has no sole traders, so this comes from CBS 81589NED) and with one
+  person employed; and one sentence that explains the row. Two bases: all figures, and
+  final figures only. A white-box model on purpose: the analyst can redo every number by
+  hand and explain it to the manager. Answers questions 1, 2, 3 and 6 in one place.
+  `gold_risk_index_history` holds the quarterly relative risks behind it.
 
 Each gold row carries its period status (provisional/final) and `data_as_of`, the date of
 the newest data behind it; comparisons that mix provisional and final figures are
@@ -520,9 +534,9 @@ TODO.md                  open work
 | Data checks before ingestion (CBS) | Built (`checks/cbs.py`) |
 | Quarantine | Built for CBS, KVK and reference files; monthly cleanup in `tools/maintenance.py` |
 | Alerting, freshness checks | To do |
-| pytest | 359 tests incl. real Delta tables, the dashboard pages and Dagster; one opt-in live CBS test |
+| pytest | 372 tests incl. real Delta tables, the dashboard pages and Dagster; one opt-in live CBS test |
 | Configuration file | Built (`config.yaml` + `pipeline/common/config.py`) |
-| Gold | Built: 5 tables; provisional figures marked |
+| Gold | Built: 7 tables, including the risk index for the insurer; provisional figures marked |
 | Streamlit dashboard | Built: 6 pages incl. data dictionary; provisional marked, "final only" switch |
 | Dagster orchestration and maintenance | Built: monthly CBS, automatic rebuilds after blocking checks, freshness, maintenance |
 | Docker Compose | Built and tested (pipeline, Dagster, dashboard); chat agent not yet tried in Docker |

@@ -23,6 +23,14 @@ gold_business_context    quarterly, 81589NED: number of businesses per sector an
                          15 in the data); a band is null when one of its classes is missing
 gold_kvk_context         latest KVK snapshot: active companies per SBI 2008 section and
                          legal form, median company age; groups under 10 companies flagged
+gold_risk_index          for the insurer's data analyst: per sector and size class, the
+                         relative absence risk (4-quarter average ÷ national), a band
+                         (lowest–highest quarter of the last 8), an assessment (higher /
+                         around / lower than national), a trend, the number of businesses
+                         (and how many are run by natural persons, i.e. self-employed), and
+                         one sentence that explains it. Two variants: all figures, and
+                         final figures only (basis)
+gold_risk_index_history  the quarterly relative risk behind it, per sector and size class
 
 Every row carries period_status / is_provisional (provisional figures are shown by
 default, marked; the dashboard can switch to final figures only) and data_as_of (when
@@ -57,6 +65,7 @@ RUN_LOG = LAKEHOUSE / "_run_log"
 PIPELINE = "gold"
 OPTIONAL_TABLES = {"gold_kvk_context"}      # empty until silver KVK exists
 SMALL_GROUP = 10                            # KVK re-identification rule
+RISK = settings["gold"]["risk_index"]       # window, minimum quarters, trend threshold
 FINAL = "Definitief"
 SILVER_CBS_TABLES = ["dim_period", "dim_sector", "dim_company_size", "dim_survey_measure",
                      "fct_absence_rate", "fct_absence_survey", "fct_business_count"]
@@ -385,6 +394,157 @@ def build_kvk_context(t: dict) -> pd.DataFrame:
             .sort_values(["legal_form", "sbi2008_section"]).reset_index(drop=True))
 
 
+# =========================================================================== risk index
+# A white-box model: every number is simple arithmetic the analyst can redo by hand.
+#   relative risk  = the group's 4-quarter average absence ÷ the national 4-quarter average
+#                    (1.00 = national; four quarters, so winter peaks don't distort it)
+#   band           = the lowest and highest quarterly relative risk in the window. CBS gives
+#                    no margin of error for 80072NED, so the band shows how stable it is
+#   assessment     = band wholly above 1 -> higher; wholly below -> lower; else around national
+#   trend          = slope of a straight line through the window's quarterly relative risks,
+#                    per year. Dividing by the national figure of the same quarter removes
+#                    the season, so quarters can be compared directly
+def _relative_risk(t: dict) -> pd.DataFrame:
+    """Per quarter, sector and size class: absence %, the national absence % of the same
+    quarter, and their ratio (the quarterly relative risk)."""
+    rate = t["fct_absence_rate"]
+    national = (rate[rate["member_type"] == "total"][["period_key", "absence_pct"]]
+                .rename(columns={"absence_pct": "national_pct"}))
+    df = rate[rate["member_type"].isin(["sector", "size"])].merge(national, on="period_key")
+    df = df[df["absence_pct"].notna() & (df["national_pct"] > 0)].copy()
+    df["relative_risk"] = (df["absence_pct"] / df["national_pct"]).round(3)
+    df["group_type"] = df["member_type"]
+    df["group_key"] = df["sector_key"].where(df["group_type"] == "sector", df["size_key"])
+    df = df.merge(t["dim_sector"][["sector_key", "sbi_code", "sbi_level", "sector_name"]],
+                  on="sector_key", how="left")
+    df = df.merge(t["dim_company_size"][["size_key", "size_range"]], on="size_key", how="left")
+    df["group_name"] = df["sector_name"].where(df["group_type"] == "sector",
+                                               df["size_range"] + " persons employed")
+    df["sbi_code"] = df["sbi_code"].where(df["group_type"] == "sector")
+    df["sbi_level"] = df["sbi_level"].where(df["group_type"] == "sector")
+    df = df.merge(_periods(t["dim_period"]), on="period_key", how="left")
+    df["is_provisional"] = df["period_status"] != FINAL
+    df["_q"] = df["year"] * 4 + df["quarter"] - 1       # quarters numbered consecutively
+    return df
+
+
+def build_risk_index_history(t: dict) -> pd.DataFrame:
+    """gold_risk_index_history: the quarterly relative risk per sector and size class."""
+    df = _relative_risk(t)
+    cols = ["period_key", "period_label", "year", "quarter", "period_status", "is_provisional",
+            "group_type", "group_key", "sbi_code", "sbi_level", "group_name", "absence_pct",
+            "national_pct", "relative_risk", "ingested_at"]
+    return (df[cols].rename(columns={"ingested_at": "data_as_of"})
+            .sort_values(["group_type", "group_key", "period_key"]).reset_index(drop=True))
+
+
+def _business_counts(t: dict) -> pd.DataFrame:
+    """Per SBI code and level, from CBS 81589NED's latest quarter: all businesses, those
+    run by natural persons (sole traders, partnerships: the self-employed), and those with
+    one person employed. The KVK open data has no sole traders, so these come from CBS."""
+    b = t["fct_business_count"]
+    if b.empty:
+        return pd.DataFrame(columns=["sbi_code", "sbi_level", "businesses", "businesses_natural_persons",
+                                     "businesses_one_person", "businesses_period"])
+    b = b[b["period_key"] == b["period_key"].max()]
+    picks = {"businesses": b["breakdown"] == "total",
+             "businesses_natural_persons": (b["breakdown"] == "legal_form")
+             & (b["legal_form"] == "Natuurlijke personen"),
+             "businesses_one_person": (b["breakdown"] == "size") & (b["size_key"] == "WP_1_2")}
+    out = None
+    for name, mask in picks.items():
+        part = b[mask].groupby("sector_key")["count"].first().rename(name)
+        out = part.to_frame() if out is None else out.join(part, how="outer")
+    out = out.reset_index().merge(t["dim_sector"][["sector_key", "sbi_code", "sbi_level"]],
+                                  on="sector_key", how="left")
+    out["businesses_period"] = b["period_key"].iloc[0]
+    for c in picks:
+        out[c] = out[c].astype("Int64")
+    return out.drop(columns="sector_key").drop_duplicates(["sbi_code", "sbi_level"])
+
+
+def _explain(r) -> str:
+    """One sentence for the analyst: the numbers of the row in words."""
+    name = f"{r.sbi_code} {r.group_name}" if r.group_type == "sector" else f"Size {r.group_name}"
+    if r.assessment == "too few quarters":
+        return f"{name}: too few quarters with figures to assess ({r.quarters_in_band})."
+    pct = (r.relative_risk - 1) * 100
+    text = (f"{name}: {abs(pct):.0f}% {'more' if pct >= 0 else 'less'} absence than nationally "
+            f"over the last 4 quarters ({r.absence_4q_pct:.1f}% vs {r.national_4q_pct:.1f}%); ")
+    band = f"{r.band_low:.2f}–{r.band_high:.2f}"
+    text += {"higher": f"above national in all {r.quarters_in_band} quarters ({band})",
+             "lower": f"below national in all {r.quarters_in_band} quarters ({band})",
+             "around national": f"sometimes above, sometimes below national ({band})"}[r.assessment]
+    slope = round(r.trend_per_year, 2) + 0.0      # + 0.0: no "-0.00" for a tiny negative slope
+    text += f"; {r.trend} ({slope:+.2f} per year)."
+    if r.provisional_quarters:
+        text += f" {r.provisional_quarters} of {r.quarters_in_band} quarters provisional."
+    if pd.notna(r.businesses):
+        text += f" {r.businesses:,} businesses"
+        if pd.notna(r.businesses_natural_persons) and r.businesses:
+            text += f", {r.businesses_natural_persons / r.businesses:.0%} run by natural persons"
+        text += f" (CBS {r.businesses_period})."
+    return text
+
+
+def build_risk_index(t: dict, settings_: dict | None = None) -> pd.DataFrame:
+    """gold_risk_index: one row per sector and size class, for two bases: 'all' (the
+    latest quarter, provisional figures included) and 'final' (the latest final quarter,
+    final figures only), so the dashboard's "final figures only" switch works here too."""
+    s = settings_ or RISK
+    window, minimum, rising = int(s["window_quarters"]), int(s["min_quarters"]), float(s["rising_per_year"])
+    history = _relative_risk(t)
+    counts = _business_counts(t)
+    rows = []
+    for basis, part in (("all", history), ("final", history[~history["is_provisional"]])):
+        if part.empty:
+            continue
+        latest = part["_q"].max()
+        period = part.loc[part["_q"] == latest, ["period_key", "period_label"]].iloc[0]
+        for (group_type, group_key), g in part[part["_q"] > latest - window].groupby(
+                ["group_type", "group_key"]):
+            last4 = g[g["_q"] > latest - 4]
+            n = len(g)
+            full_year = len(last4) == 4
+            row = {"basis": basis, "period_key": period["period_key"],
+                   "period_label": period["period_label"], "group_type": group_type,
+                   "group_key": group_key, "sbi_code": g["sbi_code"].iloc[0],
+                   "sbi_level": g["sbi_level"].iloc[0], "group_name": g["group_name"].iloc[0],
+                   "absence_4q_pct": round(last4["absence_pct"].mean(), 2) if full_year else np.nan,
+                   "national_4q_pct": round(last4["national_pct"].mean(), 2) if full_year else np.nan,
+                   "band_low": g["relative_risk"].min(), "band_high": g["relative_risk"].max(),
+                   "quarters_in_band": n,
+                   "provisional_quarters": int(g["is_provisional"].sum()),
+                   "data_as_of": g["ingested_at"].max()}
+            row["relative_risk"] = (round(row["absence_4q_pct"] / row["national_4q_pct"], 3)
+                                    if full_year else np.nan)
+            if n < minimum or not full_year:
+                row.update(assessment="too few quarters", trend_per_year=np.nan, trend="unknown")
+            else:
+                row["assessment"] = ("higher" if row["band_low"] > 1 else
+                                     "lower" if row["band_high"] < 1 else "around national")
+                slope = np.polyfit(g["_q"], g["relative_risk"], 1)[0] * 4    # per year
+                row["trend_per_year"] = round(float(slope), 3)
+                row["trend"] = ("rising" if slope > rising else
+                                "falling" if slope < -rising else "stable")
+            rows.append(row)
+    df = pd.DataFrame(rows)
+    if df.empty:
+        return df
+    df = df.merge(counts, on=["sbi_code", "sbi_level"], how="left")
+    for c in ("businesses", "businesses_natural_persons", "businesses_one_person"):
+        df[c] = df[c].astype("Int64")
+    df["explanation"] = [_explain(r) for r in df.itertuples()]
+    cols = ["basis", "period_key", "period_label", "group_type", "group_key", "sbi_code",
+            "sbi_level", "group_name", "absence_4q_pct", "national_4q_pct", "relative_risk",
+            "band_low", "band_high", "quarters_in_band", "provisional_quarters", "assessment",
+            "trend_per_year", "trend", "businesses", "businesses_natural_persons",
+            "businesses_one_person", "businesses_period", "explanation", "data_as_of"]
+    return (df[cols].sort_values(["basis", "group_type", "relative_risk"],
+                                 ascending=[True, True, False], na_position="last")
+            .reset_index(drop=True))
+
+
 def build_all(t: dict) -> dict[str, pd.DataFrame]:
     """Build all gold tables from the silver tables in `t` (as read by read_inputs)."""
     return {
@@ -393,6 +553,8 @@ def build_all(t: dict) -> dict[str, pd.DataFrame]:
         "gold_absence_profile": build_absence_profile(t),
         "gold_business_context": build_business_context(t),
         "gold_kvk_context": build_kvk_context(t),
+        "gold_risk_index": build_risk_index(t),
+        "gold_risk_index_history": build_risk_index_history(t),
     }
 
 

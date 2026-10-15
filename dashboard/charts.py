@@ -141,6 +141,33 @@ def diverging_bars(df: pd.DataFrame, label: str, diff: str, value: str, title: s
     return style(alt.layer(bar, zero), height or max(160, 26 * d[label].nunique()))
 
 
+def risk_bands(df: pd.DataFrame, label: str, title: str) -> alt.Chart:
+    """Relative risk per row as a dot, its band (lowest–highest quarter) as a line, and a
+    rule at 1.00 (national). Red: above national in every quarter; blue: below in every
+    quarter; grey: around national. Sorted from highest to lowest risk."""
+    c = colors()
+    d = df.copy()
+    order = list(d.sort_values("relative_risk", ascending=False)[label])
+    color = alt.Color("assessment:N", title=None, scale=alt.Scale(
+        domain=["higher", "around national", "lower"], range=[c["above"], c["muted"], c["below"]]))
+    y = alt.Y(f"{label}:N", title=None, sort=order, axis=alt.Axis(labelLimit=320))
+    tooltip = [alt.Tooltip(f"{label}:N", title=title),
+               alt.Tooltip("relative_risk:Q", title="Relative risk", format=".2f"),
+               alt.Tooltip("band_low:Q", title="Band low", format=".2f"),
+               alt.Tooltip("band_high:Q", title="Band high", format=".2f"),
+               alt.Tooltip("assessment:N", title="Assessment"),
+               alt.Tooltip("trend:N", title="Trend"),
+               alt.Tooltip("trend_per_year:Q", title="Trend per year", format="+.2f")]
+    base = alt.Chart(d).encode(y=y)
+    band = base.mark_rule(strokeWidth=2).encode(
+        x=alt.X("band_low:Q", title="Relative risk (1.00 = national)", scale=alt.Scale(zero=False)),
+        x2="band_high:Q", color=color)
+    dot = base.mark_point(filled=True, size=70, opacity=1).encode(
+        x="relative_risk:Q", color=color, tooltip=tooltip)
+    one = alt.Chart(pd.DataFrame({"x": [1.0]})).mark_rule(color=c["ink2"], strokeDash=[4, 3]).encode(x="x:Q")
+    return style(alt.layer(one, band, dot), max(140, 24 * d[label].nunique()))
+
+
 def intervals(df: pd.DataFrame, label: str, title: str, unit: str) -> alt.Chart:
     """Estimate with its 95% interval per row, and the national value as a grey tick.
     Blue: the interval lies wholly above or below the national value (a real difference);

@@ -103,7 +103,7 @@ How data moves through the scripts:
  (5 tables +              lakehouse/bronze/  ├──► silver/cbs.py ─────────┐
   code lists)                                │    11 tables (dims,       │
  CBS crosswalk xlsx ─► bronze/reference.py ─┘    facts, SBI crosswalk)  ├──► gold/build.py ──► dashboard/
- (SBI 2008 -> 2025)       bronze/reference/            │                 │    5 tables          (Streamlit)
+ (SBI 2008 -> 2025)       bronze/reference/            │                 │    7 tables          (Streamlit)
                                                        │ crosswalk       │
  KVK zip in inbox/kvk ─► bronze/kvk_agent.py ──────► silver/kvk.py ─────┘
  (1.9M companies)         bronze/kvk/              kvk_company
@@ -287,6 +287,7 @@ keyed on each table's Delta version); no restart needed.
 | Page | Answers |
 |---|---|
 | Overview | National absence trend; the highest and lowest sectors; small vs large companies |
+| Risk index | For the data analyst: which sectors and size classes are above national, how certain (the band), which are rising; one sector or size class explained in a sentence, with its relative risk over time |
 | Sectors | Sectors ranked against the national figure (per SBI level), one sector over time; this quarter or the 4-quarter average |
 | Size classes | Absence per size class over time; survey share absent per size class with 95% intervals |
 | Behind the numbers | For one sector or size class: which survey measures (frequency, duration, work-relatedness, complaints) differ from national beyond the margin of error |
@@ -362,7 +363,7 @@ script was raised, or with `--full`. The table is partitioned by `batch_id`.
 
 ### Gold
 
-**`pipeline/gold/build.py`** — five tables, each answering part of the main question:
+**`pipeline/gold/build.py`** — seven tables, each answering part of the main question:
 
 | Table | Answers |
 |---|---|
@@ -371,6 +372,12 @@ script was raised, or with `--full`. The table is partitioned by `batch_id`.
 | `gold_absence_profile` | What lies behind it: frequency, duration, work-related causes, with 95% intervals |
 | `gold_business_context` | How many businesses each sector and size band represents (CBS) |
 | `gold_kvk_context` | Active companies and median company age per sector (KVK) |
+| `gold_risk_index` | For the insurer's data analyst: per sector and size class the **relative risk** (4-quarter absence ÷ national; 1.00 = national), its band (lowest–highest of the last 8 quarters), an assessment (higher / around / lower), a trend (rising / stable / falling), the number of businesses and how many are run by natural persons (self-employed), and one sentence explaining it |
+| `gold_risk_index_history` | The quarterly relative risk behind it |
+
+The risk index is a deliberately simple, explainable ("white box") model: every number is
+arithmetic the analyst can redo by hand, and the thresholds (window of 8 quarters, a trend
+of ±0.05 per year) are in `config.yaml`.
 
 Provisional CBS figures are kept but marked (`is_provisional`), so the dashboard can show
 "final figures only".
@@ -412,7 +419,7 @@ lakehouse/                              (not in git; rebuilt from the sources)
   bronze/kvk/_batch_log/                which KVK files are loaded (by SHA-256)
   bronze/reference/...                  the SBI crosswalk and its batch log
   silver/                               11 CBS tables + kvk_company, each with run_id
-  gold/                                 5 dashboard tables, each with run_id
+  gold/                                 7 dashboard tables, each with run_id
   _run_log/                             one row per silver/gold run
   quarantine/<source>/<time>_<name>/    batches that failed a check: report.json + data
 ```
@@ -450,7 +457,7 @@ A misspelled setting name stops the script with an error instead of being ignore
 ## Tests
 
 ```bash
-.venv/bin/pytest              # 359 tests, ~65 s, no internet needed
+.venv/bin/pytest              # 372 tests, ~75 s, no internet needed
 .venv/bin/pytest -m live      # one extra test against the real CBS API
 ```
 

@@ -9,10 +9,10 @@ next layer on top of it.
 
 Built and run on real data: bronze (CBS, KVK, SBI crosswalk) with checks and quarantine
 (CBS bronze with a column per field next to `raw_json`),
-silver (CBS, KVK), gold (5 tables), the Streamlit dashboard, Dagster orchestration,
+silver (CBS, KVK), gold (7 tables, with the risk index), the Streamlit dashboard, Dagster orchestration,
 Docker Compose (including the KVK chat agent), column lineage, config, run log, the
 lakehouse viewer with data quality statistics (`python -m tools.lakehouse_viewer`),
-incremental silver KVK (2026-10-10), 359 tests. Code is organised in `pipeline/` (per
+incremental silver KVK (2026-10-10), 372 tests. Code is organised in `pipeline/` (per
 layer) and `tools/` (2026-10-08). All committed; no containers or servers left running. See the README for how to start
 everything (locally, or with `docker compose up -d`).
 
@@ -25,8 +25,7 @@ data & AI engineering 20%, documentation 15%. See section "Assignment" below.
 
 **Next steps, in order** (details and slide references in section "Assignment"):
 1. ~~Frame the project for the insurer~~ (done 2026-10-15)
-2. Gold for the insurer: self-employed per sector, explainable risk index per sector and
-   size class with an uncertainty band
+2. ~~Gold for the insurer~~ (done 2026-10-15: risk index, dashboard page)
 3. Requirements (functional, non-functional, stakeholders, conditions); README per phase
 4. Azure design (cloud), GDPR and risks, GenAI section
 5. Report (≤5000 words) + executive summary + canvas; presentation and demo
@@ -160,11 +159,17 @@ documentation, AI-driven automation (KVK agent).
       (premium differentiation per sector and size), risk management (portfolio early
       warning), account managers (prevention advice to employer clients), sales/product
       (market size)
-- [ ] **Gold for the insurer** (technical 40%; criterion 5 "quantitative models"):
+- [x] **Gold for the insurer** (built 2026-10-15; technical 40%; criterion 5 "quantitative models"):
       self-employed per sector from CBS 81589NED `NatuurlijkePersonen_12` (KVK's open
       data has only BV/NV, no sole traders); an explainable risk index per sector and
       size class (relative to the national figure, with an uncertainty band and a
-      trend), a white-box model as on slide 48; tests that validate it
+      trend), a white-box model as on slide 48; tests that validate it.
+      Done: `gold_risk_index` + `gold_risk_index_history` (defaults: window 8 quarters,
+      trend ±0.05 per year, both self-employed measures, sectors and size classes),
+      dashboard page "Risk index", lineage, 7 tests (known answers; season removed;
+      final basis; content of the page). Real data 2026 Q2: 5 of 19 sections above
+      national (healthcare 1.40), size 1–9 at 0.48 and 100+ at 1.16; only section S
+      (Overige dienstverlening) rising (+0.06 per year), still below national
 - [ ] **Requirements** (criterion 3; report chapter "Eisenpakket"): functional and
       non-functional, data suppliers / developers / users, conditions for use
 - [ ] **README per phase** (slide 22): ingestion, transformation, serving, model,
@@ -611,7 +616,7 @@ crosswalk; `tests/test_checks.py` the CBS and KVK checks and quarantine;
 `tests/test_maintenance.py` the quarantine cleanup; `tests/test_config.py` the
 configuration; `tests/test_kvk_silver.py` silver KVK; `tests/test_gold.py` gold;
 `tests/test_dashboard.py` the dashboard (every page headless); `tests/test_orchestration.py`
-Dagster; `tests/test_delta.py` writes real Delta tables in `tmp_path` (359 tests, ~70 s). `conftest.py` fails a test when any module still points at the real
+Dagster; `tests/test_delta.py` writes real Delta tables in `tmp_path` (372 tests, ~75 s). `conftest.py` fails a test when any module still points at the real
 lakehouse or inbox. Checked by breaking the code on purpose:
 removing the delete-before-write, an empty `done_keys()` and non-UTC silver timestamps
 each make the right tests fail.

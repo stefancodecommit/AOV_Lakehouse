@@ -29,6 +29,8 @@ GOLD_KEYS = {
     "gold_absence_profile": ["period_key", "characteristic_key", "measure_key"],
     "gold_business_context": ["period_key", "sector_key", "size_band"],
     "gold_kvk_context": ["legal_form", "sbi2008_section"],
+    "gold_risk_index": ["basis", "group_type", "group_key"],
+    "gold_risk_index_history": ["period_key", "group_type", "group_key"],
 }
 SBI_SECTIONS = set("ABCDEFGHIJKLMNOPQRSTU") | {"unknown"}
 

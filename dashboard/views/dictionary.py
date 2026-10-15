@@ -12,6 +12,14 @@ import common
 import data
 
 DESCRIPTIONS = {
+    "gold_risk_index": "For the insurer's data analyst: per sector and size class the relative "
+                       "absence risk (4-quarter average ÷ national; 1.00 = national), its band "
+                       "(lowest–highest quarter of the last 8), an assessment, a trend, the "
+                       "number of businesses (and how many are run by natural persons) and one "
+                       "sentence explaining it. Two bases: all figures, and final figures only. "
+                       "CBS 80072NED and 81589NED.",
+    "gold_risk_index_history": "The quarterly relative risk behind the risk index: absence ÷ the "
+                               "national absence of the same quarter, per sector and size class.",
     "gold_absence_by_sector": "Quarterly absence % per sector (every CBS level) and the "
                               "national total, with difference from national, rank, change "
                               "vs a year earlier and a rolling 4-quarter average. CBS 80072NED.",

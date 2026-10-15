@@ -14,7 +14,7 @@ from conftest import dashboard_data as data
 from test_delta import bronze_delta  # noqa: F401  (fixture)
 
 APP = str(Path(__file__).resolve().parents[1] / "dashboard" / "app.py")
-PAGES = ["overview", "sectors", "sizes", "profile", "context", "dictionary"]
+PAGES = ["overview", "risk", "sectors", "sizes", "profile", "context", "dictionary"]
 
 
 # =========================================================================== helpers
@@ -142,3 +142,25 @@ def test_dark_logo_in_dark_mode(tmp_path, monkeypatch):
         "logo": str(tmp_path / "logo.svg"), "logo_dark": str(tmp_path / "logo_dark.svg")})
     run_page("overview")
     assert calls == [str(tmp_path / "logo_dark.svg")]
+
+
+def test_risk_page_shows_the_analyst_what_is_above_national_and_rising():
+    """A risk index over 8 quarters (the sample data has too few): the page counts the
+    groups above national and rising, names the rising ones and explains the chosen one."""
+    from test_gold import F, V, risk_inputs, SETTINGS
+    t = risk_inputs({"total": [5.0] * 8, "Q": [7.0] * 8, "I": [3.0] * 8,
+                     "S": [5.0 * (0.85 + 0.02 * i) for i in range(8)]}, [F] * 6 + [V, V])
+    for name, df in {"gold_risk_index": g.build_risk_index(t, SETTINGS),
+                     "gold_risk_index_history": g.build_risk_index_history(t)}.items():
+        publish.write_table(g.GOLD_ROOT / name, df.assign(run_id="gold_test"))
+    at = run_page("risk")
+    assert not at.exception, [e.value for e in at.exception]
+    metrics = {m.label: m.value for m in at.metric}
+    # (the test periods are labelled with their code; real ones read "2025 Q4")
+    assert metrics["Above national, 2025KW04"] == "1 of 3" and metrics["Rising"] == "1"
+    assert any(m.value.startswith("**Rising:** S S") for m in at.markdown)
+    assert any(m.value.startswith("Q Q: 40% more absence than nationally") for m in at.markdown)
+    # final figures only: the index of the latest final quarter, without the provisional ones
+    at.toggle(key="final_only").set_value(True).run()
+    assert not at.exception
+    assert "Above national, 2025KW02" in {m.label for m in at.metric}

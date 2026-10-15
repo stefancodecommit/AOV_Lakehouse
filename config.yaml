@@ -92,6 +92,14 @@ dashboard:
   logo_dark: dashboard/assets/eur_logo_dark.svg
   project_note: Erasmus University Rotterdam
 
+gold:
+  # The risk index (pipeline/gold/build.py, gold_risk_index): relative absence risk per
+  # sector and size class, compared with the national figure.
+  risk_index:
+    window_quarters: 8          # quarters for the band and the trend (2 years)
+    min_quarters: 4             # fewer quarters with figures: no assessment
+    rising_per_year: 0.05       # trend above +0.05 per year: rising; below -0.05: falling
+
 schedules:
   # When Dagster runs the jobs (cron: minute hour day-of-month month day-of-week), in
   # this time zone. Only while Dagster runs (dagster dev, or docker compose up).

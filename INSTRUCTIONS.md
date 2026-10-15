@@ -63,7 +63,7 @@ it skips what is already there.
 .venv/bin/python -m pipeline.bronze.kvk_agent --inbox  # 3. newest new KVK zip in inbox/kvk/ -> bronze (type YES)
 .venv/bin/python -m pipeline.silver.cbs                # 4. bronze CBS + crosswalk -> silver (11 tables)
 .venv/bin/python -m pipeline.silver.kvk                # 5. bronze KVK -> silver kvk_company (needs 4)
-.venv/bin/python -m pipeline.gold.build                # 6. silver -> gold (5 tables)
+.venv/bin/python -m pipeline.gold.build                # 6. silver -> gold (7 tables)
 .venv/bin/python -m tools.inspect_lakehouse            # 7. check: should end with "problems: none"
 .venv/bin/streamlit run dashboard/app.py               # 8. the dashboard: http://localhost:8501
 ```

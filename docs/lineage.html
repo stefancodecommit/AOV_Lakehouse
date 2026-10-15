@@ -48,6 +48,8 @@ by <code>python -m tools.lineage</code>; the same lineage as a table:
 <li><a href="#n_s_gold__gold_absence_profile">gold: gold_absence_profile</a></li>
 <li><a href="#n_s_gold__gold_business_context">gold: gold_business_context</a></li>
 <li><a href="#n_s_gold__gold_kvk_context">gold: gold_kvk_context</a></li>
+<li><a href="#n_s_gold__gold_risk_index">gold: gold_risk_index</a></li>
+<li><a href="#n_s_gold__gold_risk_index_history">gold: gold_risk_index_history</a></li>
 </ul>
 <section id="n_s_Overview__bronze___silver___gold"><h2>Overview: bronze → silver → gold</h2><pre class="mermaid">
 flowchart LR
@@ -80,25 +82,36 @@ flowchart LR
     n_gold_gold_absence_profile["gold_absence_profile"]:::gold
     n_gold_gold_business_context["gold_business_context"]:::gold
     n_gold_gold_kvk_context["gold_kvk_context"]:::gold
+    n_gold_gold_risk_index["gold_risk_index"]:::gold
+    n_gold_gold_risk_index_history["gold_risk_index_history"]:::gold
   end
   n_silver_dim_company_size --> n_gold_gold_absence_by_size
   n_silver_dim_company_size --> n_gold_gold_absence_profile
+  n_silver_dim_company_size --> n_gold_gold_risk_index
+  n_silver_dim_company_size --> n_gold_gold_risk_index_history
   n_silver_dim_period --> n_gold_gold_absence_by_sector
   n_silver_dim_period --> n_gold_gold_absence_by_size
   n_silver_dim_period --> n_gold_gold_absence_profile
   n_silver_dim_period --> n_gold_gold_business_context
+  n_silver_dim_period --> n_gold_gold_risk_index
+  n_silver_dim_period --> n_gold_gold_risk_index_history
   n_silver_dim_sector --> n_gold_gold_absence_by_sector
   n_silver_dim_sector --> n_gold_gold_absence_profile
   n_silver_dim_sector --> n_gold_gold_business_context
   n_silver_dim_sector --> n_gold_gold_kvk_context
+  n_silver_dim_sector --> n_gold_gold_risk_index
+  n_silver_dim_sector --> n_gold_gold_risk_index_history
   n_silver_dim_survey_measure --> n_gold_gold_absence_by_size
   n_silver_dim_survey_measure --> n_gold_gold_absence_profile
   n_silver_dim_survey_measure --> n_silver_fct_absence_survey
   n_silver_fct_absence_rate --> n_gold_gold_absence_by_sector
   n_silver_fct_absence_rate --> n_gold_gold_absence_by_size
+  n_silver_fct_absence_rate --> n_gold_gold_risk_index
+  n_silver_fct_absence_rate --> n_gold_gold_risk_index_history
   n_silver_fct_absence_survey --> n_gold_gold_absence_by_size
   n_silver_fct_absence_survey --> n_gold_gold_absence_profile
   n_silver_fct_business_count --> n_gold_gold_business_context
+  n_silver_fct_business_count --> n_gold_gold_risk_index
   n_silver_kvk_company --> n_gold_gold_kvk_context
   n_silver_map_characteristic --> n_silver_dim_sector
   n_silver_map_characteristic --> n_silver_fct_absence_rate
@@ -1024,6 +1037,161 @@ flowchart LR
   n_src_silver_kvk_company_snapshot_date --> n_col_median_age_years
   n_src_silver_kvk_company_is_active --> n_col_is_small_group
   n_src_silver_kvk_company_is_latest --> n_col_is_small_group
+  run --> n_col_run_id
+  classDef bronze fill:#f3e3c9,stroke:#a8743a,color:#1d1d1d
+  classDef silver fill:#e4e7ec,stroke:#6b7480,color:#1d1d1d
+  classDef gold fill:#f6ecb8,stroke:#9c7f12,color:#1d1d1d
+  classDef silverref fill:#f2f3f5,stroke:#9aa1ab,stroke-dasharray:4 3,color:#1d1d1d
+  classDef run fill:#ffffff,stroke:#9aa1ab,color:#52514e
+</pre></section>
+<section id="n_s_gold__gold_risk_index"><h2>gold: gold_risk_index</h2><pre class="mermaid">
+flowchart LR
+  n_src_silver_dim_company_size_size_range["dim_company_size<br/>size_range"]:::silverref
+  n_src_silver_dim_period_period_label["dim_period<br/>period_label"]:::silverref
+  n_src_silver_dim_sector_sbi_code["dim_sector<br/>sbi_code"]:::silverref
+  n_src_silver_dim_sector_sbi_level["dim_sector<br/>sbi_level"]:::silverref
+  n_src_silver_dim_sector_sector_name["dim_sector<br/>sector_name"]:::silverref
+  n_src_silver_fct_absence_rate_absence_pct["fct_absence_rate<br/>absence_pct"]:::silverref
+  n_src_silver_fct_absence_rate_ingested_at["fct_absence_rate<br/>ingested_at"]:::silverref
+  n_src_silver_fct_absence_rate_member_type["fct_absence_rate<br/>member_type"]:::silverref
+  n_src_silver_fct_absence_rate_period_key["fct_absence_rate<br/>period_key"]:::silverref
+  n_src_silver_fct_absence_rate_period_status["fct_absence_rate<br/>period_status"]:::silverref
+  n_src_silver_fct_absence_rate_sector_key["fct_absence_rate<br/>sector_key"]:::silverref
+  n_src_silver_fct_absence_rate_size_key["fct_absence_rate<br/>size_key"]:::silverref
+  n_src_silver_fct_business_count_breakdown["fct_business_count<br/>breakdown"]:::silverref
+  n_src_silver_fct_business_count_count["fct_business_count<br/>count"]:::silverref
+  n_src_silver_fct_business_count_legal_form["fct_business_count<br/>legal_form"]:::silverref
+  n_src_silver_fct_business_count_period_key["fct_business_count<br/>period_key"]:::silverref
+  n_src_silver_fct_business_count_size_key["fct_business_count<br/>size_key"]:::silverref
+  run(["the gold run (pipeline/common/publish.py)"]):::run
+  subgraph n_tbl_gold_risk_index["gold: gold_risk_index"]
+    n_col_basis["basis"]:::gold
+    n_col_period_key["period_key"]:::gold
+    n_col_period_label["period_label"]:::gold
+    n_col_group_type["group_type"]:::gold
+    n_col_group_key["group_key"]:::gold
+    n_col_sbi_code["sbi_code"]:::gold
+    n_col_sbi_level["sbi_level"]:::gold
+    n_col_group_name["group_name"]:::gold
+    n_col_absence_4q_pct["absence_4q_pct"]:::gold
+    n_col_national_4q_pct["national_4q_pct"]:::gold
+    n_col_relative_risk["relative_risk"]:::gold
+    n_col_band_low["band_low"]:::gold
+    n_col_band_high["band_high"]:::gold
+    n_col_quarters_in_band["quarters_in_band"]:::gold
+    n_col_provisional_quarters["provisional_quarters"]:::gold
+    n_col_assessment["assessment"]:::gold
+    n_col_trend_per_year["trend_per_year"]:::gold
+    n_col_trend["trend"]:::gold
+    n_col_businesses["businesses"]:::gold
+    n_col_businesses_natural_persons["businesses_natural_persons"]:::gold
+    n_col_businesses_one_person["businesses_one_person"]:::gold
+    n_col_businesses_period["businesses_period"]:::gold
+    n_col_explanation["explanation"]:::gold
+    n_col_data_as_of["data_as_of"]:::gold
+    n_col_run_id["run_id"]:::gold
+  end
+  n_src_silver_fct_absence_rate_period_status --> n_col_basis
+  n_src_silver_fct_absence_rate_period_key --> n_col_period_key
+  n_src_silver_dim_period_period_label --> n_col_period_label
+  n_src_silver_fct_absence_rate_member_type --> n_col_group_type
+  n_src_silver_fct_absence_rate_sector_key --> n_col_group_key
+  n_src_silver_fct_absence_rate_size_key --> n_col_group_key
+  n_src_silver_dim_sector_sbi_code --> n_col_sbi_code
+  n_src_silver_dim_sector_sbi_level --> n_col_sbi_level
+  n_src_silver_dim_sector_sector_name --> n_col_group_name
+  n_src_silver_dim_company_size_size_range --> n_col_group_name
+  n_src_silver_fct_absence_rate_absence_pct --> n_col_absence_4q_pct
+  n_src_silver_fct_absence_rate_absence_pct --> n_col_national_4q_pct
+  n_src_silver_fct_absence_rate_member_type --> n_col_national_4q_pct
+  n_src_silver_fct_absence_rate_absence_pct --> n_col_relative_risk
+  n_src_silver_fct_absence_rate_member_type --> n_col_relative_risk
+  n_src_silver_fct_absence_rate_absence_pct --> n_col_band_low
+  n_src_silver_fct_absence_rate_member_type --> n_col_band_low
+  n_src_silver_fct_absence_rate_absence_pct --> n_col_band_high
+  n_src_silver_fct_absence_rate_member_type --> n_col_band_high
+  n_src_silver_fct_absence_rate_period_key --> n_col_quarters_in_band
+  n_src_silver_fct_absence_rate_period_status --> n_col_provisional_quarters
+  n_src_silver_fct_absence_rate_absence_pct --> n_col_assessment
+  n_src_silver_fct_absence_rate_member_type --> n_col_assessment
+  n_src_silver_fct_absence_rate_absence_pct --> n_col_trend_per_year
+  n_src_silver_fct_absence_rate_member_type --> n_col_trend_per_year
+  n_src_silver_fct_absence_rate_absence_pct --> n_col_trend
+  n_src_silver_fct_absence_rate_member_type --> n_col_trend
+  n_src_silver_fct_business_count_count --> n_col_businesses
+  n_src_silver_fct_business_count_breakdown --> n_col_businesses
+  n_src_silver_fct_business_count_count --> n_col_businesses_natural_persons
+  n_src_silver_fct_business_count_breakdown --> n_col_businesses_natural_persons
+  n_src_silver_fct_business_count_legal_form --> n_col_businesses_natural_persons
+  n_src_silver_fct_business_count_count --> n_col_businesses_one_person
+  n_src_silver_fct_business_count_breakdown --> n_col_businesses_one_person
+  n_src_silver_fct_business_count_size_key --> n_col_businesses_one_person
+  n_src_silver_fct_business_count_period_key --> n_col_businesses_period
+  n_src_silver_fct_absence_rate_absence_pct --> n_col_explanation
+  n_src_silver_dim_sector_sector_name --> n_col_explanation
+  n_src_silver_fct_business_count_count --> n_col_explanation
+  n_src_silver_fct_absence_rate_ingested_at --> n_col_data_as_of
+  run --> n_col_run_id
+  classDef bronze fill:#f3e3c9,stroke:#a8743a,color:#1d1d1d
+  classDef silver fill:#e4e7ec,stroke:#6b7480,color:#1d1d1d
+  classDef gold fill:#f6ecb8,stroke:#9c7f12,color:#1d1d1d
+  classDef silverref fill:#f2f3f5,stroke:#9aa1ab,stroke-dasharray:4 3,color:#1d1d1d
+  classDef run fill:#ffffff,stroke:#9aa1ab,color:#52514e
+</pre></section>
+<section id="n_s_gold__gold_risk_index_history"><h2>gold: gold_risk_index_history</h2><pre class="mermaid">
+flowchart LR
+  n_src_silver_dim_company_size_size_range["dim_company_size<br/>size_range"]:::silverref
+  n_src_silver_dim_period_period_label["dim_period<br/>period_label"]:::silverref
+  n_src_silver_dim_period_quarter["dim_period<br/>quarter"]:::silverref
+  n_src_silver_dim_period_year["dim_period<br/>year"]:::silverref
+  n_src_silver_dim_sector_sbi_code["dim_sector<br/>sbi_code"]:::silverref
+  n_src_silver_dim_sector_sbi_level["dim_sector<br/>sbi_level"]:::silverref
+  n_src_silver_dim_sector_sector_name["dim_sector<br/>sector_name"]:::silverref
+  n_src_silver_fct_absence_rate_absence_pct["fct_absence_rate<br/>absence_pct"]:::silverref
+  n_src_silver_fct_absence_rate_ingested_at["fct_absence_rate<br/>ingested_at"]:::silverref
+  n_src_silver_fct_absence_rate_member_type["fct_absence_rate<br/>member_type"]:::silverref
+  n_src_silver_fct_absence_rate_period_key["fct_absence_rate<br/>period_key"]:::silverref
+  n_src_silver_fct_absence_rate_period_status["fct_absence_rate<br/>period_status"]:::silverref
+  n_src_silver_fct_absence_rate_sector_key["fct_absence_rate<br/>sector_key"]:::silverref
+  n_src_silver_fct_absence_rate_size_key["fct_absence_rate<br/>size_key"]:::silverref
+  run(["the gold run (pipeline/common/publish.py)"]):::run
+  subgraph n_tbl_gold_risk_index_history["gold: gold_risk_index_history"]
+    n_col_period_key["period_key"]:::gold
+    n_col_period_label["period_label"]:::gold
+    n_col_year["year"]:::gold
+    n_col_quarter["quarter"]:::gold
+    n_col_period_status["period_status"]:::gold
+    n_col_is_provisional["is_provisional"]:::gold
+    n_col_group_type["group_type"]:::gold
+    n_col_group_key["group_key"]:::gold
+    n_col_sbi_code["sbi_code"]:::gold
+    n_col_sbi_level["sbi_level"]:::gold
+    n_col_group_name["group_name"]:::gold
+    n_col_absence_pct["absence_pct"]:::gold
+    n_col_national_pct["national_pct"]:::gold
+    n_col_relative_risk["relative_risk"]:::gold
+    n_col_data_as_of["data_as_of"]:::gold
+    n_col_run_id["run_id"]:::gold
+  end
+  n_src_silver_fct_absence_rate_period_key --> n_col_period_key
+  n_src_silver_dim_period_period_label --> n_col_period_label
+  n_src_silver_dim_period_year --> n_col_year
+  n_src_silver_dim_period_quarter --> n_col_quarter
+  n_src_silver_fct_absence_rate_period_status --> n_col_period_status
+  n_src_silver_fct_absence_rate_period_status --> n_col_is_provisional
+  n_src_silver_fct_absence_rate_member_type --> n_col_group_type
+  n_src_silver_fct_absence_rate_sector_key --> n_col_group_key
+  n_src_silver_fct_absence_rate_size_key --> n_col_group_key
+  n_src_silver_dim_sector_sbi_code --> n_col_sbi_code
+  n_src_silver_dim_sector_sbi_level --> n_col_sbi_level
+  n_src_silver_dim_sector_sector_name --> n_col_group_name
+  n_src_silver_dim_company_size_size_range --> n_col_group_name
+  n_src_silver_fct_absence_rate_absence_pct --> n_col_absence_pct
+  n_src_silver_fct_absence_rate_absence_pct --> n_col_national_pct
+  n_src_silver_fct_absence_rate_member_type --> n_col_national_pct
+  n_src_silver_fct_absence_rate_absence_pct --> n_col_relative_risk
+  n_src_silver_fct_absence_rate_member_type --> n_col_relative_risk
+  n_src_silver_fct_absence_rate_ingested_at --> n_col_data_as_of
   run --> n_col_run_id
   classDef bronze fill:#f3e3c9,stroke:#a8743a,color:#1d1d1d
   classDef silver fill:#e4e7ec,stroke:#6b7480,color:#1d1d1d

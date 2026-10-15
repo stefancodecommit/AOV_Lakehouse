@@ -26,6 +26,7 @@ st.set_page_config(page_title="Sickness absence by company characteristics", pag
 VIEWS = Path(__file__).resolve().parent / "views"
 pages = st.navigation([
     st.Page(VIEWS / "overview.py", title="Overview", default=True),
+    st.Page(VIEWS / "risk.py", title="Risk index"),
     st.Page(VIEWS / "sectors.py", title="Sectors"),
     st.Page(VIEWS / "sizes.py", title="Size classes"),
     st.Page(VIEWS / "profile.py", title="Behind the numbers"),

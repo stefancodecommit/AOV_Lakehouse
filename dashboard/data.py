@@ -23,8 +23,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))   # project root: p
 from pipeline.common.config import project_path, settings  # noqa: E402
 
 GOLD_ROOT = project_path(settings["paths"]["lakehouse"]) / "gold"
-GOLD_TABLES = ["gold_absence_by_sector", "gold_absence_by_size", "gold_absence_profile",
-               "gold_business_context", "gold_kvk_context"]
+GOLD_TABLES = ["gold_risk_index", "gold_risk_index_history", "gold_absence_by_sector",
+               "gold_absence_by_size", "gold_absence_profile", "gold_business_context",
+               "gold_kvk_context"]
 FINAL = "Definitief"
 
 

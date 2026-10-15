@@ -179,7 +179,7 @@ def silver_kvk() -> dg.MaterializeResult:
 
 
 @dg.asset(group_name="gold", deps=["silver_cbs", "silver_kvk"],
-          automation_condition=AFTER_NEW_DATA, description="pipeline/gold/build.py: 5 dashboard tables",
+          automation_condition=AFTER_NEW_DATA, description="pipeline/gold/build.py: 7 dashboard tables",
           metadata=lineage.dagster_lineage(set(lineage.GOLD_LINEAGE)))
 def gold() -> dg.MaterializeResult:
     return _published(gold_layer.run)

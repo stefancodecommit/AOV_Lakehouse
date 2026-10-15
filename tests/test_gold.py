@@ -198,3 +198,106 @@ def test_gold_reads_only_the_latest_kvk_snapshot_and_the_columns_it_needs():
     df = g.read_silver(["kvk_company"])["kvk_company"]
     assert list(df["batch_id"]) == ["new", "new"]
     assert "sbi_mapping" not in df and set(g.PARTIAL_READS["kvk_company"]["columns"]) == set(df)
+
+
+# =========================================================================== risk index
+SETTINGS = {"window_quarters": 8, "min_quarters": 4, "rising_per_year": 0.05}
+
+
+def risk_inputs(series: dict[str, list], statuses=None, start=(2024, 1), counts=True) -> dict:
+    """Silver tables for the risk index: 'total' is the national series, other keys are
+    sectors (sector_key = SBI code, level 'section'), or a size class for key 'WP_1_10'."""
+    rows, periods = [], []
+    for key, values in series.items():
+        q = quarters(values, statuses, start, key)
+        for r in q.itertuples():
+            member = "total" if key == "total" else ("size" if key.startswith("WP_") else "sector")
+            rows.append({"period_key": r.period_key, "member_type": member,
+                         "sector_key": key if member == "sector" else None,
+                         "size_key": key if member == "size" else None,
+                         "absence_pct": r.value, "period_status": r.period_status,
+                         "ingested_at": pd.Timestamp("2026-10-01", tz="UTC")})
+            periods.append({"period_key": r.period_key, "period_label": r.period_key,
+                            "year": r.year, "quarter": r.quarter,
+                            "start_date": pd.Timestamp(r.year, 3 * r.quarter - 2, 1)})
+    sectors = [k for k in series if k != "total" and not k.startswith("WP_")]
+    business = pd.DataFrame([
+        {"period_key": "2026KW03", "sector_key": k, "breakdown": b, "legal_form": lf,
+         "size_key": sk, "count": n}
+        for k in sectors for b, lf, sk, n in [("total", None, None, 1000),
+                                               ("legal_form", "Natuurlijke personen", None, 800),
+                                               ("size", None, "WP_1_2", 600)]]) if counts else \
+        pd.DataFrame(columns=["period_key", "sector_key", "breakdown", "legal_form", "size_key", "count"])
+    return {"fct_absence_rate": pd.DataFrame(rows),
+            "dim_period": pd.DataFrame(periods).drop_duplicates("period_key"),
+            "dim_sector": pd.DataFrame({"sector_key": sectors, "sbi_code": sectors,
+                                        "sbi_level": "section", "sector_name": sectors}),
+            "dim_company_size": pd.DataFrame({"size_key": ["WP_1_10"], "size_range": ["1-9"]}),
+            "fct_business_count": business}
+
+
+def risk(series, statuses=None, basis="all", **kw) -> pd.DataFrame:
+    """The risk index for one basis ('all' or 'final'); basis=None: both."""
+    df = g.build_risk_index(risk_inputs(series, statuses, **kw), SETTINGS)
+    return df if basis is None else df[df["basis"] == basis].reset_index(drop=True)
+
+
+def test_relative_risk_band_and_assessment():
+    nat = [5.0] * 8
+    df = risk({"total": nat, "Q": [7.0, 7.5, 7.0, 7.5, 7.0, 7.5, 7.0, 7.5],
+               "I": [3.0] * 8, "P": [4.8, 5.2] * 4}).set_index("group_key")
+    q = df.loc["Q"]
+    assert q.relative_risk == pytest.approx(7.25 / 5.0)         # 4-quarter averages
+    assert (q.band_low, q.band_high) == (1.4, 1.5)              # lowest and highest quarter
+    assert q.assessment == "higher" and q.quarters_in_band == 8
+    assert df.loc["I"].assessment == "lower" and df.loc["I"].relative_risk == pytest.approx(0.6)
+    assert df.loc["P"].assessment == "around national"          # 0.96 and 1.04: band spans 1
+
+
+def test_trend_removes_the_season_and_uses_the_threshold():
+    # national and sector share the same winter peak: relative risk is flat -> stable
+    season = [6.0, 5.0, 4.5, 5.5] * 2
+    flat = risk({"total": season, "A": [v * 1.2 for v in season]}).set_index("group_key").loc["A"]
+    assert flat.trend == "stable" and flat.trend_per_year == pytest.approx(0, abs=1e-9)
+    # relative risk rising 0.02 per quarter = 0.08 per year -> rising
+    up = risk({"total": [5.0] * 8, "B": [5.0 * (1 + 0.02 * i) for i in range(8)]}).iloc[0]
+    assert up.trend == "rising" and up.trend_per_year == pytest.approx(0.08, abs=1e-3)
+    down = risk({"total": [5.0] * 8, "C": [5.0 * (1 - 0.02 * i) for i in range(8)]}).iloc[0]
+    assert down.trend == "falling"
+
+
+def test_window_and_too_few_quarters():
+    # 12 quarters: only the last 8 count for the band
+    df = risk({"total": [5.0] * 12, "A": [10.0] * 4 + [6.0] * 8}).iloc[0]
+    assert df.band_high == pytest.approx(1.2) and df.quarters_in_band == 8
+    few = risk({"total": [5.0] * 3, "A": [6.0] * 3}).iloc[0]
+    assert few.assessment == "too few quarters" and pd.isna(few.relative_risk)
+    assert "too few quarters" in few.explanation
+
+
+def test_final_basis_uses_only_final_quarters():
+    statuses = [F] * 6 + [V, V]
+    df = risk({"total": [5.0] * 8, "A": [5.0] * 6 + [9.0, 9.0]}, statuses, basis=None).set_index("basis")
+    assert df.loc["all", "period_key"] == "2025KW04" and df.loc["all", "provisional_quarters"] == 2
+    assert df.loc["final", "period_key"] == "2025KW02" and df.loc["final", "provisional_quarters"] == 0
+    assert df.loc["final", "band_high"] == pytest.approx(1.0)  # the provisional 9.0s left out
+
+
+def test_business_counts_and_explanation():
+    df = risk({"total": [5.0] * 8, "A": [7.0] * 8, "WP_1_10": [2.5] * 8}).set_index("group_key")
+    a = df.loc["A"]
+    assert (a.businesses, a.businesses_natural_persons, a.businesses_one_person) == (1000, 800, 600)
+    assert a.explanation.startswith("A A: 40% more absence than nationally")
+    assert "80% run by natural persons" in a.explanation and "+0.00 per year" in a.explanation
+    size = df.loc["WP_1_10"]
+    assert size.group_type == "size" and pd.isna(size.businesses)   # size units differ: no count
+    assert size.explanation.startswith("Size 1-9 persons employed: 50% less absence")
+    assert risk({"total": [5.0] * 8, "A": [7.0] * 8}, counts=False).businesses.isna().all()
+
+
+def test_risk_index_history_is_the_quarterly_ratio(silver_tables):
+    h = g.build_risk_index_history(silver_tables)
+    assert set(h["group_type"]) <= {"sector", "size"}
+    row = h.iloc[0]
+    assert row.relative_risk == pytest.approx(row.absence_pct / row.national_pct, abs=1e-3)
+    assert not h.duplicated(["period_key", "group_type", "group_key"]).any()
