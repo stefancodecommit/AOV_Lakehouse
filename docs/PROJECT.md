@@ -1,9 +1,82 @@
 # CBS & KVK Lakehouse
 
-A local data platform that combines Dutch business statistics from CBS (Statistics
-Netherlands) with the KVK business register, refines them through bronze, silver and gold
-Delta Lake layers, and presents insights in a Streamlit dashboard. Dagster orchestrates the
-pipeline and Docker Compose packages it so it runs the same on any machine.
+A data platform for an **income-protection insurer**: it combines Dutch business statistics
+from CBS (Statistics Netherlands) with the KVK business register, refines them through
+bronze, silver and gold Delta Lake layers, and presents insights on sickness absence per
+sector and company size in a Streamlit dashboard. Dagster orchestrates the pipeline and
+Docker Compose packages it so it runs the same on any machine.
+
+## The organisation and its need
+
+The organisation is an insurer that offers **income insurance**: it pays out when an
+insured person is on sick leave or can no longer work. Its claims risk is, in essence,
+absence risk. How likely and how long people are absent differs strongly per sector and
+company size, so the insurer needs a reliable, current picture of those differences:
+to price and accept risks, to watch its portfolio, and to advise clients on prevention.
+
+The insurer has its own benchmarks, built from its own policy and claims data. Those
+contain privacy-sensitive data (health data of insured persons), so they can't be used
+in this project. The second-best source is public: CBS's statistics on sickness absence.
+They are not a replacement for the insurer's own figures, but they add things those
+figures can't:
+
+- **No privacy risk:** aggregated public data, free to use, combine and share, also with
+  employer clients.
+- **The whole market:** figures for every sector and size class, also where the insurer
+  has few policies and its own benchmark is thin.
+- **Independent:** an outside reference to check the insurer's own figures against.
+
+This project turns those public figures into a repeatable data product: collected
+automatically, checked, combined and kept up to date, with every number traceable to its
+source.
+
+### Users and how the results are used
+
+One role works with the data directly; the others act on what that role finds:
+
+```
+ data analyst ──► manager ──┬──► risk management          (portfolio, premiums, acceptance)
+ (finds risks per SBI)       └──► account managers         (advice to employer clients)
+```
+
+| Who | Uses | What they do with it | Sub-questions (below) |
+|---|---|---|---|
+| **Data analyst** (direct user) | the dashboard and, for detail, the lakehouse tables | finds the risks per SBI sector and size class: which are above the national figure, rising, or driven by work-related absence; checks whether a difference is real or within the margin of error; weighs it against how many companies it concerns | 1–6 |
+| **Manager** | the analyst's findings | decides what is worth acting on and passes it on | |
+| **Risk management** | the findings for the portfolio | watches sectors where absence rises and where the insurer has many policies; input for premiums and acceptance | 1, 3 |
+| **Account managers** (employer clients) | the findings per client's sector | discuss with an employer how its sector compares and where prevention helps (e.g. work-related absence, long absences) | 1, 4 |
+
+The dashboard is built for the data analyst: every figure shows whether it is
+provisional, its margin of error where CBS gives one, and its source and date, so the
+analyst can judge it before passing it on.
+
+### Business goals
+
+1. **Find the risks per SBI sector and size class** with a privacy-free, external
+   benchmark, next to the insurer's own benchmarks.
+2. **Early warning:** rising absence in a sector is visible per quarter, before it shows
+   in claims, so risk management can act in time.
+3. **Prevention advice** for account managers, backed by figures on the kind of absence
+   (frequency, duration, work-relatedness, causes), with margins of error.
+4. **Weigh each risk by its size:** how many businesses a sector and size class contain,
+   including those run by self-employed people.
+
+### Scope and boundaries
+
+- **Only public, aggregated statistics** (CBS open data, KVK open dataset). No personal
+  data, no data about individual insured persons, no claims data. Linking the figures to
+  the insurer's own claims data is a possible next step, but that is health data (a
+  special category under the GDPR, art. 9) and needs its own legal basis and a DPIA.
+- **The dashboard informs, people decide.** The analyst interprets, the manager decides
+  what to act on, and premiums, acceptance and advice stay human decisions (human in
+  command).
+- **Employees, not the self-employed.** CBS's absence figures describe *employees*:
+  80072NED gives the absence percentage at private companies and the government,
+  86009NED and 83130NED are about the absence of employees aged 15–75 (CBS's own table
+  descriptions). For products for the self-employed they are a proxy, not a measurement
+  of their own absence.
+- **Correlation, not cause.** A sector with high absence is a higher-risk group; the data
+  doesn't say *why* an individual company or person is absent.
 
 ## Purpose
 
@@ -56,10 +129,12 @@ Further points to keep in mind:
 - **KVK has no absence data.** It adds context per sector (number of BVs/NVs, company
   age), not an explanation of absence.
 
-### Audience
+### Where it runs
 
-Personal use, for an educational project; the dashboard runs on this machine. Privacy
-rules such as the KVK small-group rule are applied as flags that hide by default.
+For now on one machine (locally or with Docker Compose), as the prototype for the course
+assignment. In the insurer it would run on its data platform; the cloud design is in the
+TODO. Privacy rules such as the KVK small-group rule are applied as flags that hide by
+default.
 
 ### Provisional figures
 
@@ -68,6 +143,8 @@ later. The dashboard shows them by default, clearly marked, with a switch "final
 only"; comparisons that mix provisional and final figures are flagged.
 
 ## Goals
+
+The business goals are listed under "The organisation and its need". The engineering goals:
 
 - Answer the questions above with data that is complete, current and correct.
 - Never request or ingest the same data twice.
@@ -264,7 +341,8 @@ job of the runtime checks above, which share the same validation functions.
   saved once. A monthly cleanup removes entries that were resolved later or are older
   than the retention period (90 days); a problem that persists is quarantined again.
 - **Alerting:** failed runs and failed checks are shown in the Dagster UI (decided
-  2026-10-06 for personal use; email or Slack can be added with a run failure sensor).
+  2026-10-06 for the prototype; in the insurer they would go to the data team by email or
+  Slack, with a run failure sensor).
 - **Freshness:** a check warns when the newest data is older than expected:
   CBS quarterly data more than 4 months behind the current quarter, yearly data more than
   15 months, the latest KVK snapshot older than the agreed upload interval. This catches a
@@ -352,7 +430,7 @@ then runs locally, in Docker, or on another machine with only the configuration 
 - Asset checks (see Data quality) run after each asset and block downstream work when
   they fail.
 - A separate monthly maintenance job (see Storage and maintenance).
-- Failures are shown in the Dagster UI; no email or Slack alerts (personal use).
+- Failures are shown in the Dagster UI; no email or Slack alerts yet (prototype).
 - First time on a lakehouse filled by hand: the job `register_existing_data` records the
   existing bronze data, so automatic rebuilds can start. Details in the README.
 

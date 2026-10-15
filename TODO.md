@@ -24,7 +24,7 @@ for work). Proposal approved. Code on GitHub:
 data & AI engineering 20%, documentation 15%. See section "Assignment" below.
 
 **Next steps, in order** (details and slide references in section "Assignment"):
-1. Frame the project for the insurer: PROJECT.md and README (organisation, users, goals)
+1. ~~Frame the project for the insurer~~ (done 2026-10-15)
 2. Gold for the insurer: self-employed per sector, explainable risk index per sector and
    size class with an uncertainty band
 3. Requirements (functional, non-functional, stakeholders, conditions); README per phase
@@ -151,8 +151,12 @@ documentation, AI-driven automation (KVK agent).
 - [x] Proposal submitted and approved by the teacher
 - [x] Code on GitHub (2026-10-15): <https://github.com/stefancodecommit/AOV_Lakehouse>,
       public; the first CI run passed (section 7). Commits show the author's email
-- [ ] **Insurer framing** (business value 25%; criteria 1, 3, 7): organisation, users
-      and their questions in PROJECT.md and README. Users: underwriters/actuaries
+- [x] **Insurer framing** (2026-10-15; business value 25%; criteria 1, 3, 7): docs/PROJECT.md
+      "The organisation and its need" (need: own benchmarks use privacy-sensitive data, so
+      CBS as the privacy-free second-best; users: data analyst finds risks per SBI ->
+      manager -> risk management and account managers; business goals,
+      scope and boundaries: public aggregated data only, people decide, figures describe
+      employees not the self-employed, correlation not cause); README intro. Users: underwriters/actuaries
       (premium differentiation per sector and size), risk management (portfolio early
       warning), account managers (prevention advice to employer clients), sales/product
       (market size)
@@ -175,13 +179,17 @@ documentation, AI-driven automation (KVK agent).
       examples from the sessions (e.g. a CI status wrongly marked done, a test that
       briefly pointed at the real lakehouse)
 - [ ] **Report** ≤5000 words in the structure of slide 17, with an **executive
-      summary** (slide 16) and the canvas (slide 20)
+      summary** (slide 16) and the canvas (slide 20). **In Dutch** (decided
+      2026-10-15); everything else (code, comments, documentation, dashboard) stays in
+      English
 - [ ] **Presentation with demo** (January): dashboard, Dagster, lineage explorer,
       lakehouse viewer
 
 ## 0. Foundations
 - [x] Decide the dashboard's audience: personal use, for an educational project
       (2026-10-05). Runs on this machine; no login or public hosting needed.
+      Update 2026-10-15: framed for an income-protection insurer (the assignment's
+      organisation); still runs locally as a prototype
 - [x] `config.yaml` + `pipeline/common/config.py` (2026-10-05): paths, CBS base URL/tables/metadata/start
       year/period preference/pause, KVK URLs/columns/malformed limit, SBI crosswalk URL,
       Ollama host and model. Overrides: `config.local.yaml`, then environment variables

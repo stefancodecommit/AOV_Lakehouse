@@ -1,11 +1,20 @@
 # CBS & KVK Lakehouse
 
-An educational data-engineering project. It collects Dutch business statistics from
+A data platform for an **income-protection insurer**, built as the assignment for the
+Erasmus course *Data and AI Engineering*. It collects Dutch business statistics from
 **CBS** (Statistics Netherlands) and the **KVK** business register, refines them in three
 layers, and prepares tables for a dashboard that answers one question:
 
 > **Which company characteristics (sector, size class) go together with higher sickness
 > absence?**
+
+The insurer's own benchmarks are built on privacy-sensitive data and can't be used here,
+so this project uses public CBS figures instead: free of privacy risk, covering the whole
+market. A **data analyst** uses the dashboard to find the risks per SBI sector and size
+class; through their manager, the findings reach **risk management** (portfolio, premiums)
+and **account managers** (prevention advice to employer clients). The organisation, its
+need, the goals and the boundaries (public, aggregated data only; people decide, the
+dashboard informs) are in [docs/PROJECT.md](docs/PROJECT.md#the-organisation-and-its-need).
 
 Everything runs locally in Python, without a database server or Spark: the data is stored
 as [Delta Lake](https://delta.io) tables in the folder `lakehouse/`.
