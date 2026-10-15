@@ -5,7 +5,7 @@ Open work, in the order of `docs/PROJECT.md`. Each phase builds on the one befor
 Rule for every phase: run each new layer on real data and check it before building the
 next layer on top of it.
 
-## Where to continue (status 2026-10-10)
+## Where to continue (status 2026-10-15)
 
 Built and run on real data: bronze (CBS, KVK, SBI crosswalk) with checks and quarantine
 (CBS bronze with a column per field next to `raw_json`),
@@ -16,25 +16,34 @@ incremental silver KVK (2026-10-10), 359 tests. Code is organised in `pipeline/`
 layer) and `tools/` (2026-10-08). All committed; no containers or servers left running. See the README for how to start
 everything (locally, or with `docker compose up -d`).
 
-**Next steps:**
-1. **Verify CI on GitHub** (section 7): both CI jobs were run locally the way GitHub
-   would (clean Python 3.12, only committed files) and pass, after pinning exact package
-   versions. The real test is a push to a GitHub repository: your choice whether and
-   how to publish.
-2. **pandas 3** (section 7): make the code work with it, then raise the pin.
-3. **Open question:** limit the *local* dashboard to this machine (section 4; one line
-   in `.streamlit/config.toml`). In Docker it already is.
-4. **When CBS publishes a new SBI crosswalk version:** update
-   `reference.sbi_crosswalk_url` in config.yaml (section 1, Reference).
-5. **Open question** (Lakehouse viewer section): `CategoryGroupID` in `81644ned_regios`
-   is typed as text because every value is empty; give all-empty fields Arrow's null
-   type so the first real value sets the type?
-6. **Open question** (Silver KVK): `snapshot_date` is the upload date, not KVK's own date
-   of the file. Check whether the zip or CSV carries KVK's date and use that instead.
-7. Optional, when KVK grows (Silver KVK): move silver KVK (and gold's KVK table) to
-   Polars; CBS stays on pandas.
-8. Optional: email/Slack alerts (section 5), re-run the palette validator (needs
-   Node.js, section 4), report the deltalake exit race upstream (Known issues).
+**The assignment** (Erasmus, Data and AI Engineering; slides "Day 1 - assignment", pages
+10–18). Organisation: an **income-protection insurer** (AOV, sick leave and incapacity
+for work). Proposal approved. Code on GitHub:
+<https://github.com/stefancodecommit/AOV_Lakehouse>. **Deadline report + code: 4 January
+2027**; presentation with demo in January. Grading: technical 40%, business value 25%,
+data & AI engineering 20%, documentation 15%. See section "Assignment" below.
+
+**Next steps, in order** (details and slide references in section "Assignment"):
+1. Frame the project for the insurer: PROJECT.md and README (organisation, users, goals)
+2. Gold for the insurer: self-employed per sector, explainable risk index per sector and
+   size class with an uncertainty band
+3. Requirements (functional, non-functional, stakeholders, conditions); README per phase
+4. Azure design (cloud), GDPR and risks, GenAI section
+5. Report (≤5000 words) + executive summary + canvas; presentation and demo
+
+Technical items, lower priority for the assignment:
+- **pandas 3** (section 7): make the code work with it, then raise the pin
+- **Open question:** limit the *local* dashboard to this machine (section 4; one line
+  in `.streamlit/config.toml`). In Docker it already is. Small; fits "security"
+- **When CBS publishes a new SBI crosswalk version:** update
+  `reference.sbi_crosswalk_url` in config.yaml (section 1, Reference)
+- **Open question** (Lakehouse viewer section): `CategoryGroupID` in `81644ned_regios`
+  is typed as text because every value is empty; give all-empty fields Arrow's null type?
+- **Open question** (Silver KVK): `snapshot_date` is the upload date, not KVK's own date
+  of the file (matters for data provenance)
+- Optional: Polars for silver KVK (Silver KVK); email/Slack alerts (section 5); re-run
+  the palette validator (needs Node.js, section 4); report the deltalake exit race
+  upstream (Known issues)
 
 Run order (from the project folder, with the virtualenv):
 
@@ -130,6 +139,45 @@ ingest, problems).
       column names, tested in `tests/test_kvk_logic.py`)
 - [x] Turn the checks above into the Delta tests (section 7: `tests/test_delta.py`)
 - [x] Later: the same checks as Dagster asset checks (section 5, `checks/layers.py`)
+
+## Assignment (Data and AI Engineering, deadline 2027-01-04)
+
+Checked against the slides (pages 10–18) on 2026-10-15. Strong already: ETL pipeline and
+automation, performance work, tests (≥1 required; 359), pipeline steps (≥3 required; all
+six covered: ingestion, transformation, serving, model design/testing of the data models,
+model integration CBS+KVK and the LLM intake agent, deployment & monitoring), technical
+documentation, AI-driven automation (KVK agent).
+
+- [x] Proposal submitted and approved by the teacher
+- [x] Code on GitHub (2026-10-15): <https://github.com/stefancodecommit/AOV_Lakehouse>,
+      public; the first CI run passed (section 7). Commits show the author's email
+- [ ] **Insurer framing** (business value 25%; criteria 1, 3, 7): organisation, users
+      and their questions in PROJECT.md and README. Users: underwriters/actuaries
+      (premium differentiation per sector and size), risk management (portfolio early
+      warning), account managers (prevention advice to employer clients), sales/product
+      (market size)
+- [ ] **Gold for the insurer** (technical 40%; criterion 5 "quantitative models"):
+      self-employed per sector from CBS 81589NED `NatuurlijkePersonen_12` (KVK's open
+      data has only BV/NV, no sole traders); an explainable risk index per sector and
+      size class (relative to the national figure, with an uncertainty band and a
+      trend), a white-box model as on slide 48; tests that validate it
+- [ ] **Requirements** (criterion 3; report chapter "Eisenpakket"): functional and
+      non-functional, data suppliers / developers / users, conditions for use
+- [ ] **README per phase** (slide 22): ingestion, transformation, serving, model,
+      deployment & monitoring, each pointing to its code and tests
+- [ ] **Cloud design, Azure** (learning objective 3): architecture, costs, security,
+      EU region; optionally run one part there
+- [ ] **GDPR and risks** (learning objective 6, criterion 7): public aggregated data
+      only; the real risk is linking it to claims data (health data, GDPR art. 9);
+      correlation vs causation in premium differentiation
+- [ ] **GenAI section** (slide 15, required): why and how Claude was used, what was
+      decided by the author, how results were checked, pros and risks with real
+      examples from the sessions (e.g. a CI status wrongly marked done, a test that
+      briefly pointed at the real lakehouse)
+- [ ] **Report** ≤5000 words in the structure of slide 17, with an **executive
+      summary** (slide 16) and the canvas (slide 20)
+- [ ] **Presentation with demo** (January): dashboard, Dagster, lineage explorer,
+      lakehouse viewer
 
 ## 0. Foundations
 - [x] Decide the dashboard's audience: personal use, for an educational project
@@ -575,15 +623,19 @@ Delta tests (done 2026-10-05, `tests/test_delta.py`):
 Later, as each part is built:
 - [x] Tests for the data checks, quarantine, scope cleanup, silver KVK, gold, the
       dashboard's data loading and the Dagster definitions (all built with their parts)
-- [ ] GitHub Actions stage 1: run pytest on every push (`.github/workflows/tests.yml`).
-      Never run on GitHub: the repository has no GitHub remote yet. Run locally the way
+- [x] GitHub Actions stage 1: run pytest on every push (`.github/workflows/tests.yml`).
+      **Ran on GitHub 2026-10-15** (first push to stefancodecommit/AOV_Lakehouse, commit
+      aa04b82): Python 3.12, pinned versions, all tests passed (job `pytest`, 1 min 38 s).
+      Before that, run locally the way
       CI would (2026-10-08): a clean `python:3.12` container with only the committed
       files, `pip install -r requirements-dev.txt`, `pytest -m "not live"`. The first
       try failed (79 tests): a fresh install got **pandas 3.0.6** (`pandas>=2.0`), which
       the code doesn't support yet. Fixed by pinning exact versions (requirements.txt,
       constraints.txt); then all 348 tests pass on Python 3.12
-- [ ] GitHub Actions stage 3: build the Docker image after the tests pass, and check the
-      code and the Dagster definitions load in it. Never run on GitHub; run locally
+- [x] GitHub Actions stage 3: build the Docker image after the tests pass, and check the
+      code and the Dagster definitions load in it. **Ran on GitHub 2026-10-15**: image
+      built, imports and `dagster definitions validate` passed (job `docker-build`, 47 s).
+      Before that, run locally
       2026-10-08 with the pinned versions: image builds, imports and
       `dagster definitions validate` pass
 - [x] Exact package versions (2026-10-08): requirements.txt pins the packages the project
