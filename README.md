@@ -267,7 +267,8 @@ docker compose down                        # stop (data and run history stay)
 - **The data stays in this project folder.** `lakehouse/` and `inbox/` are mounted into
   the containers, so Docker and local runs work on the same lakehouse. Containers run as
   your user (`HOST_UID`/`HOST_GID`, see `.env.example`), so the files they write are yours.
-- **Only reachable from this machine:** the ports are published on 127.0.0.1.
+- **Only reachable from this machine:** the ports are published on 127.0.0.1. Started
+  locally, the dashboard listens on 127.0.0.1 too (`.streamlit/config.toml`).
 - **First time** on an existing lakehouse: run the job `register_existing_data` once in
   the Dagster UI (Jobs), as described in the Dagster section.
 - **Record the code version** in the run log: `docker compose build --build-arg
@@ -474,7 +475,7 @@ A misspelled setting name stops the script with an error instead of being ignore
 ## Tests
 
 ```bash
-.venv/bin/pytest              # 372 tests, ~75 s, no internet needed
+.venv/bin/pytest              # 373 tests, ~75 s, no internet needed
 .venv/bin/pytest -m live      # one extra test against the real CBS API
 ```
 

@@ -145,7 +145,7 @@ How well the system must work, per quality attribute.
 | NFR-10 | No personal data is stored or shown: only public, aggregated statistics and the KVK dataset of legal entities | Must | ✅ | source choice; KVK open data has no sole traders | source documentation; [PROJECT.md](PROJECT.md#scope-and-boundaries) |
 | NFR-11 | No re-identification: KVK groups under 10 companies are hidden by default | Must | ✅ | `is_small_group` in `gold_kvk_context` | `test_kvk_context` |
 | NFR-12 | No secrets in the code or the repository | Must | ✅ | open data needs no API keys; `.env` is not in git | git history checked before publishing (2026-10-15) |
-| NFR-13 | Services are reachable from this machine only | Must | ⚠️ | Docker: ports on 127.0.0.1 only. **Gap:** the dashboard started locally (`streamlit run`) listens on all network interfaces | `docker-compose.yml`; open item in TODO |
+| NFR-13 | Services are reachable from this machine only | Must | ✅ | Docker: ports published on 127.0.0.1 only. Locally: `.streamlit/config.toml` makes the dashboard listen on 127.0.0.1 (Streamlit's default is every network interface); the lakehouse viewer and Dagster listen on 127.0.0.1 too | `test_dashboard_is_reachable_from_this_machine_only`; checked 2026-10-17: before the fix the dashboard answered on the network address, after it the connection is refused |
 | NFR-14 | Containers run without root rights | Should | ✅ | `user: HOST_UID:HOST_GID` | `docker-compose.yml` |
 | NFR-15 | Default passwords are not used in production | Should | ⚠️ | Postgres (Dagster's run history only) has a default password `dagster` in `.env.example`; to be replaced by a secret in a real deployment | — |
 | NFR-16 | Tests can never write to the real data | Must | ✅ | `tests/conftest.py`: isolated paths, checked before and after each test; every Delta write to the real lakehouse refused | proven with a probe test (2026-10-10) |
@@ -220,7 +220,8 @@ Under which conditions the results may be used, and what they can't be used for.
 | Group | Met | Partly | Not yet |
 |---|---|---|---|
 | Functional (FR-1 – FR-19) | 18 | 0 | 1 (FR-19 alerts, *Could*) |
-| Non-functional (NFR-1 – NFR-27) | 25 | 2 (NFR-13 local dashboard network, NFR-15 default password) | 0 |
+| Non-functional (NFR-1 – NFR-27) | 26 | 1 (NFR-15 default password, *Should*) | 0 |
 
-All *Must* requirements are met except one partly met: NFR-13 (the locally started
-dashboard listens on the network; Docker doesn't), an open item in [TODO.md](../TODO.md).
+All *Must* requirements are met. Open: FR-19 email or chat alerts (*Could*) and NFR-15,
+the default password of Dagster's run-history database (*Should*; to be replaced by a
+secret in a real deployment), both in [TODO.md](../TODO.md).

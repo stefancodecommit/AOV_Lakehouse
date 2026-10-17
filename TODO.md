@@ -12,7 +12,7 @@ Built and run on real data: bronze (CBS, KVK, SBI crosswalk) with checks and qua
 silver (CBS, KVK), gold (7 tables, with the risk index), the Streamlit dashboard, Dagster orchestration,
 Docker Compose (including the KVK chat agent), column lineage, config, run log, the
 lakehouse viewer with data quality statistics (`python -m tools.lakehouse_viewer`),
-incremental silver KVK (2026-10-10), 372 tests. Code is organised in `pipeline/` (per
+incremental silver KVK (2026-10-10), 373 tests. Code is organised in `pipeline/` (per
 layer) and `tools/` (2026-10-08). All committed; no containers or servers left running. See the README for how to start
 everything (locally, or with `docker compose up -d`).
 
@@ -32,8 +32,6 @@ data & AI engineering 20%, documentation 15%. See section "Assignment" below.
 
 Technical items, lower priority for the assignment:
 - **pandas 3** (section 7): make the code work with it, then raise the pin
-- **Open question:** limit the *local* dashboard to this machine (section 4; one line
-  in `.streamlit/config.toml`). In Docker it already is. Small; fits "security"
 - **When CBS publishes a new SBI crosswalk version:** update
   `reference.sbi_crosswalk_url` in config.yaml (section 1, Reference)
 - **Open question** (Lakehouse viewer section): `CategoryGroupID` in `81644ned_regios`
@@ -175,8 +173,8 @@ documentation, AI-driven automation (KVK agent).
       developers, users, DPO), 7 use cases, 19 functional and 27 non-functional
       requirements with MoSCoW priority, status and the test or measurement that verifies
       each (50 tests cited, all checked to exist), 6 organisational requirements, 9
-      conditions for use. Open: FR-19 alerts (Could); partly met: NFR-13 local dashboard
-      listens on the network, NFR-15 default Postgres password
+      conditions for use. Open: FR-19 alerts (Could); partly met: NFR-15 default
+      Postgres password (Should). NFR-13 met since 2026-10-17: every Must is met
 - [x] **README per phase** (2026-10-17; slide 22): pipeline/bronze (1 ingestion),
       pipeline/silver (2 transformation, 5 model integration), pipeline/gold (3 serving,
       4 the risk model), dashboard (3), orchestration (6 deployment & monitoring), tests
@@ -489,10 +487,13 @@ Run: `.venv/bin/streamlit run dashboard/app.py`
   series without a legend; direct labels on the size lines)
 - [ ] Optional: re-run the palette validator once Node.js is available (the values are
       the guidance's published, validated set)
-- [ ] Open question (2026-10-06): limit the dashboard to this machine? Streamlit also
-      listens on the network address by default (Dagster already listens on 127.0.0.1
-      only). Fix: `.streamlit/config.toml` with `[server] address = "localhost"`; for
-      Docker (section 6) the port mapping decides instead
+- [x] Limit the dashboard to this machine (done 2026-10-17, requirement NFR-13):
+      `.streamlit/config.toml` with `address = "127.0.0.1"`. Proven: before, Streamlit
+      listened on `*:8598` and answered on the network address; after, it listens on
+      127.0.0.1 and the network address is refused. Docker keeps working: its command
+      line `--server.address 0.0.0.0` takes precedence (checked), and the port is
+      published on 127.0.0.1 only. Test: `test_dashboard_is_reachable_from_this_machine_only`
+      (fails when the address is changed, checked)
 
 ## 5. Orchestration (Dagster) (built 2026-10-06: `orchestration/`)
 Run: `DAGSTER_HOME=$PWD/orchestration .venv/bin/dagster dev -f orchestration/definitions.py`
@@ -624,7 +625,7 @@ crosswalk; `tests/test_checks.py` the CBS and KVK checks and quarantine;
 `tests/test_maintenance.py` the quarantine cleanup; `tests/test_config.py` the
 configuration; `tests/test_kvk_silver.py` silver KVK; `tests/test_gold.py` gold;
 `tests/test_dashboard.py` the dashboard (every page headless); `tests/test_orchestration.py`
-Dagster; `tests/test_delta.py` writes real Delta tables in `tmp_path` (372 tests, ~75 s). `conftest.py` fails a test when any module still points at the real
+Dagster; `tests/test_delta.py` writes real Delta tables in `tmp_path` (373 tests, ~75 s). `conftest.py` fails a test when any module still points at the real
 lakehouse or inbox. Checked by breaking the code on purpose:
 removing the delete-before-write, an empty `done_keys()` and non-UTC silver timestamps
 each make the right tests fail.

@@ -164,3 +164,19 @@ def test_risk_page_shows_the_analyst_what_is_above_national_and_rising():
     at.toggle(key="final_only").set_value(True).run()
     assert not at.exception
     assert "Above national, 2025KW02" in {m.label for m in at.metric}
+
+
+def test_dashboard_is_reachable_from_this_machine_only():
+    """Requirement NFR-13: started locally, Streamlit listens on 127.0.0.1 only (its default
+    is every network interface); in Docker the port is published on 127.0.0.1 only."""
+    try:
+        import tomllib                       # Python 3.11+
+    except ModuleNotFoundError:              # Python 3.10
+        import tomli as tomllib
+    import yaml
+    root = Path(APP).parents[1]
+    config = tomllib.loads((root / ".streamlit" / "config.toml").read_text())
+    assert config["server"]["address"] == "127.0.0.1"
+    compose = yaml.safe_load((root / "docker-compose.yml").read_text())
+    ports = compose["services"]["dashboard"]["ports"]
+    assert ports and all(str(p).startswith("127.0.0.1:") for p in ports)

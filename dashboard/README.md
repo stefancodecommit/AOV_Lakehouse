@@ -42,6 +42,10 @@ and turns them into pages that answer the main question: which company character
 .venv/bin/streamlit run dashboard/app.py               # http://localhost:8501
 ```
 
+It listens on 127.0.0.1 only (set in [`.streamlit/config.toml`](../.streamlit/config.toml);
+Streamlit's own default is every network interface), so it can't be opened from another
+computer on the network.
+
 In Docker it runs as the `dashboard` service (`docker compose up -d`), reachable from
 this machine only.
 
@@ -51,8 +55,9 @@ this machine only.
 .venv/bin/pytest tests/test_dashboard.py
 ```
 
-Expected: all tests pass (25 at the time of writing). Every page is run headless
+Expected: all tests pass (26 at the time of writing). Every page is run headless
 (Streamlit's AppTest) on gold tables built end to end from the sample data, with the
 *Final figures only* switch off and on; plus the data helpers, the warnings, the
-overview's latest quarter, and the risk page's content (counts, the rising groups, the
-explanation sentence, the final-figures variant).
+overview's latest quarter, the risk page's content (counts, the rising groups, the
+explanation sentence, the final-figures variant), and that the dashboard is reachable
+from this machine only (`.streamlit/config.toml`, Docker's port mapping).

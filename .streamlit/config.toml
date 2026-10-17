@@ -1,0 +1,14 @@
+# Streamlit settings, read when the dashboard is started from the project folder
+# (`streamlit run dashboard/app.py`).
+
+[server]
+# Listen on this machine only. Without this, Streamlit listens on every network interface
+# and anyone on the same network can open the dashboard (requirement NFR-13).
+# Docker overrides it with --server.address 0.0.0.0 (docker-compose.yml): inside a
+# container that is needed, and the port is published on 127.0.0.1 only, so the
+# dashboard is still reachable from this machine only.
+address = "127.0.0.1"
+
+[browser]
+# Don't send usage statistics to Streamlit.
+gatherUsageStats = false
