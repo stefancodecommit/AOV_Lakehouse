@@ -207,7 +207,7 @@ documentation, AI-driven automation (KVK agent).
       the decisions and ideas that came from the author (from the session record), how
       results were checked, advantages, risks with 7 real incidents and how each was
       caught, general risks (understanding, confidentiality: no insurer data shared,
-      reliability, over-reliance, licensing). 55 of 56 commits credit Claude
+      reliability, over-reliance, licensing). Every commit except GitHub's placeholder credits Claude
 - [ ] **Author's own reflection** in docs/genai_use.md section 6 (only the author can
       write it)
 - [ ] **Report** ≤5000 words in the structure of slide 17, with an **executive

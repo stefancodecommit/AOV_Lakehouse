@@ -20,7 +20,7 @@ Two different uses of AI appear in this project; this document is about the firs
 | **Claude** (Anthropic), in the claude.ai chat | the starting point: a first project description (`PROJECT.md`) and a task list (`TODO.md`), imported into the repository on 2026-10-05 |
 | **Claude Code** (Anthropic), in VS Code, model Claude Opus | the rest: code, tests, documentation, analyses, measurements, git commits. Sessions from 2026-10-05 to 2026-10-17 |
 
-Transparency in the history: **55 of the 56 commits** carry the line
+Transparency in the history: **every commit except one** carries the line
 `Co-Authored-By: Claude Opus 5.5`; the one without is GitHub's own placeholder commit.
 
 ## 2. Why

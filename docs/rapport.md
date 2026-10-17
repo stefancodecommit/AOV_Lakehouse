@@ -381,3 +381,119 @@ toelichting in woorden. Bijzondere gevallen zijn zichtbaar gemarkeerd, voorlopig
 zijn overal herkenbaar, en de enquêtecijfers tonen hun 95%-interval. Zo kan de analist bij
 elk getal zeggen waar het vandaan komt en hoe zeker het is, en precies dat is nodig om een
 bevinding met vertrouwen aan de manager door te geven.
+
+## 5. Evaluatie
+
+### 5.1 Resultaten en hun betekenis
+
+**Sectoren.** Over de laatste vier kwartalen (tot en met het tweede kwartaal van 2026) ligt
+het verzuim in 5 van de 19 SBI-secties duidelijk boven landelijk (5,5%), in alle acht
+kwartalen. De gezondheids- en welzijnszorg springt eruit met een relatief risico van 1,40
+(7,7%), gevolgd door water en afval (1,24), openbaar bestuur (1,17), vervoer en opslag
+(1,15) en industrie (1,15). Het laagst zijn horeca (0,61), landbouw (0,61) en
+specialistische zakelijke dienstverlening (0,64). Alleen "overige dienstverlening" stijgt
+(+0,06 per jaar), al ligt die sectie nog onder landelijk: precies het soort vroeg signaal
+waarvoor de index bedoeld is.
+
+**Wat erachter zit.** De jaarenquête van 2025 laat voor de zorg zien waaróm het risico hoger
+is, en dat is relevant voor een inkomensverzekeraar: meer werknemers verzuimen (54,3% tegen
+50,7%), het verzuim duurt langer (19,4 tegen 17,3 dagen; langdurig verzuim van 20 tot 210
+dagen 14,3% tegen 11,4%) en is vaker werkgerelateerd (27,5% tegen 22,5%), met als
+opvallendste redenen besmetting op het werk (28,7% tegen 14,0%) en emotioneel zwaar werk.
+Tegelijk liggen 42 van de 65 enquêtematen voor de zorg binnen de foutmarge: niet elk
+verschil is echt.
+
+**Bedrijfsgrootte.** Het verzuim stijgt met de grootte: kleine bedrijven (1 tot 10
+werkzame personen) zitten op 0,48 van landelijk, grote (100 of meer) op 1,16. De enquête
+bevestigt het patroon: het aandeel werknemers dat verzuimt, loopt op van 33,8% bij 1 tot 5
+werknemers tot ongeveer 53% vanaf 50 werknemers, en vlakt af vanaf zo'n 20 werknemers.
+
+**Kritische kanttekeningen.** De cijfers zijn betrouwbaar als beschrijving, maar beperkt als
+verklaring:
+
+- **Samenstelling, geen oorzaak.** Sectoren verschillen in leeftijd, geslacht en soort
+  werk van hun werknemers. Het hogere risico van de zorg kan voor een deel daaruit
+  voortkomen; de gegevens kunnen dat niet scheiden.
+- **Het grootte-effect is niet eenduidig.** Kleine bedrijven verzuimen minder, maar of dat
+  komt door het werk, door doorwerken bij ziekte of door hoe verzuim wordt geregistreerd,
+  blijkt niet uit de cijfers.
+- **Stabiliteit is geen zekerheid.** De bandbreedte van de index laat zien hoe stabiel een
+  sector is, geen statistische foutmarge.
+- **Het trendsignaal is gevoelig voor voorlopige cijfers.** Met alleen definitieve cijfers
+  (tot en met het vierde kwartaal van 2025) blijven de niveaus en de rangorde gelijk:
+  dezelfde vijf secties boven landelijk, dezelfde hoogste en laagste. Maar dan stijgt niet
+  "overige dienstverlening" maar "delfstoffenwinning". Een stijgende trend moet de analist
+  dus altijd ook met definitieve cijfers bekijken voordat hij die doorgeeft.
+- **Datakwaliteit KVK.** Bij 90% van de actieve bedrijven is de sector eenduidig te bepalen;
+  de rest is gemarkeerd. Het KVK-bestand bevat 381.513 identieke rijen. Omdat het bestand
+  geen KVK-nummer bevat, is niet vast te stellen of dat dubbele regels zijn of verschillende
+  bedrijven met dezelfde kenmerken; ze zijn daarom bewaard en niet verwijderd.
+
+Voor de verzekeraar betekent dit: de index wijst betrouwbaar aan *waar* het risico hoger
+ligt en of het verandert, en de enquête geeft aanknopingspunten voor preventie. *Waarom*
+een sector hoger ligt en wat dat voor één werkgever betekent, vraagt het eigen oordeel van
+analist en accountmanager.
+
+### 5.2 Verwachte voordelen en risico's
+
+**Voordelen.** Een privacyvrije, onafhankelijke benchmark van de hele markt naast de eigen
+cijfers; een kwartaalsignaal vóórdat stijgend verzuim in de schadelast zichtbaar wordt;
+onderbouwing voor preventiegesprekken met werkgevers; en cijfers die automatisch actueel
+blijven en tot de bron herleidbaar zijn, waar dat eerder handwerk was.
+
+**Risico's.** Het risicoregister (in de repository: R1 tot en met R18) laat zien dat de
+grootste risico's niet in de gegevens zitten, maar in het **gebruik** ervan:
+
+- een sectorcijfer gebruiken om één werkgever te beoordelen (*ecological fallacy*);
+- werknemerscijfers zonder meer toepassen op producten voor zelfstandigen;
+- premiedifferentiatie naar sector die indirect een beschermde groep benadeelt (de zorg
+  heeft bijvoorbeeld vooral vrouwelijke werknemers). Dat moet compliance beoordelen
+  voordat de index invloed krijgt op premies.
+
+Technisch zijn de belangrijkste open punten een back-up van de KVK-historie (een oude
+momentopname is niet opnieuw te downloaden) en het automatisch scannen van de gebruikte
+pakketten op kwetsbaarheden.
+
+### 5.3 Onderhoud, privacy en beveiliging
+
+**Onderhoud.** Het systeem werkt maandelijks automatisch; het enige terugkerende handwerk is
+het KVK-bestand laden. Onderhoud is vastgelegd in een README per fase, een
+instructiebestand en de tests. Het grootste onderhoudsrisico is afhankelijkheid van één
+beheerder; een overdracht aan het datateam van de verzekeraar ligt voor de hand.
+
+**Privacy.** Er worden geen persoonsgegevens van verzekerden of burgers verwerkt; alleen de
+KVK-uploadlog legt vast welke medewerker een bestand bevestigde. Wel kan een bedrijf op
+rijniveau herleidbaar zijn (851.804 van de 1,9 miljoen bedrijven zijn uniek op regio,
+SBI-code en startdatum); het dashboard toont daarom alleen aantallen, met groepen onder de
+10 verborgen. Een DPIA is pas nodig als deze cijfers aan eigen schadegegevens worden
+gekoppeld.
+
+**Beveiliging.** Alles is alleen bereikbaar vanaf de eigen machine, er zijn geen geheimen
+nodig en containers draaien zonder beheerdersrechten. Het clouddesign voegt inloggen via
+Entra ID, rollen, Key Vault en afgeschermde netwerkverbindingen toe.
+
+### 5.4 Gebruik van generatieve AI
+
+Het project is gebouwd met Claude (Anthropic) als ontwikkelassistent: eerst voor een
+projectopzet, daarna, via Claude Code in VS Code, voor code, tests, documentatie en
+analyses. Dat is in de repository transparant vastgelegd: alle commits, op de
+plaatshouder van GitHub na, vermelden Claude als co-auteur, en een apart document beschrijft de werkwijze
+([docs/genai_use.md](genai_use.md)).
+
+**Werkwijze.** Ik bepaalde de richting en nam de beslissingen; de assistent onderzocht,
+stelde opties voor, bouwde de gekozen oplossing en testte die. Belangrijke keuzes kwamen van
+mij, zoals bijzondere gevallen markeren in plaats van aannames doen, een gestructureerde
+bronzelaag, de vraag of de oplossing schaalt, en de keuze voor een verzekeraar als
+organisatie.
+
+**Voordelen:** veel meer omvang en grondigheid (tests, metingen, documentatie) dan anders
+haalbaar was, en uitleg op de eigen code. **Nadelen en risico's:** generatieve AI kan met
+stelligheid iets beweren wat niet klopt. Dat gebeurde ook: zo werden testen in GitHub
+Actions als gedaan afgevinkt terwijl ze nog nooit hadden gedraaid, en werd een functie in
+Dagster beschreven die in de gratis versie niet bestaat. Beide zijn ontdekt en
+gecorrigeerd, onder meer door de vraag "hoe heb je dat getest?". Daarom is niets op
+vertrouwen aangenomen: tests, metingen op de echte gegevens en controles tegen de bron.
+Gegevens van de verzekeraar zijn nooit met de assistent gedeeld.
+
+*Eigen reflectie (door de auteur te schrijven): wat generatieve AI betekende voor het leren
+en het resultaat, en wat ik een volgende keer anders zou doen.*
