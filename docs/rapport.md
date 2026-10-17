@@ -156,3 +156,110 @@ De resultaten zijn alleen bruikbaar onder deze voorwaarden:
    AVG artikel 9).
 6. **Prototype-infrastructuur.** Productiegebruik vraagt de cloudomgeving uit het
    clouddesign, echte geheimen en meldingen.
+
+## 3. Conceptuele benadering
+
+### 3.1 Het data- en AI-engineeringcanvas
+
+Figuur 1 vult het canvas uit de colleges in voor dit project: van de eisen en de bronnen
+links, via de levenscyclus in het midden, naar het gebruik rechts.
+
+```mermaid
+flowchart TB
+  REQ["<b>Eisen</b>: 19 functioneel, 27 niet-functioneel, 6 organisatorisch"]
+  subgraph BRON["Bronnen: acquisitie en voorbereiding"]
+    direction LR
+    S1[("CBS verzuim<br/>80072, 86009, 83130")]
+    S2[("CBS bedrijven<br/>81589, 81644")]
+    S3[("CBS omzettabel<br/>SBI 2008-2025")]
+    S4[("KVK open data<br/>BV / NV")]
+    S1 ~~~ S2 ~~~ S3 ~~~ S4
+  end
+  subgraph CYCLUS["Levenscyclus, workflow: Dagster"]
+    direction LR
+    I["Ingestie<br/>bronze"] --> T["Transformatie<br/>silver"] --> SV["Serving<br/>gold, dashboard"]
+    MD["Modelontwerp<br/>risico-index"] --> MI["Modelintegratie<br/>CBS+KVK, LLM"] --> DM["Deployment,<br/>monitoring"]
+  end
+  OPS["<b>Opslag</b>: Delta Lake, bronze / silver / gold<br/><b>Infrastructuur</b>: lokaal of Docker, alleen 127.0.0.1; clouddesign Azure"]
+  subgraph GEBRUIK["Gebruik en evaluatie"]
+    direction LR
+    U1["Data-analist"] --> U2["Manager"]
+    U2 --> U3["Risicomanagement"]
+    U2 --> U4["Accountmanagers"]
+  end
+  REQ --> BRON --> CYCLUS --> GEBRUIK
+  CYCLUS --- OPS
+```
+
+*Figuur 1. Het canvas voor dit project.*
+
+| Canvaselement | Invulling |
+|---|---|
+| Eisen | de eisen uit hoofdstuk 2, elk met een test of meting als bewijs |
+| Bronnen, acquisitie en voorbereiding | vier openbare bronnen; CBS via de API (*pull*, maandelijks), KVK en de omzettabel als bestand |
+| Workflow | Dagster: schema's, automatische vervolgstappen na nieuwe gegevens, blokkerende controles tussen de lagen |
+| Levenscyclus | alle zes stappen; per stap een README in de repository met een *proof of working* |
+| Opslag | Delta Lake in drie lagen (*medallion*): bronze zoals ontvangen, silver opgeschoond, gold klaar voor gebruik |
+| Veilige infrastructuur | lokaal of Docker Compose, alleen bereikbaar vanaf de eigen machine; een clouddesign voor Azure |
+| Gebruik en evaluatie | de analist werkt met het dashboard; bevindingen lopen via de manager naar risicomanagement en accountmanagers |
+
+### 3.2 Data-acquisitie en -voorbereiding
+
+De gegevens worden **getrokken** (*pull*): het CBS publiceert geen meldingen, dus de
+pijplijn vraagt maandelijks per tabel welke perioden er zijn en haalt alleen op wat nog
+ontbreekt. Elk verzoek krijgt een sleutel die de periode en de CBS-status (voorlopig of
+definitief) bevat. Wordt een voorlopige periode herzien, dan verandert de sleutel en
+vervangt de nieuwe versie de oude rijen. Zo wordt niets dubbel opgevraagd of opgeslagen.
+
+Voorbereiding gebeurt in twee stappen. **Bronze** bewaart elk record precies zoals
+ontvangen (als tekst én als kolom per veld), met herkomst en tijdstip. Elke batch wordt
+vóór het wegschrijven gecontroleerd tegen de metadata van de tabel zelf; een afgekeurde
+batch gaat met een rapport in quarantaine en wordt de volgende keer opnieuw geprobeerd.
+**Silver** geeft de codes betekenis, zet de typen goed en verwijdert de opvulspaties van
+het CBS. Bijzondere gevallen worden **gemarkeerd in plaats van opgelost**: een onbekende
+code, een bedrijf met twee hoofdactiviteiten of een code die in beide SBI-versies bestaat,
+blijft staan met een vlag die uitlegt wat er bijzonder aan is. Zo maakt de pijplijn geen
+aannames die de gebruiker niet kan zien.
+
+### 3.3 Modelontwerp en trainingsaanpak
+
+Het project heeft twee soorten modellen. Het **datamodel** in silver is een
+sterschema-achtige opzet van dimensies (periode, sector, grootteklasse, regio,
+enquêtemaat) en feiten (verzuim, enquête, aantallen bedrijven). Daarop is het
+**kwantitatieve model** gebouwd: de risico-index per sector en grootteklasse
+(paragraaf 4.2 beschrijft de berekening).
+
+Voor de risico-index is bewust gekozen voor een *white-box*-model van eenvoudige
+rekenregels, en niet voor machine learning:
+
+- **de vraag is beschrijvend:** waar is het risico hoger en stijgt het? Er wordt niets
+  voorspeld over individuen;
+- **er is weinig data:** 26 kwartalen voor zo'n 38 groepen, te weinig om een model
+  betrouwbaar te trainen en te valideren;
+- **uitlegbaarheid en verantwoording:** de analist moet elk getal aan een manager kunnen
+  uitleggen. Dat sluit aan bij de aanbeveling uit de colleges om voor verantwoording
+  regels te gebruiken die mensen kunnen controleren (De Bruijn, Janssen & Warnier, 2022).
+
+Er is daarom geen training in de gebruikelijke zin. Wat er wel is, is **kalibratie en
+validatie**: de parameters (een venster van acht kwartalen, een trenddrempel van 0,05 per
+jaar) staan in één configuratiebestand, en tests op gegevens met een vooraf bekend
+antwoord bewijzen dat de berekening klopt.
+
+### 3.4 Systeemintegratie
+
+Drie integraties maken van losse bronnen één systeem:
+
+1. **CBS en KVK via de omzettabel.** De KVK registreert bedrijven in SBI 2025, het CBS
+   publiceert in SBI 2008. Via de omzettabel worden KVK-bedrijven aan CBS-sectoren
+   gekoppeld; gevallen die de tabel niet eenduidig kan vertalen, worden gemarkeerd.
+2. **Verzuim en aantallen bedrijven.** De risico-index koppelt het verzuim aan het aantal
+   bedrijven per sector, waaronder bedrijven van zelfstandigen, zodat een risico kan
+   worden gewogen naar omvang.
+3. **Een taalmodel in de ingestie.** Een lokaal taalmodel (via Ollama) helpt de
+   medewerker het KVK-bestand te vinden en te controleren, maar kan zelf niets laden:
+   controle en laden zijn gewone code, en pas na een bevestiging door de medewerker wordt
+   er geschreven (*human in the loop*).
+
+De onderdelen zijn **los gekoppeld**: de scripts roepen elkaar niet aan, maar delen alleen
+gegevens via de lakehouse. Dagster bepaalt de volgorde en start een laag pas als de laag
+eronder haar controles heeft doorstaan.
