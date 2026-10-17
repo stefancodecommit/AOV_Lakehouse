@@ -91,13 +91,14 @@ cbs-kvk-lakehouse/
 │   └── common/             shared by all layers: config.py, publish.py, runlog.py
 ├── checks/                 data checks before writing, layer checks, quarantine
 ├── tools/                  inspect_lakehouse.py, lakehouse_viewer.py, maintenance.py,
-│                           lineage.py (+ the explorer's HTML template)
+│                           backup.py, lineage.py (+ the explorer's HTML template)
 ├── dashboard/              the Streamlit app; reads the gold tables only
 ├── orchestration/          Dagster: schedules, automatic rebuilds, layer checks
 ├── docs/                   PROJECT.md (the design) and the bronze -> silver documents
 ├── tests/                  pytest
 ├── config.yaml             all settings (paths, URLs, tables, model)
-└── lakehouse/, inbox/      the data and the KVK uploads (not in git)
+├── lakehouse/, inbox/      the data and the KVK uploads (not in git)
+└── backups/                monthly backups of lakehouse/ and inbox/kvk/ (not in git)
 ```
 
 How data moves through the scripts:
@@ -205,6 +206,7 @@ Useful options:
 | `python -m tools.inspect_lakehouse --layer silver` | Overview of one layer |
 | `python -m tools.lakehouse_viewer` | Browse every bronze, silver and gold table at http://localhost:8502: rows (with a text filter over the whole table), data quality statistics, history, older versions |
 | `python -m tools.maintenance quarantine --dry-run` | Show which quarantine entries the monthly cleanup would remove |
+| `python -m tools.backup create`, `... list`, `... verify`, `... restore <archive> --to <folder>` | Back up `lakehouse/` and `inbox/kvk/`, verified; restore only into an empty folder ([INSTRUCTIONS.md](INSTRUCTIONS.md#7-maintenance-and-repairs)) |
 
 ## Running it automatically: Dagster
 
@@ -238,8 +240,9 @@ Then open <http://localhost:3000>. Dagster only acts while this command runs.
   keys, keys present in their dimension; `checks/layers.py`).
 - **Freshness** warnings (1st, 09:00): CBS quarterly data more than 4 months old,
   yearly data more than 15 months, the KVK snapshot more than 45 days.
-- **Maintenance** (15th, 03:00): quarantine cleanup, KVK retention (latest snapshot plus
-  the first of each month), Delta optimize and vacuum.
+- **Maintenance** (15th, 03:00), one step after the other: quarantine cleanup, KVK
+  retention (latest snapshot plus the first of each month), personal data in the KVK
+  upload log, Delta optimize and vacuum, Dagster runs older than 180 days, and a backup.
 - At most one run that writes to the lakehouse at a time (`orchestration/dagster.yaml`).
 - Failed runs and failed checks are shown in the Dagster UI (no email or Slack).
 
@@ -430,7 +433,8 @@ instance settings (one writing run at a time).
 | `tools/lineage.py` | Column lineage bronze → silver → gold: the source of `docs/lineage.md`, `docs/lineage.html` (diagrams), `docs/lineage_explorer.html` (interactive; layout in `tools/lineage_explorer_template.html`) and the lineage in Dagster; a test keeps it complete |
 | `tools/inspect_lakehouse.py` | One-screen overview: rows, periods, freshness per table; warnings; problems (exit code 1) |
 | `tools/lakehouse_viewer.py` | Small Streamlit app to look at any Delta table, any version, read-only; its *Data quality* view shows per column how complete it is, padded text, distinct values, min/max and the most common value, the flags' true counts, duplicate rows and duplicate keys |
-| `tools/maintenance.py` | Monthly maintenance: quarantine cleanup, KVK retention, Delta optimize/vacuum |
+| `tools/maintenance.py` | Monthly maintenance: quarantine cleanup, KVK retention, personal data in the KVK upload log, Delta optimize/vacuum |
+| `tools/backup.py` | Backup of `lakehouse/` and `inbox/kvk/` as one verified archive; restore into an empty folder |
 
 ## What ends up in `lakehouse/`
 
@@ -480,15 +484,16 @@ A misspelled setting name stops the script with an error instead of being ignore
 ## Tests
 
 ```bash
-.venv/bin/pytest              # 373 tests, ~75 s, no internet needed
+.venv/bin/pytest              # 383 tests, ~85 s, no internet needed
 .venv/bin/pytest -m live      # one extra test against the real CBS API
 ```
 
 The tests use small samples copied from real CBS and KVK responses, and write real Delta
 tables in a temporary folder; a safety check makes a test fail if any script still points
 at the real `lakehouse/`. A GitHub Actions workflow (`.github/workflows/tests.yml`) runs
-the tests and builds the Docker image on every push; it hasn't run yet, because the
-repository isn't on GitHub yet.
+the tests and builds the Docker image on every push; a second one
+(`.github/workflows/audit.yml`) checks every pinned package for known vulnerabilities with
+`pip-audit`, when the pins change and weekly.
 
 | Test file | Covers |
 |---|---|
@@ -499,7 +504,8 @@ repository isn't on GitHub yet.
 | `test_kvk_logic.py`, `test_kvk_silver.py` | KVK file checks, inbox, silver KVK and its SBI mapping |
 | `test_reference.py` | The SBI crosswalk: loading, rejecting, no duplicates |
 | `test_gold.py` | Gold comparisons and tables, end to end from bronze to gold |
-| `test_config.py`, `test_maintenance.py` | Configuration overrides, quarantine cleanup |
+| `test_config.py`, `test_maintenance.py` | Configuration overrides, quarantine cleanup, KVK retention, personal data in the KVK upload log, Delta vacuum |
+| `test_backup.py` | Backup and restore: contents, Delta logs archived first, verification finds a missing file, rotation, restore only into an empty folder |
 | `test_lineage.py` | The column lineage is complete (every silver and gold column), its bronze fields and silver columns exist, and `docs/lineage.md` is up to date |
 | `test_dashboard.py` | Dashboard helpers, and every page run headless (both switch states) on gold built from sample data |
 | `test_orchestration.py` | Dagster: the graph and schedules, skipping when nothing is new, the KVK confirmation, blocking checks stopping the next layer, automatic rebuilds, and one run of the real `dagster` command |

@@ -1,4 +1,5 @@
-"""Monthly quarantine cleanup: checks.quarantine.cleanup and maintenance.make_resolver."""
+"""Monthly maintenance (tools/maintenance.py): quarantine cleanup, KVK retention, personal
+data in the KVK upload log, Delta optimize/vacuum."""
 import json
 from datetime import datetime, timedelta, timezone
 
@@ -153,6 +154,49 @@ def test_kvk_retention_keeps_the_newest_even_when_it_is_not_first_in_its_month()
 
 def test_kvk_retention_without_kvk_data():
     assert m.kvk_retention() == []
+
+
+# =========================================================================== personal data (R10)
+def upload_log(rows):
+    """A KVK batch log with (batch_id, ingested_at, confirmed_by, report file) rows."""
+    import pyarrow as pa
+    from deltalake import write_deltalake
+    write_deltalake(str(m.KVK_ROOT / "_batch_log"), pa.table({
+        "batch_id": [r[0] for r in rows],
+        "ingested_at": pa.array([pd.Timestamp(r[1], tz="UTC") for r in rows],
+                                pa.timestamp("us", tz="UTC")),
+        "confirmed_by": [r[2] for r in rows],
+        "verification_report": [json.dumps({"file": r[3], "row_count": 3}) for r in rows],
+        "status": ["success"] * len(rows)}))
+
+
+def read_upload_log():
+    from deltalake import DeltaTable
+    return DeltaTable(str(m.KVK_ROOT / "_batch_log")).to_pandas().set_index("batch_id")
+
+
+def test_personal_data_is_removed_from_old_rows_and_paths_from_all(monkeypatch):
+    monkeypatch.setitem(m.settings, "retention", {"confirmed_by_days": 365,
+                                                  "dagster_runs_days": 180})
+    upload_log([("old", "2025-09-01", "stefan", "/home/stefan/inbox/kvk/a.zip"),
+                ("new", "2026-09-01", "dagster:stefan", "/home/stefan/inbox/kvk/b.zip"),
+                ("clean", "2026-10-01", "anna", "c.zip")])
+    assert m.clear_personal_data(dry_run=True, now=NOW) == ["old", "new"]
+    assert read_upload_log().loc["old", "confirmed_by"] == "stefan"      # dry run: unchanged
+
+    assert m.clear_personal_data(now=NOW) == ["old", "new"]
+    log = read_upload_log()
+    assert log["confirmed_by"].to_dict() == {"old": "removed", "new": "dagster:stefan",
+                                             "clean": "anna"}
+    files = {b: json.loads(r)["file"] for b, r in log["verification_report"].items()}
+    assert files == {"old": "a.zip", "new": "b.zip", "clean": "c.zip"}
+    assert json.loads(log.loc["old", "verification_report"])["row_count"] == 3   # rest kept
+    assert (log["status"] == "success").all() and len(log) == 3          # no row removed
+    assert m.clear_personal_data(now=NOW) == []                           # nothing left
+
+
+def test_personal_data_without_kvk_data():
+    assert m.clear_personal_data() == []
 
 
 # =========================================================================== Delta maintenance

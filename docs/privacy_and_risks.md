@@ -26,7 +26,8 @@ privacy officer or compliance, it says so.
   statistics (CBS) and the KVK open dataset of legal entities (BV, NV). The insurer's
   own data, which does contain health data, is deliberately not used.
 - **Two small, known exceptions,** both about the people who run the system: the KVK
-  upload log records the operating-system user who confirmed a load, and the git history
+  upload log records the operating-system user who confirmed a load (removed after a year
+by the monthly maintenance), and the git history
   shows the author's name and email (by the author's choice).
 - **The main privacy risk is re-identification of companies,** not people: 851,804 of the
   1.92 million KVK companies are unique on postcode region, SBI code and start date. The
@@ -50,10 +51,11 @@ lakehouse on 2026-10-17.
 | SBI crosswalk | `bronze/reference/`, `silver/map_sbi2008_sbi2025` | code-to-code mapping | No | public |
 | KVK companies | `bronze/kvk/`, `silver/kvk_company` | per company: start date, active, insolvency code, legal form (BV 1,916,604; NV 5,307), 2-digit postcode region, SBI codes. No names, addresses or KVK numbers | **Not in itself:** data about legal entities. **But** a one-person BV is closely tied to its director, and 851,804 companies are unique on (postcode region, SBI code, start date), so linking with other sources could identify a company and through it a person | public source, but treat the row-level tables as **internal** |
 | KVK aggregates | `gold/gold_kvk_context` | counts and median age per section and legal form; groups under 10 flagged (10 of 64) and hidden by default | No | public |
-| KVK upload log | `bronze/kvk/_batch_log` | per upload: file, hash, row count, verification report, **`confirmed_by`** (the operating-system user, e.g. `stefan`); the report contains local file paths including the home folder | **Yes, minimal:** identifies the employee who confirmed a load | internal |
+| KVK upload log | `bronze/kvk/_batch_log` | per upload: file, hash, row count, verification report, **`confirmed_by`** (the operating-system user, e.g. `stefan`), replaced by `removed` after 365 days; the report holds the file name only (until 2026-10-17 the full path, with the home folder; shortened by the maintenance) | **Yes, minimal:** identifies the employee who confirmed a load | internal |
 | Run log | `lakehouse/_run_log` | per run: pipeline, times, status, input versions, code version | No | internal |
 | Quarantine | `lakehouse/quarantine/` | failed batches with a report | No (same data as above) | internal |
-| Dagster run history | `orchestration/` (local) or PostgreSQL (Docker) | runs, events, logs | **Minimal:** may contain usernames and paths | internal |
+| Backups | `backups/` (`tools/backup.py`) | monthly archives of `lakehouse/` and `inbox/kvk/`, newest 3 | as the lakehouse (includes the KVK upload log) | internal |
+| Dagster run history | `orchestration/` (local) or PostgreSQL (Docker) | runs, events, logs; runs older than 180 days are deleted monthly | **Minimal:** may contain usernames and paths | internal |
 | Git history (GitHub, public) | the repository | code and documentation; author name and email in every commit | **Yes:** the author's, published by the author's own choice | public |
 
 Not stored anywhere: the insurer's policy, claims or health data; dashboard visitors
@@ -75,7 +77,7 @@ If the insurer runs this in production, the insurer is the controller for those.
 | Purpose limitation | The figures serve one purpose: benchmarking absence risk per sector and size class. Using row-level KVK data for anything aimed at individual companies is outside that purpose and against KVK's terms |
 | Data minimisation | Silver KVK reads only the columns it uses (not the full list of activities, not the source file names); gold keeps aggregates only. Bronze keeps the file as received, to prove what was loaded |
 | Accuracy | Checks before writing, quarantine, blocking layer checks, provisional figures marked, revised periods replacing old ones |
-| Storage limitation | Configured retention: quarantine 90 days, KVK snapshots the latest plus one per month, old Delta file versions 7 days (`config.yaml`, `tools/maintenance.py`). **Gap:** no retention for the KVK upload log and Dagster's run history (see actions) |
+| Storage limitation | Configured retention: quarantine 90 days, KVK snapshots the latest plus one per month, old Delta file versions 7 days, `confirmed_by` in the KVK upload log 365 days, Dagster runs 180 days and schedule ticks 90 days (`config.yaml`, `tools/maintenance.py`, `orchestration/dagster.yaml`). Backups: the newest 3 (`tools/backup.py`), so data removed by retention is gone from the backups within three months |
 | Integrity and confidentiality | Local only (127.0.0.1), no secrets, containers without root rights; in the cloud design, Entra ID login, roles, private endpoints, encryption ([cloud_design.md](cloud_design.md#6-security-and-privacy)) |
 | Accountability | Run log, column lineage, requirements with verification, this document |
 
@@ -123,7 +125,7 @@ already in place.
 | R7 | A company (and through it, its director) is re-identified from row-level KVK data | low | medium | dashboard shows aggregates only; groups under 10 hidden; only columns needed are kept in silver | low | keep `silver/kvk_company` and bronze KVK restricted to the data team (cloud design: roles) |
 | R8 | The figures are linked to claims or health data without a legal basis | low now | high | out of scope; stated as a condition for use (OR-5) | low | DPIA and the privacy officer's approval before any such link |
 | R9 | Pricing by sector indirectly disadvantages a protected group | medium (if used in pricing) | high | figures are a benchmark, decisions are human | medium | compliance review before use in premiums |
-| R10 | Personal data in logs (username in the KVK upload log, paths in reports, Dagster history) kept indefinitely | high (it is there) | low | minimal data; internal only | low | add retention for these logs; mention in the internal privacy notice |
+| R10 | Personal data in logs (username in the KVK upload log, paths in reports, Dagster history) kept indefinitely | high (it is there) | low | minimal data; internal only; **retention** (2026-10-17): the monthly maintenance removes `confirmed_by` after 365 days, stores file names instead of full paths, deletes Dagster runs older than 180 days (with their logs) and the daemon purges ticks after 90 days; quarantine reports go after 90 days | low | mention `confirmed_by` in the internal privacy notice |
 
 ### Security and operations
 
@@ -131,8 +133,8 @@ already in place.
 |---|---|---|---|---|---|---|
 | R11 | Unauthorised access to the dashboard or the Dagster UI | low (local) | medium | everything listens on 127.0.0.1; containers without root; no secrets; cloud design with Entra ID | low | — |
 | R12 | Default password of Dagster's run-history database (NFR-15) | low | low (no business data in it) | local only; open on purpose for the prototype | low | Key Vault when deployed (cloud design) |
-| R13 | A vulnerable or compromised Python package | medium | medium | exact versions pinned; CI on every change | medium | add automatic vulnerability scanning (e.g. GitHub Dependabot or `pip-audit` in CI) |
-| R14 | Data loss: the lakehouse and inbox are not in git and not backed up; old KVK snapshots can't be downloaded again (the KVK download link serves the current file only) | low | high (KVK history lost) | Delta keeps old versions for 7 days; CBS data can be fetched again | medium | back up `lakehouse/` and `inbox/kvk/`; in the cloud, zone-redundant storage with soft delete |
+| R13 | A vulnerable or compromised Python package | medium | medium | exact versions pinned; CI on every change; **`pip-audit` in CI** (2026-10-17, `.github/workflows/audit.yml`): every pinned package of the local install and the Docker image, on each change of the pins and weekly | low | not scanned: the Docker base image's operating-system packages (e.g. Trivy in CI, or the cloud registry's scanning) |
+| R14 | Data loss: the lakehouse and inbox are not in git; old KVK snapshots can't be downloaded again (the KVK download link serves the current file only) | low | high (KVK history lost) | Delta keeps old versions for 7 days; CBS data can be fetched again; **monthly backup** (2026-10-17, `tools/backup.py`) of `lakehouse/` and `inbox/kvk/`, verified after writing, newest 3 kept; restore tested on the real data | medium (the backup is on the same disk) | point `backup.path` at another disk; in the cloud, zone-redundant storage with soft delete |
 | R15 | Failures go unnoticed: no email or chat alerts (FR-19) | medium | medium | failures and freshness warnings in the Dagster UI; `inspect_lakehouse` exits with an error | medium | someone checks the Dagster UI regularly; alerts in the cloud design |
 | R16 | Dependence on one maintainer | high (now one person) | medium | README, INSTRUCTIONS, a README per phase, requirements, tests and CI | medium | hand-over to the insurer's data team |
 
@@ -141,7 +143,7 @@ already in place.
 | ID | Risk | Likelihood | Impact | Measures in place | Residual | Next step |
 |---|---|---|---|---|---|---|
 | R17 | The LLM in the KVK intake misunderstands or proposes the wrong file | medium | low | the LLM can't load anything itself: files are verified by ordinary code and loaded only after a person types `YES`; the Dagster route doesn't use the LLM at all | low | — |
-| R18 | Errors in code written with GenAI assistance | medium | medium | 373 tests, CI, mutation checks, real-data comparisons, review by the author | medium | described in the GenAI section of the report |
+| R18 | Errors in code written with GenAI assistance | medium | medium | 383 tests, CI, mutation checks, real-data comparisons, review by the author | medium | described in the GenAI section of the report |
 
 ## 6. Value against risk
 
@@ -151,8 +153,9 @@ risks that remain are mostly about **how the figures are used**, not about the d
 itself: reading group figures as individual ones (R3), employees' figures for the
 self-employed (R5), and indirect effects in pricing (R9). These are handled by people and
 processes (briefing, compliance review), not by more code. The technical risks with a
-real impact are a missing backup of the KVK history (R14) and the absence of vulnerability
-scanning (R13), both straightforward to fix.
+real impact were a missing backup of the KVK history (R14) and the absence of vulnerability
+scanning (R13); both are now in place, with one limit: the backup is on the same disk as the
+data until it is pointed elsewhere or the project moves to the cloud.
 
 ## 7. Actions
 
@@ -161,8 +164,11 @@ scanning (R13), both straightforward to fix.
 | Brief analysts and account managers on the conditions for use | R3, R5 | manager of the analyst | open |
 | Compliance review of sector-based pricing | R9 | compliance | open, before use in premiums |
 | DPIA before any link with internal data | R8 | privacy officer | condition, not planned |
-| Retention for the KVK upload log and Dagster's history; mention `confirmed_by` in the internal privacy notice | R10 | data team | open |
+| Retention for the KVK upload log and Dagster's history | R10 | data team | done (2026-10-17) |
+| Mention `confirmed_by` in the internal privacy notice | R10 | privacy officer | open |
 | Restrict row-level KVK tables to the data team | R7 | data team | in the cloud design (roles) |
-| Vulnerability scanning of dependencies in CI | R13 | data team | open |
-| Back up `lakehouse/` and `inbox/kvk/` | R14 | data team | open |
+| Vulnerability scanning of dependencies in CI | R13 | data team | done (2026-10-17) |
+| Scan the Docker base image as well | R13 | data team | open |
+| Back up `lakehouse/` and `inbox/kvk/` | R14 | data team | done (2026-10-17); still on the same disk |
+| Point the backup at another disk | R14 | data team | open |
 | Alerts by email or chat | R15 | data team | in the cloud design (FR-19) |

@@ -29,6 +29,7 @@ def kvk_zip(tmp_path, monkeypatch):
 def test_verify_recognises_every_column_of_the_real_header(kvk_zip):
     report = json.loads(k.verify_dataset(str(kvk_zip)))
     assert report["status"] == "PASSED", report["errors"]
+    assert report["file"] == kvk_zip.name             # no folder: it holds a username (R10)
     assert report["row_count"] == 3
     assert report["warnings"] == []
     assert report["recognised_columns"] == {

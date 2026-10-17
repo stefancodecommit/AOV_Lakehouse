@@ -8,7 +8,8 @@
 #   docker compose down                   stop everything (data and run history stay)
 #
 # The data stays in this project folder: lakehouse/ and inbox/ are mounted into the
-# containers, so local runs and Docker runs see the same lakehouse. Containers run as
+# containers, so local runs and Docker runs see the same lakehouse; backups/ too, for the
+# monthly backup in Dagster's maintenance job. Containers run as
 # HOST_UID:HOST_GID (default 1000:1000; see .env.example) so the files they write belong
 # to you. Ports are published on 127.0.0.1 only: reachable from this machine, not from
 # the network.
@@ -48,6 +49,7 @@ services:
     volumes:
       - ./lakehouse:/app/lakehouse
       - ./inbox:/app/inbox
+      - ./backups:/app/backups
       - dagster_home:/opt/dagster_home
     ports:
       - "127.0.0.1:3000:3000"
@@ -62,6 +64,7 @@ services:
     volumes:
       - ./lakehouse:/app/lakehouse
       - ./inbox:/app/inbox
+      - ./backups:/app/backups
       - dagster_home:/opt/dagster_home
     depends_on:
       postgres:

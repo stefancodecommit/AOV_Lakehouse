@@ -15,12 +15,10 @@ ENV CODE_VERSION=${CODE_VERSION} \
 WORKDIR /app
 
 # Dependencies first, so a code change doesn't reinstall them (Docker layer cache).
-# dagster-postgres: in Docker, Dagster keeps its run history in Postgres. It works with
-# the psycopg2 driver; SQLAlchemy 2.1 switched its default Postgres driver to psycopg 3,
-# with which Dagster's queued runs fail (SQL syntax error), so SQLAlchemy stays on 2.0.
-# Versions: exact, from requirements.txt and constraints.txt (SQLAlchemy 2.0.x is pinned there).
-COPY requirements.txt constraints.txt ./
-RUN pip install -r requirements.txt "dagster-postgres==0.29.25" "psycopg2-binary==2.9.13"
+# requirements-docker.txt: the project's packages plus Dagster's Postgres storage (see
+# that file); exact versions, with constraints.txt.
+COPY requirements.txt requirements-docker.txt constraints.txt ./
+RUN pip install -r requirements-docker.txt
 
 COPY . .
 

@@ -39,8 +39,10 @@ Schedules and jobs (the times are in config.yaml, section schedules)
 ------------------
 cbs_monthly        1st of the month 06:00: cbs_bronze and sbi_crosswalk
 freshness_monthly  1st of the month 09:00: the freshness checks
-maintenance        15th of the month 03:00: quarantine cleanup, KVK retention, Delta
-                   optimize/vacuum (tools/maintenance.py)
+maintenance        15th of the month 03:00, one step after the other: quarantine
+                   cleanup, KVK retention, personal data in the KVK upload log, Delta
+                   optimize/vacuum (tools/maintenance.py), Dagster runs older than
+                   retention.dagster_runs_days, a backup (tools/backup.py)
 Every run that writes to the lakehouse has the tag lakehouse=write; dagster.yaml allows
 one such run at a time, so maintenance never overlaps an ingestion.
 
@@ -66,6 +68,7 @@ from pipeline.gold import build as gold_layer  # noqa: E402
 from pipeline.bronze import kvk_agent as kvk_bronze_agent  # noqa: E402
 from pipeline.silver import kvk as kvk_silver  # noqa: E402
 from tools import lineage  # noqa: E402
+from tools import backup  # noqa: E402
 from tools import maintenance  # noqa: E402
 from pipeline.bronze import reference as reference_bronze  # noqa: E402
 from checks import CheckResult  # noqa: E402
@@ -274,28 +277,85 @@ def latest_kvk_snapshot():
 
 
 # =========================================================================== maintenance
+# The steps run one after the other (each waits for the previous one through an input of
+# type Nothing): steps without such a link may run at the same time in Dagster, and a
+# vacuum or a backup must not overlap a delete.
+AFTER = {"after": dg.In(dg.Nothing)}
+
+
 @dg.op
 def clean_quarantine(context: dg.OpExecutionContext) -> None:
     for folder, reason in maintenance.clean_quarantine():
         context.log.info("Removed %s (%s)", folder, reason)
 
 
-@dg.op
+@dg.op(ins=AFTER)
 def kvk_retention(context: dg.OpExecutionContext) -> None:
     context.log.info("Retired KVK batches: %s", maintenance.kvk_retention())
 
 
-@dg.op
+@dg.op(ins=AFTER)
+def clear_personal_data(context: dg.OpExecutionContext) -> None:
+    context.log.info("KVK upload log, personal data cleared in: %s",
+                     maintenance.clear_personal_data())
+
+
+@dg.op(ins=AFTER)
 def delta_optimize_vacuum(context: dg.OpExecutionContext) -> None:
     files = maintenance.optimize_and_vacuum()
     context.log.info("Vacuumed %d old files in %d tables", sum(files.values()), len(files))
 
 
-@dg.job(tags=WRITE, description="Monthly: quarantine cleanup, KVK retention, Delta optimize/vacuum")
+def old_runs(instance: dg.DagsterInstance, days: int, check_keys) -> list[str]:
+    """Finished runs older than `days`, except runs that hold an asset's latest
+    materialization or a check's latest result: deleting those would make an asset look
+    never built, or a blocking check never run, and stop the automatic rebuilds."""
+    from datetime import datetime, timedelta, timezone
+    keep = set()
+    for key in instance.get_asset_keys():
+        event = instance.get_latest_materialization_event(key)
+        if event is not None:
+            keep.add(event.run_id)
+    if check_keys:
+        latest = instance.event_log_storage.get_latest_asset_check_execution_by_key(check_keys)
+        keep |= {record.run_id for record in latest.values()}
+    finished = [dg.DagsterRunStatus.SUCCESS, dg.DagsterRunStatus.FAILURE,
+                dg.DagsterRunStatus.CANCELED]
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    records = instance.get_run_records(dg.RunsFilter(created_before=cutoff, statuses=finished))
+    return [r.dagster_run.run_id for r in records if r.dagster_run.run_id not in keep]
+
+
+@dg.op(ins=AFTER)
+def dagster_history_retention(context: dg.OpExecutionContext) -> None:
+    """Delete old runs with their events and log files (risk R10: run configs and logs
+    hold usernames and paths)."""
+    instance = context.instance
+    check_keys = list(defs.resolve_asset_graph().asset_check_keys)
+    run_ids = old_runs(instance, int(settings["retention"]["dagster_runs_days"]), check_keys)
+    for run_id in run_ids:
+        instance.delete_run(run_id)          # the run and its events, not its log files
+        manager = instance.compute_log_manager
+        if hasattr(manager, "delete_logs"):
+            manager.delete_logs(prefix=[run_id])
+    context.log.info("Deleted %d old runs", len(run_ids))
+
+
+@dg.op(ins=AFTER)
+def backup_lakehouse(context: dg.OpExecutionContext) -> None:
+    path = backup.create()
+    context.log.info("Backup %s (%.0f MB), verified", path.name, path.stat().st_size / 1e6)
+
+
+@dg.job(tags=WRITE, description="Monthly: quarantine cleanup, KVK retention, personal data "
+                                "in logs, Delta optimize/vacuum, old Dagster runs, backup")
 def maintenance_job():
-    clean_quarantine()
-    kvk_retention()
-    delta_optimize_vacuum()
+    done = clean_quarantine()
+    done = kvk_retention(after=done)
+    done = clear_personal_data(after=done)
+    done = delta_optimize_vacuum(after=done)
+    done = dagster_history_retention(after=done)
+    backup_lakehouse(after=done)
 
 
 # =========================================================================== first-time setup

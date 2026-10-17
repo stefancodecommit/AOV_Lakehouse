@@ -48,8 +48,8 @@ geen persoonsgegevens van verzekerden verwerkt.
 **Advies.** Gebruik de index als benchmark naast de eigen cijfers en op groepsniveau;
 instrueer analisten en accountmanagers over de randvoorwaarden; laat compliance
 premiedifferentiatie beoordelen; en koppel aan eigen schadegegevens pas na een DPIA.
-Technisch zijn een back-up, de overstap naar Azure volgens het clouddesign en meldingen bij
-fouten de volgende stappen.
+Technisch zijn een back-up buiten de eigen machine, de overstap naar Azure volgens het
+clouddesign en meldingen bij fouten de volgende stappen.
 
 ---
 
@@ -340,7 +340,7 @@ datakwaliteitsstatistieken toont.
 
 ### 4.3 Testen en validatie
 
-Er zijn **373 geautomatiseerde tests**, van vier soorten:
+Er zijn **383 geautomatiseerde tests**, van vier soorten:
 
 - **eenheidstests** op de logica (codes ontleden, controles, de berekening van de
   risico-index) met kleine, zelfgemaakte gegevens waarvan het juiste antwoord vooraf
@@ -472,20 +472,23 @@ grootste risico's niet in de gegevens zitten, maar in het **gebruik** ervan:
   heeft bijvoorbeeld vooral vrouwelijke werknemers). Dat moet compliance beoordelen
   voordat de index invloed krijgt op premies.
 
-Technisch ontbreken nog een back-up van de KVK-historie en het scannen van pakketten op
-kwetsbaarheden.
+Technisch staat de back-up van de KVK-historie nog op dezelfde schijf als de gegevens: hij
+beschermt tegen vergissingen, niet tegen het verlies van de machine.
 
 ### 5.3 Onderhoud, privacy en beveiliging
 
 **Onderhoud.** Het systeem werkt maandelijks automatisch; het enige terugkerende handwerk is
-het KVK-bestand laden. Onderhoud is vastgelegd in een README per fase, een
+het KVK-bestand laden. Het maandelijkse onderhoud maakt ook een gecontroleerde back-up, en
+GitHub controleert wekelijks of een gebruikt pakket een bekende kwetsbaarheid heeft.
+Onderhoud is vastgelegd in een README per fase, een
 instructiebestand en de tests. Het grootste onderhoudsrisico is afhankelijkheid van één
 beheerder; een overdracht aan het datateam van de verzekeraar ligt voor de hand.
 
 **Privacy en beveiliging.** Er worden geen persoonsgegevens van verzekerden verwerkt. Wel
 is een bedrijf op rijniveau herleidbaar (851.804 van de 1,9 miljoen bedrijven zijn uniek op
 regio, SBI-code en startdatum); het dashboard toont daarom alleen aantallen, met kleine
-groepen verborgen. Alles is alleen bereikbaar vanaf de eigen machine; het clouddesign voegt
+groepen verborgen. Gebruikersnamen in logbestanden worden na een vaste termijn
+verwijderd. Alles is alleen bereikbaar vanaf de eigen machine; het clouddesign voegt
 inloggen, rollen en een kluis voor geheimen toe. Details staan in
 [docs/privacy_and_risks.md](privacy_and_risks.md).
 
@@ -536,7 +539,7 @@ De antwoorden op de deelvragen:
 
 Als dataproduct voldoet de oplossing aan alle *must*-eisen: zij haalt de gegevens
 automatisch en zonder dubbelingen op, controleert ze op elke laag, maakt elk getal
-herleidbaar en uitlegbaar, en is aangetoond met 373 tests. Daarmee verschuift het werken
+herleidbaar en uitlegbaar, en is aangetoond met 383 tests. Daarmee verschuift het werken
 met deze cijfers van incidenteel handwerk naar een herhaalbaar en gecontroleerd proces.
 
 ### 6.2 Aanbevelingen
@@ -554,7 +557,7 @@ met deze cijfers van incidenteel handwerk naar een herhaalbaar en gecontroleerd 
 
 **Technisch, in volgorde:**
 
-1. Een **back-up** van de KVK-historie en automatisch **scannen op kwetsbare pakketten**.
+1. De **back-up** naar een andere schijf of de cloud verplaatsen.
 2. De stap naar **Azure** volgens het clouddesign, met inloggen via Entra ID, geheimen in
    Key Vault en **meldingen** bij fouten.
 3. **pandas 3** ondersteunen, en Polars overwegen als KVK verder groeit.

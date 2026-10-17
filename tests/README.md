@@ -4,10 +4,10 @@ How the project is tested, and how to check it yourself. This is the *testing* h
 phase 4 (model design and testing) and the proof of working for every phase.
 
 ```bash
-.venv/bin/pytest            # all tests, ~75 s, no internet needed
+.venv/bin/pytest            # all tests, ~85 s, no internet needed
 ```
 
-Expected: all pass (373 at the time of writing, 1 deselected: the live test below). The
+Expected: all pass (383 at the time of writing, 1 deselected: the live test below). The
 same suite runs on every push in GitHub Actions, on a clean Python 3.12.
 
 ## What is tested, per phase
@@ -18,7 +18,7 @@ same suite runs on every push in GitHub Actions, on a clean Python 3.12.
 | 2. Transformation | `test_silver_logic.py`, `test_kvk_silver.py` | 116 | every silver table and its keys; no padded keys; unknown keys flagged; SBI translation per case; incremental KVK equals a full rebuild |
 | 3. Serving | `test_gold.py`, `test_dashboard.py` | 46 | every gold table; every dashboard page, with and without *Final figures only* |
 | 4. Model | `test_gold.py` (risk index) | (in 46) | the risk index on data with known answers (see [gold's README](../pipeline/gold/README.md#phase-4--model-design-and-testing-the-risk-index)) |
-| 6. Deployment & monitoring | `test_orchestration.py`, `test_maintenance.py` | 25 | the Dagster graph, blocking checks, automation, the one-writer limit, maintenance |
+| 6. Deployment & monitoring | `test_orchestration.py`, `test_maintenance.py`, `test_backup.py` | 35 | the Dagster graph, blocking checks, automation, the one-writer limit, maintenance (in order), log retention, backup and restore |
 | All layers on real Delta tables | `test_delta.py` | 29 | bronze writes (revisions replace, repeats add nothing), silver end to end with types read back, publishing all-or-nothing, the run log |
 | Documentation and tools | `test_lineage.py`, `test_config.py`, `test_lakehouse_viewer.py` | 69 | every silver and gold column has a documented origin; the generated docs are up to date; config errors are caught; the viewer's statistics |
 

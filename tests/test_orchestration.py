@@ -134,6 +134,47 @@ def test_maintenance_job_runs(bronze_delta):   # noqa: F811
     publish.write_table(b.BRONZE_ROOT.parent / "silver" / "x", __import__("pandas").DataFrame({"v": [1]}))
     result = d.defs.resolve_job_def("maintenance_job").execute_in_process()
     assert result.success
+    assert len(list((b.BRONZE_ROOT.parent / "backups").glob("backup_*.tar.gz"))) == 1
+
+
+def test_maintenance_steps_run_one_after_the_other():
+    job = d.defs.resolve_job_def("maintenance_job")
+    order = ["clean_quarantine", "kvk_retention", "clear_personal_data",
+             "delta_optimize_vacuum", "dagster_history_retention", "backup_lakehouse"]
+    for before, after in zip(order, order[1:]):
+        assert job.dependency_structure.input_to_upstream_outputs_for_node(after) \
+            and [o.node_name for outs in job.dependency_structure
+                 .input_to_upstream_outputs_for_node(after).values() for o in outs] == [before]
+
+
+def test_old_runs_keeps_the_runs_with_an_assets_latest_result():
+    @dg.asset
+    def a():
+        return 1
+
+    @dg.asset_check(asset=a)
+    def a_ok():
+        return dg.AssetCheckResult(passed=True)
+
+    @dg.op
+    def nothing():
+        pass
+
+    @dg.job
+    def plain():
+        nothing()
+
+    instance = dg.DagsterInstance.ephemeral()
+    first = dg.materialize([a, a_ok], instance=instance).run_id
+    second = dg.materialize([a], instance=instance).run_id          # newest a, no check
+    other = plain.execute_in_process(instance=instance).run_id
+    check_keys = [a_ok.check_key]
+    # -1 days: every run counts as old
+    old = d.old_runs(instance, -1, check_keys)
+    assert second not in old                 # holds a's latest materialization
+    assert first not in old                  # holds the check's latest result
+    assert other in old
+    assert d.old_runs(instance, 180, check_keys) == []               # nothing that old
 
 
 

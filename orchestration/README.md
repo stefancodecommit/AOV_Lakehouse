@@ -27,8 +27,14 @@ same on any machine, and tested on every push by GitHub Actions.
   typed as confirmation.
 - **One writer at a time** ([`dagster.yaml`](dagster.yaml)): runs that write to the
   lakehouse never overlap.
-- **Maintenance** on the 15th: quarantine cleanup, KVK retention (latest snapshot plus
-  one per month), Delta optimize and vacuum ([`tools/maintenance.py`](../tools/maintenance.py)).
+- **Maintenance** on the 15th, one step after the other (a step waits for the previous
+  one, so a vacuum or the backup never overlaps a delete): quarantine cleanup, KVK
+  retention (latest snapshot plus one per month), personal data in the KVK upload log,
+  Delta optimize and vacuum ([`tools/maintenance.py`](../tools/maintenance.py)), Dagster
+  runs older than 180 days, and a verified backup ([`tools/backup.py`](../tools/backup.py)).
+  Old runs are deleted with their logs, except a run that holds an asset's latest
+  materialization or a check's latest result: without those, the automatic rebuilds would
+  stop. Schedule and automation ticks are purged after 90 days ([`dagster.yaml`](dagster.yaml)).
 
 ## Monitoring
 

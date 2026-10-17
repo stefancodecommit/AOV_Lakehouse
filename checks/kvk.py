@@ -44,7 +44,8 @@ class FileCheck:
     def report(self) -> dict:
         """The check result as a dict: the JSON report shown to the agent and saved in
         quarantine."""
-        return {"file": str(self.path), **self.details, "sha256": self.sha256,
+        # the file name only: the full path holds the home folder, so a username (R10)
+        return {"file": Path(self.path).name, **self.details, "sha256": self.sha256,
                 "status": "PASSED" if self.passed else "FAILED",
                 "errors": self.errors, "warnings": self.warnings}
 

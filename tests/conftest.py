@@ -20,6 +20,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "dashboard"))
 import data as dashboard_data  # noqa: E402  (dashboard/data.py)
 from pipeline.silver import kvk as kvk_silver  # noqa: E402
 from tools import maintenance  # noqa: E402
+from tools import backup  # noqa: E402
 from pipeline.common import runlog  # noqa: E402
 from pipeline.bronze import reference as reference_bronze  # noqa: E402
 
@@ -67,6 +68,9 @@ def isolated_lakehouse(tmp_path, monkeypatch):
         "cbs": tmp_path / "bronze" / "_ingestion_log",
         "kvk": tmp_path / "bronze" / "kvk" / "_batch_log",
         "reference": tmp_path / "bronze" / "reference" / "_batch_log"})
+    monkeypatch.setattr(backup, "LAKEHOUSE", tmp_path)
+    monkeypatch.setattr(backup, "INBOX_KVK", tmp_path / "inbox" / "kvk")
+    monkeypatch.setattr(backup, "BACKUP_DIR", tmp_path / "backups")
 
     # Safety net: no module-level path may still point into the real lakehouse or inbox,
     # at the start of the test and again at its end (a test that calls monkeypatch.undo()
@@ -79,13 +83,15 @@ def isolated_lakehouse(tmp_path, monkeypatch):
 
 def _real_data() -> list[Path]:
     from pipeline.common import config
-    return [config.project_path(config.settings["paths"][k]).resolve() for k in ("lakehouse", "inbox")]
+    return [config.project_path(p).resolve() for p in (
+        config.settings["paths"]["lakehouse"], config.settings["paths"]["inbox"],
+        config.settings["backup"]["path"])]
 
 
 def _check_no_real_paths(when: str) -> None:
     real = _real_data()
     for mod in (cbs_bronze, cbs_silver, reference_bronze, kvk_bronze_agent, maintenance, runlog,
-                kvk_silver, gold, dashboard_data):
+                kvk_silver, gold, dashboard_data, backup):
         for name, value in vars(mod).items():
             values = value.values() if isinstance(value, dict) else [value]
             for v in values:

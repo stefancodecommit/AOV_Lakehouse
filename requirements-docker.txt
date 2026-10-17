@@ -1,0 +1,8 @@
+# What the Docker image installs: the project's packages plus Dagster's Postgres storage
+# (in Docker, Dagster keeps its run history in Postgres). dagster-postgres works with the
+# psycopg2 driver; SQLAlchemy 2.1 switched its default Postgres driver to psycopg 3, with
+# which Dagster's queued runs fail (SQL syntax error), so SQLAlchemy stays on 2.0 (pinned
+# in constraints.txt). Also scanned for known vulnerabilities (.github/workflows/audit.yml).
+-r requirements.txt
+dagster-postgres==0.29.25
+psycopg2-binary==2.9.13

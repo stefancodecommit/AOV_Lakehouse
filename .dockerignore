@@ -4,6 +4,7 @@
 venv
 lakehouse
 inbox
+backups
 dashboard/assets/*
 !dashboard/assets/README.md
 **/__pycache__

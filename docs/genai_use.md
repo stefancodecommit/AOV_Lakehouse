@@ -26,7 +26,7 @@ Transparency in the history: **every commit except one** carries the line
 ## 2. Why
 
 - **Scope within the time available.** A complete pipeline (three sources, three layers,
-  orchestration, deployment, a dashboard, 373 tests, CI) in about two weeks. Without an
+  orchestration, deployment, a dashboard, 383 tests, CI) in about two weeks. Without an
   assistant the project would have stopped at a smaller scope.
 - **Learning.** Many questions were "how does this work?" rather than "build this": what
   `python -m` does, how Delta Lake decides which Parquet files are current, what GitHub
@@ -88,7 +88,7 @@ GenAI output was not accepted on trust. The checks used:
 
 | Check | Example |
 |---|---|
-| **Automated tests** (373), on every change and in GitHub Actions on a clean machine | the tests run before every commit; CI found that a fresh install got pandas 3, which the code didn't support (fixed by pinning versions) |
+| **Automated tests** (383), on every change and in GitHub Actions on a clean machine | the tests run before every commit; CI found that a fresh install got pandas 3, which the code didn't support (fixed by pinning versions) |
 | **Tests on purpose-broken code** (mutation checks): does a test actually catch the error? | breaking the `is_latest` flag, the delete-before-write, the dashboard's network setting: each time the right test failed |
 | **Comparison with the real data** before and after a change | silver identical after restructuring bronze (11 tables); KVK identical after the incremental redesign (1,921,911 rows) |
 | **Measurements instead of assumptions** | memory of silver KVK measured for 1 to 4 snapshots; the first design turned out to grow with each snapshot, and was improved until it didn't |
@@ -103,8 +103,8 @@ GenAI output was not accepted on trust. The checks used:
 - **Speed and scope:** far more was built, tested and documented than would otherwise fit
   in the time.
 - **Explanations on demand:** concepts explained on the project's own code and data.
-- **Consistency:** naming, documentation and test style stay the same across the 68
-  Python and Markdown files.
+- **Consistency:** naming, documentation and test style stay the same across more than
+  70 Python and Markdown files.
 - **Thoroughness on request:** measuring, verifying and documenting is cheap with an
   assistant, so it gets done.
 

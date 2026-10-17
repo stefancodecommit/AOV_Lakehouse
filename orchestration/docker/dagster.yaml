@@ -23,5 +23,15 @@ concurrency:
         value: write
         limit: 1
 
+# Schedule and automation ticks older than 90 days are removed by the daemon (risk R10);
+# old runs are removed by the monthly maintenance job (config.yaml, retention).
+retention:
+  schedule:
+    purge_after_days: 90
+  sensor:
+    purge_after_days: 90
+  auto_materialize:
+    purge_after_days: 90
+
 telemetry:
   enabled: false

@@ -195,13 +195,52 @@ docker compose down                        # stop (data and run history stay)
 
 ### Monthly maintenance
 
-Dagster runs this on the 15th; by hand, try `--dry-run` first:
+Dagster runs this on the 15th (and then also deletes Dagster runs older than 180 days and
+makes a backup); by hand, try `--dry-run` first:
 
 ```bash
 .venv/bin/python -m tools.maintenance all --dry-run         # what would be done
-.venv/bin/python -m tools.maintenance all                   # quarantine cleanup, KVK retention, Delta vacuum
-.venv/bin/python -m tools.maintenance quarantine            # or one task: quarantine, kvk-retention, delta
+.venv/bin/python -m tools.maintenance all                   # quarantine cleanup, KVK retention, personal data in the upload log, Delta vacuum
+.venv/bin/python -m tools.maintenance quarantine            # or one task: quarantine, kvk-retention, personal-data, delta
 ```
+
+The retention periods are in `config.yaml`, section `retention`.
+
+### Backup and restore
+
+A backup is one archive of `lakehouse/` and `inbox/kvk/` in `backups/` (`backup.path` in
+`config.yaml`; point it at another disk in `config.local.yaml` for a real backup). Each new
+archive is checked right after writing; the newest three are kept.
+
+```bash
+.venv/bin/python -m tools.backup create      # make, verify and rotate (~15 s, ~160 MB)
+.venv/bin/python -m tools.backup list        # the backups, newest first
+.venv/bin/python -m tools.backup verify      # check the newest again (or give an archive)
+```
+
+To restore, unpack into a new folder (never over the live lakehouse), check it, and swap
+the folders by hand while nothing runs:
+
+```bash
+.venv/bin/python -m tools.backup restore backups/backup_<time>.tar.gz --to ../restore
+# stop Dagster and the dashboard (section 9), then:
+mv lakehouse lakehouse.broken && mv ../restore/lakehouse lakehouse
+cp -n ../restore/inbox/kvk/* inbox/kvk/       # KVK uploads that are missing
+.venv/bin/python -m tools.inspect_lakehouse   # ends with "problems: none"
+```
+
+### Known vulnerabilities in the packages
+
+GitHub checks the pinned packages weekly (`.github/workflows/audit.yml`). To check by hand,
+in a separate environment so the project's own stays as pinned:
+
+```bash
+python3 -m venv /tmp/audit && /tmp/audit/bin/pip install pip-audit==2.10.1
+/tmp/audit/bin/pip-audit -r requirements-dev.txt -r requirements-docker.txt
+```
+
+If a package is reported: raise its version in `requirements.txt` (or `constraints.txt`
+for an indirect one), run the tests, rebuild the Docker image.
 
 ### Remove data outside the configuration
 

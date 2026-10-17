@@ -106,7 +106,7 @@ schedules:
   timezone: Europe/Amsterdam
   cbs_ingest: "0 6 1 * *"        # 1st of the month 06:00: CBS + SBI crosswalk
   freshness: "0 9 1 * *"         # 1st of the month 09:00: freshness warnings
-  maintenance: "0 3 15 * *"      # 15th of the month 03:00: quarantine, KVK retention, vacuum
+  maintenance: "0 3 15 * *"      # 15th 03:00: quarantine, KVK retention, log retention, vacuum, backup
 
 delta:
   # tools/maintenance.py (monthly) deletes Parquet files that no table version younger than
@@ -118,5 +118,18 @@ quarantine:
   # entries older than this; a problem that still exists is quarantined again next run.
   retention_days: 90
 
-# Still to add when they are built (see TODO.md): KVK retention, Dagster schedules,
-# alert targets.
+retention:
+  # Personal data in logs (risk R10, docs/privacy_and_risks.md), applied by the monthly
+  # maintenance (tools/maintenance.py, orchestration/definitions.py).
+  confirmed_by_days: 365          # KVK upload log: who confirmed a load is removed after this
+  dagster_runs_days: 180          # Dagster runs older than this are deleted (with their logs),
+                                  # except a run that holds an asset's latest result
+
+backup:
+  # tools/backup.py (monthly, in the maintenance job): lakehouse/ and inbox/kvk/ as one
+  # archive (risk R14). Relative to this file's folder; for a real backup, point it at
+  # another disk, e.g. in config.local.yaml.
+  path: backups
+  keep: 3                         # newest archives kept; older ones are removed
+
+# Still to add when they are built (see TODO.md): alert targets (FR-19).

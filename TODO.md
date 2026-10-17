@@ -12,7 +12,8 @@ Built and run on real data: bronze (CBS, KVK, SBI crosswalk) with checks and qua
 silver (CBS, KVK), gold (7 tables, with the risk index), the Streamlit dashboard, Dagster orchestration,
 Docker Compose (including the KVK chat agent), column lineage, config, run log, the
 lakehouse viewer with data quality statistics (`python -m tools.lakehouse_viewer`),
-incremental silver KVK (2026-10-10), 373 tests. Code is organised in `pipeline/` (per
+incremental silver KVK (2026-10-10), backup, log retention and vulnerability scanning
+(2026-10-17), 383 tests. Code is organised in `pipeline/` (per
 layer) and `tools/` (2026-10-08), with a README per phase. Requirements in
 docs/requirements.md (every Must met; open: FR-19 alerts, NFR-15 default password, left
 open on purpose), Azure design in docs/cloud_design.md (not built). All committed; no containers or servers left running. See the README for how to start
@@ -204,7 +205,8 @@ documentation, AI-driven automation (KVK agent).
       rules (KVK terms, CC BY, EU AI Act, equal treatment in pricing), risk register
       R1–R18 with measures, actions. New open actions from it: backup of lakehouse/ and
       inbox/kvk/ (R14), vulnerability scanning in CI (R13), retention for the KVK upload
-      log and Dagster history (R10)
+      log and Dagster history (R10); all three done 2026-10-17 (section 5, "Backup, log
+      retention, vulnerability scanning")
 - [x] **GenAI section** (2026-10-17; slide 15, required): [docs/genai_use.md](docs/genai_use.md),
       in English (the report summarises it in Dutch): tools, why, the way of working,
       the decisions and ideas that came from the author (from the session record), how
@@ -550,6 +552,32 @@ Run: `DAGSTER_HOME=$PWD/orchestration .venv/bin/dagster dev -f orchestration/def
       writing run at a time (`orchestration/dagster.yaml`)
 - [x] First-time setup job `register_existing_data`: records bronze loaded before Dagster
       as materialized; without it automatic rebuilds never start (found while testing)
+
+### Backup, log retention, vulnerability scanning (done 2026-10-17; risks R14, R10, R13)
+- [x] **Backup** (`tools/backup.py`, R14): `lakehouse/` + `inbox/kvk/` as one archive in
+      `backups/` (`backup.path`, `backup.keep: 3`), every `_delta_log` archived before
+      the data files (so each commit in the archive has its files), a manifest, verified
+      after writing by unpacking and opening every table; `restore` only into an empty
+      folder. Real data: 162 MB in 13 s, ~70 MB memory; restored and compared: 57 tables,
+      same versions and row counts, KVK zip identical. Also from inside the daemon
+      container (`./backups` mounted; files owned by the host user)
+- [x] **Log retention** (R10): `tools.maintenance personal-data`: `confirmed_by` →
+      `removed` after `retention.confirmed_by_days` (365), file paths in
+      `verification_report` shortened to the file name (new reports store the name only,
+      `checks/kvk.py`); applied to the real log (1 row: path shortened; silver KVK sees
+      nothing new). Dagster: runs older than `retention.dagster_runs_days` (180) deleted
+      with their log files, except runs holding an asset's latest materialization or a
+      check's latest result (otherwise automation would stop); ticks purged after 90 days
+      (`dagster.yaml`, both)
+- [x] **Maintenance steps in order**: found while adding the backup: the job's ops had
+      no dependencies, so Dagster could run them at the same time (e.g. vacuum during
+      the KVK retention delete); now chained with `Nothing` inputs, with a test
+- [x] **Vulnerability scanning** (R13): `.github/workflows/audit.yml`, `pip-audit
+      --strict` on `requirements-dev.txt` and the new `requirements-docker.txt` (the
+      Dockerfile's two extra packages moved there), on pin changes and weekly. Locally
+      2026-10-17: no known vulnerabilities
+- [ ] Open: point `backup.path` at another disk; scan the Docker base image's OS packages
+      (Trivy); mention `confirmed_by` in the internal privacy notice (privacy officer)
 - Real runs (2026-10-06): monthly CBS ingest skipped (nothing new), silver + gold built
   with all 12 checks passing, freshness and maintenance jobs succeeded
 - Found while testing: Dagster runs steps in their own process and drops the project
@@ -651,10 +679,10 @@ Run: `docker compose up -d` (Dagster http://localhost:3000, dashboard :8501)
 `tests/test_bronze_logic.py` and `tests/test_silver_logic.py` cover the pure logic;
 `tests/test_kvk_logic.py` the KVK file verification; `tests/test_reference.py` the SBI
 crosswalk; `tests/test_checks.py` the CBS and KVK checks and quarantine;
-`tests/test_maintenance.py` the quarantine cleanup; `tests/test_config.py` the
+`tests/test_maintenance.py` the maintenance tasks; `tests/test_backup.py` backup and restore; `tests/test_config.py` the
 configuration; `tests/test_kvk_silver.py` silver KVK; `tests/test_gold.py` gold;
 `tests/test_dashboard.py` the dashboard (every page headless); `tests/test_orchestration.py`
-Dagster; `tests/test_delta.py` writes real Delta tables in `tmp_path` (373 tests, ~75 s). `conftest.py` fails a test when any module still points at the real
+Dagster; `tests/test_delta.py` writes real Delta tables in `tmp_path` (383 tests, ~85 s). `conftest.py` fails a test when any module still points at the real
 lakehouse or inbox. Checked by breaking the code on purpose:
 removing the delete-before-write, an empty `done_keys()` and non-UTC silver timestamps
 each make the right tests fail.

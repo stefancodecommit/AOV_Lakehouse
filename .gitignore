@@ -3,6 +3,9 @@
 lakehouse/
 # KVK uploads for the agent
 inbox/
+# Backups of lakehouse/ and inbox/kvk/ (tools/backup.py); the folder itself stays
+backups/*
+!backups/README.md
 *.zip
 *.csv
 !tests/**/*.csv

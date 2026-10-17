@@ -1,0 +1,45 @@
+# Dependency audit (risk R13 in docs/privacy_and_risks.md): checks every pinned Python
+# package, of the local install and of the Docker image, against the public vulnerability
+# databases (PyPI advisories, OSV). Fails when a package has a known vulnerability.
+# Runs when the pins change, and weekly, because a new vulnerability can be published
+# for a version that was fine when it was pinned. (GitHub pauses scheduled workflows in
+# a repository without activity for 60 days; re-enable it on the Actions tab.)
+name: dependency-audit
+
+on:
+  push:
+    paths:
+      - "requirements*.txt"
+      - constraints.txt
+      - .github/workflows/audit.yml
+  pull_request:
+    paths:
+      - "requirements*.txt"
+      - constraints.txt
+  schedule:
+    - cron: "0 5 * * 1"         # Mondays 05:00 UTC
+  workflow_dispatch:            # also allows a manual run from the Actions tab
+
+permissions:
+  contents: read
+
+jobs:
+  pip-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install pip-audit
+        run: pip install "pip-audit==2.10.1"
+
+      # pip-audit installs the requirements (with constraints.txt) in a temporary
+      # environment and checks every package in it, including the indirect ones
+      - name: Audit the pinned packages
+        run: pip-audit --strict --progress-spinner off -r requirements-dev.txt -r requirements-docker.txt
