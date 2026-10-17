@@ -26,6 +26,7 @@ as [Delta Lake](https://delta.io) tables in the folder `lakehouse/`.
 | [`INSTRUCTIONS.md`](INSTRUCTIONS.md) | Which commands to run: the whole project or one part, by hand, with Dagster or in Docker |
 | [`TODO.md`](TODO.md) | Open work, decisions taken, and results of each real run |
 | [`docs/requirements.md`](docs/requirements.md) | Requirements: stakeholders, use cases, functional and non-functional requirements (each with its status and the test that verifies it), organisational requirements, conditions for use |
+| [`docs/cloud_design.md`](docs/cloud_design.md) | Design (not built) for running the project on Azure: options considered, architecture, security, monitoring, CI/CD, indicative costs, migration path |
 | [`docs/bronze_to_silver.md`](docs/bronze_to_silver.md) | How bronze becomes silver, table by table, with real examples |
 | [`docs/lineage.md`](docs/lineage.md) | Column lineage: for every silver column, the bronze field(s) it comes from; for every gold column, the silver column(s) it is made from; as diagrams and tables (generated from `tools/lineage.py`) |
 | [`docs/lineage.html`](docs/lineage.html) | The same lineage diagrams on one page, to open in a browser |

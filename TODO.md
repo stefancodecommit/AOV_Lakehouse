@@ -27,7 +27,7 @@ data & AI engineering 20%, documentation 15%. See section "Assignment" below.
 1. ~~Frame the project for the insurer~~ (done 2026-10-15)
 2. ~~Gold for the insurer~~ (done 2026-10-15: risk index, dashboard page)
 3. ~~Requirements~~ and ~~README per phase~~ (done 2026-10-17)
-4. Azure design (cloud), GDPR and risks, GenAI section
+4. ~~Azure design~~ (done 2026-10-17, design only); GDPR and risks; GenAI section
 5. Report (≤5000 words) + executive summary + canvas; presentation and demo
 
 Technical items, lower priority for the assignment:
@@ -180,8 +180,15 @@ documentation, AI-driven automation (KVK agent).
       4 the risk model), dashboard (3), orchestration (6 deployment & monitoring), tests
       (testing); each with design decisions, how to run, and a proof of working (test
       command + expected result). Phase map in the README. Closes NFR-23
-- [ ] **Cloud design, Azure** (learning objective 3): architecture, costs, security,
-      EU region; optionally run one part there
+- [x] **Cloud design, Azure** (2026-10-17; learning objective 3):
+      [docs/cloud_design.md](docs/cloud_design.md), design only, nothing built: three
+      options weighed (chosen: the existing containers on Azure Container Apps with
+      Azure Storage and PostgreSQL; rejected for now: Data Factory + Databricks/Fabric,
+      and Functions), architecture diagram, component mapping, storage in two steps
+      (Azure Files without code change, then ADLS Gen2), security per CIAA (Entra ID,
+      managed identities, Key Vault, private endpoints), monitoring and alerts, CI/CD
+      with OIDC and Bicep, indicative costs (~€50–200/month), migration path, risks.
+      Would close FR-19 and NFR-15 when built
 - [ ] **GDPR and risks** (learning objective 6, criterion 7): public aggregated data
       only; the real risk is linking it to claims data (health data, GDPR art. 9);
       correlation vs causation in premium differentiation
