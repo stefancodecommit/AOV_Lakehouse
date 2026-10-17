@@ -5,7 +5,7 @@ Open work, in the order of `docs/PROJECT.md`. Each phase builds on the one befor
 Rule for every phase: run each new layer on real data and check it before building the
 next layer on top of it.
 
-## Where to continue (status 2026-10-15)
+## Where to continue (status 2026-10-17)
 
 Built and run on real data: bronze (CBS, KVK, SBI crosswalk) with checks and quarantine
 (CBS bronze with a column per field next to `raw_json`),
@@ -13,7 +13,9 @@ silver (CBS, KVK), gold (7 tables, with the risk index), the Streamlit dashboard
 Docker Compose (including the KVK chat agent), column lineage, config, run log, the
 lakehouse viewer with data quality statistics (`python -m tools.lakehouse_viewer`),
 incremental silver KVK (2026-10-10), 373 tests. Code is organised in `pipeline/` (per
-layer) and `tools/` (2026-10-08). All committed; no containers or servers left running. See the README for how to start
+layer) and `tools/` (2026-10-08), with a README per phase. Requirements in
+docs/requirements.md (every Must met; open: FR-19 alerts, NFR-15 default password, left
+open on purpose), Azure design in docs/cloud_design.md (not built). All committed; no containers or servers left running. See the README for how to start
 everything (locally, or with `docker compose up -d`).
 
 **The assignment** (Erasmus, Data and AI Engineering; slides "Day 1 - assignment", pages
