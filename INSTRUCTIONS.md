@@ -236,6 +236,17 @@ run; a quarantined KVK file is checked again when you load it again.
 After changing a silver or gold column, regenerate the lineage: a test fails until
 `tools/lineage.py` describes the new column.
 
+The report (in Dutch) is written in `docs/rapport.md`. To make the Word and PDF files for
+submission:
+
+```bash
+.venv/bin/python -m tools.export_report       # -> build/rapport.docx, build/rapport.pdf (~10 s)
+```
+
+It needs Firefox (to draw the diagrams), LibreOffice and an internet connection. Edit
+`docs/rapport.md` and export again; changes made in the Word file are lost at the next
+export.
+
 ## 9. Stop everything
 
 ```bash

@@ -2,13 +2,11 @@
 
 **Een data- en AI-engineeringbenadering voor een inkomensverzekeraar**
 
-| | |
-|---|---|
-| Vak | Data and AI Engineering, Erasmus Universiteit Rotterdam |
-| Docent | prof.dr.ir. M. Janssen |
-| Auteur | Stefan *(volledige naam en studentnummer invullen)* |
-| Code | <https://github.com/stefancodecommit/AOV_Lakehouse> |
-| Datum | *(datum van inleveren)* |
+**Vak:** Data and AI Engineering, Erasmus Universiteit Rotterdam\
+**Docent:** prof.dr.ir. M. Janssen\
+**Auteur:** Stefan *(volledige naam en studentnummer invullen)*\
+**Code:** <https://github.com/stefancodecommit/AOV_Lakehouse>\
+**Datum:** *(datum van inleveren)*
 
 ---
 
