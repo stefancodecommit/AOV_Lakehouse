@@ -263,3 +263,121 @@ Drie integraties maken van losse bronnen één systeem:
 De onderdelen zijn **los gekoppeld**: de scripts roepen elkaar niet aan, maar delen alleen
 gegevens via de lakehouse. Dagster bepaalt de volgorde en start een laag pas als de laag
 eronder haar controles heeft doorstaan.
+
+## 4. Implementatie
+
+### 4.1 Gebruikte methoden en tools
+
+Bij elke keuze is gekeken naar wat past bij de omvang (ongeveer 120 MB, met ongeveer
+300 MB groei per jaar) en bij de eisen, niet naar wat het zwaarste is.
+
+| Tool | Waarvoor | Waarom deze, en niet het alternatief |
+|---|---|---|
+| **Delta Lake** via delta-rs (Python) | opslag van alle lagen | transacties, versies (*time travel*) en een open formaat, zonder Spark of databaseserver; Spark is bedoeld voor clusters en terabytes, hier zou het alleen opstarttijd en geheugen kosten |
+| **pandas** (met pyarrow) | transformaties | ruim voldoende bij deze omvang (silver CBS ongeveer 3 seconden). Polars is overwogen voor het deel dat groeit (KVK); het geheugenprobleem bleek met een incrementele opzet beter op te lossen (4.4) |
+| **Dagster** | workflow | werkt met *assets* en controles per laag, start een laag alleen na nieuwe gegevens en geslaagde controles, en toont herkomst per kolom; een eenvoudige planner (cron) kan dat niet |
+| **Streamlit** met Altair | dashboard | in Python, dus testbaar met dezelfde tests als de pijplijn, en gratis; Power BI is een optie voor later (clouddesign) |
+| **Docker Compose** | uitrol | dezelfde omgeving op elke machine met één commando |
+| **pytest** en **GitHub Actions** | testen | tests bij elke wijziging, op een schone machine met Python 3.12 |
+| **Ollama** met een lokaal taalmodel | KVK-intake | draait op de eigen machine: er gaat niets naar een externe dienst |
+
+De gegevens doorlopen drie lagen (*medallion*-architectuur): **bronze** bewaart wat binnenkwam,
+**silver** schoont op en koppelt, **gold** bevat de tabellen voor het dashboard. Elke laag
+wordt alleen gebouwd uit de laag eronder, zodat elke stap opnieuw kan worden uitgevoerd
+zonder de bron opnieuw te bevragen.
+
+### 4.2 Toepassingen: het dashboard en de risico-index
+
+Het **dashboard** is gebouwd voor de data-analist en heeft zeven pagina's: een overzicht,
+de risico-index, sectoren, grootteklassen, "achter de cijfers" (wat verschilt van landelijk
+buiten de foutmarge), context (aantallen bedrijven) en een datawoordenboek. Op elke pagina
+staan de nieuwste periode, of die voorlopig is, de datum van de gegevens en de bron.
+
+De **risico-index** rekent per sector en grootteklasse:
+
+| Uitkomst | Berekening |
+|---|---|
+| relatief risico | verzuim van de groep over de laatste vier kwartalen ÷ het landelijk verzuim over dezelfde kwartalen; 1,00 is landelijk |
+| bandbreedte | het laagste en hoogste relatieve risico per kwartaal over de laatste acht kwartalen |
+| oordeel | bandbreedte geheel boven 1: *hoger*; geheel onder 1: *lager*; anders *rond landelijk* |
+| trend | helling van een rechte lijn door de acht kwartaalwaarden, per jaar; boven +0,05 *stijgend*, onder -0,05 *dalend* |
+| omvang | aantal bedrijven, waarvan door natuurlijke personen (zelfstandigen) |
+| toelichting | één zin die de rij in woorden uitlegt |
+
+Doordat elk kwartaal wordt gedeeld door het landelijk cijfer van datzelfde kwartaal, valt
+het seizoenseffect weg en zijn kwartalen direct vergelijkbaar. De index bestaat in twee
+varianten: met alle cijfers en met alleen definitieve cijfers.
+
+Voor de **data engineer** zijn er twee hulpmiddelen: een overzicht van alle tabellen met
+problemen en waarschuwingen, en een viewer die elke tabel, elke versie en
+datakwaliteitsstatistieken toont.
+
+### 4.3 Testen en validatie
+
+Er zijn **373 geautomatiseerde tests**, van vier soorten:
+
+- **eenheidstests** op de logica (codes ontleden, controles, de berekening van de
+  risico-index) met kleine, zelfgemaakte gegevens waarvan het juiste antwoord vooraf
+  bekend is;
+- **integratietests** op echte Delta-tabellen in een tijdelijke map: schrijven,
+  herschrijven, een run die halverwege stopt, opnieuw draaien;
+- **paginatests:** elke dashboardpagina wordt zonder browser uitgevoerd, met en zonder
+  "alleen definitieve cijfers";
+- **workflowtests:** Dagster voert de stappen uit met de controles ertussen.
+
+De tests draaien bij elke wijziging in **GitHub Actions** op een schone machine met de
+exacte pakketversies, gevolgd door het bouwen van de Docker-image. Dat leverde al een
+echte vondst op: een nieuwe installatie kreeg pandas 3, waarmee de code nog niet werkt.
+De pakketversies liggen sindsdien vast.
+
+Drie aanvullende manieren van valideren:
+
+1. **Opzettelijk gebroken code:** bij belangrijke tests is de code expres kapotgemaakt om
+   te zien of de test dat opmerkt; dat deed hij telkens.
+2. **Vergelijken op de echte gegevens:** na grote wijzigingen moesten de resultaten gelijk
+   blijven. Na het herstructureren van bronze waren alle elf silvertabellen identiek; na
+   de incrementele opzet van KVK ook alle 1.921.911 rijen.
+3. **Controles in de pijplijn zelf:** elke CBS-batch wordt vóór het wegschrijven
+   gecontroleerd, en elke laag wordt gecontroleerd (unieke sleutels, sleutels die in hun
+   dimensie bestaan, één run per laag) voordat de volgende laag wordt gebouwd.
+
+### 4.4 Deployment en monitoring
+
+**Uitrol.** Het project draait lokaal of met Docker Compose (Dagster, het dashboard en een
+database voor de rungeschiedenis). De diensten zijn alleen bereikbaar vanaf de eigen
+machine, de containers draaien zonder beheerdersrechten, en de pakketversies zijn overal
+gelijk. Het clouddesign beschrijft de stap naar Azure.
+
+**Workflow.** Dagster haalt op de eerste van de maand de CBS-gegevens op. Is er niets
+nieuws, dan gebeurt er verder niets; anders worden silver en gold opnieuw gebouwd, maar
+alleen als de controles van de laag eronder zijn geslaagd. Het KVK-bestand wordt door een
+medewerker geladen. Er schrijft nooit meer dan één run tegelijk. Op de vijftiende van de
+maand ruimt onderhoud op: quarantaine na 90 dagen, KVK-momentopnamen (de nieuwste plus één
+per maand) en oude bestandsversies na zeven dagen.
+
+**Monitoring.** Mislukte runs en controles zijn zichtbaar in Dagster; versheidscontroles
+waarschuwen als een bron te oud is of door het CBS is gestopt. Elke silver- en goldrun
+staat in een runlog met tijdstip, codeversie, invoerversies en uitkomst.
+
+**Prestaties en schaalbaarheid.** Silver CBS duurt ongeveer 3 seconden, gold ongeveer 17,
+silver KVK ongeveer 10. Het onderdeel dat groeit is KVK: elke bewaarde momentopname telt
+1,9 miljoen rijen. De eerste opzet bouwde alles elke keer opnieuw en had steeds meer
+geheugen nodig. De huidige opzet voegt alleen nieuwe momentopnamen toe en verwerkt ze één
+voor één. Gemeten met vier gesimuleerde momentopnamen: 1,65 GB voor een volledige
+herbouw (eerst 3,2 GB) en 0,18 GB als er niets nieuws is.
+
+### 4.5 Data provenance en uitlegbaarheid
+
+**Herkomst.** Voor elk van de 282 kolommen in silver en gold is vastgelegd uit welke
+kolommen in de laag eronder ze komen en wat ermee gebeurt. Een test faalt zodra een nieuwe
+kolom geen herkomst heeft. De herkomst is te volgen in een interactieve verkenner (van een
+goldkolom terug naar de bronvelden, of andersom), in gegenereerde documentatie en in
+Dagster. Daarnaast draagt elke rij in silver en gold het nummer van de run die haar
+maakte, bewaart bronze elk record precies zoals ontvangen, en krijgt elke afgekeurde batch
+een rapport.
+
+**Uitlegbaarheid.** De risico-index is met de hand na te rekenen en geeft per rij een
+toelichting in woorden. Bijzondere gevallen zijn zichtbaar gemarkeerd, voorlopige cijfers
+zijn overal herkenbaar, en de enquêtecijfers tonen hun 95%-interval. Zo kan de analist bij
+elk getal zeggen waar het vandaan komt en hoe zeker het is, en precies dat is nodig om een
+bevinding met vertrouwen aan de manager door te geven.
