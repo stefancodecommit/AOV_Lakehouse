@@ -63,6 +63,11 @@ analyst can judge it before passing it on.
 
 ### Scope and boundaries
 
+The full requirements (stakeholders, use cases, functional and non-functional
+requirements with their status and verification, conditions for use) are in
+[requirements.md](requirements.md).
+
+
 - **Only public, aggregated statistics** (CBS open data, KVK open dataset). No personal
   data, no data about individual insured persons, no claims data. Linking the figures to
   the insurer's own claims data is a possible next step, but that is health data (a

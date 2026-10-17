@@ -26,7 +26,7 @@ data & AI engineering 20%, documentation 15%. See section "Assignment" below.
 **Next steps, in order** (details and slide references in section "Assignment"):
 1. ~~Frame the project for the insurer~~ (done 2026-10-15)
 2. ~~Gold for the insurer~~ (done 2026-10-15: risk index, dashboard page)
-3. Requirements (functional, non-functional, stakeholders, conditions); README per phase
+3. ~~Requirements~~ (done 2026-10-17: docs/requirements.md); README per phase
 4. Azure design (cloud), GDPR and risks, GenAI section
 5. Report (≤5000 words) + executive summary + canvas; presentation and demo
 
@@ -170,8 +170,13 @@ documentation, AI-driven automation (KVK agent).
       final basis; content of the page). Real data 2026 Q2: 5 of 19 sections above
       national (healthcare 1.40), size 1–9 at 0.48 and 100+ at 1.16; only section S
       (Overige dienstverlening) rising (+0.06 per year), still below national
-- [ ] **Requirements** (criterion 3; report chapter "Eisenpakket"): functional and
-      non-functional, data suppliers / developers / users, conditions for use
+- [x] **Requirements** (2026-10-17; criterion 3; report chapter "Eisenpakket"):
+      [docs/requirements.md](docs/requirements.md), in English: stakeholders (suppliers,
+      developers, users, DPO), 7 use cases, 19 functional and 27 non-functional
+      requirements with MoSCoW priority, status and the test or measurement that verifies
+      each (50 tests cited, all checked to exist), 6 organisational requirements, 9
+      conditions for use. Open: FR-19 alerts (Could); partly met: NFR-13 local dashboard
+      listens on the network, NFR-15 default Postgres password, NFR-23 README per phase
 - [ ] **README per phase** (slide 22): ingestion, transformation, serving, model,
       deployment & monitoring, each pointing to its code and tests
 - [ ] **Cloud design, Azure** (learning objective 3): architecture, costs, security,
