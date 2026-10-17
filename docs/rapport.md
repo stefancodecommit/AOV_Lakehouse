@@ -14,7 +14,44 @@
 
 ## Managementsamenvatting
 
-*Wordt als laatste geschreven, als de rest van het rapport vaststaat.*
+**Vraag.** Als inkomensverzekeraar is ons schaderisico in de kern een verzuimrisico, en dat
+verschilt sterk per sector en bedrijfsgrootte. Onze eigen benchmarks zijn gebaseerd op
+privacygevoelige gegevens en daarom niet overal bruikbaar. Dit project onderzoekt welke
+bedrijfskenmerken samengaan met hoger verzuim, met uitsluitend openbare gegevens van het
+CBS en de KVK.
+
+**Aanpak.** Er is een dataplatform gebouwd dat de openbare cijfers maandelijks automatisch
+ophaalt, controleert, combineert en klaarzet in een dashboard voor de data-analist. Elk getal
+is herleidbaar tot de bron, voorlopige cijfers zijn herkenbaar, en een eenvoudige,
+controleerbare risico-index toont per sector en grootteklasse hoeveel hoger of lager het
+verzuim is dan landelijk, hoe stabiel dat is en of het stijgt.
+
+**Resultaat.**
+
+- De **zorg** heeft 40% meer verzuim dan landelijk; daar verzuimen meer mensen, langer en
+  vaker door het werk (besmetting, emotioneel zwaar werk). Horeca en landbouw liggen
+  ongeveer 40% lager.
+- Het verzuim **stijgt met de bedrijfsgrootte**: kleine bedrijven zitten op de helft van
+  landelijk, grote 16% erboven.
+- De niveaus zijn over twee jaar stabiel. Een **stijgende trend** is zichtbaar, maar moet
+  met definitieve cijfers worden bevestigd.
+- Per sector is bekend hoeveel bedrijven het betreft, ook hoeveel van zelfstandigen.
+
+**Waarde.** Een onafhankelijke, privacyvrije benchmark van de hele markt naast onze eigen
+cijfers; een kwartaalsignaal vóórdat stijgend verzuim in de schadelast zichtbaar wordt; en
+onderbouwing voor preventiegesprekken met werkgevers. Wat eerder handwerk was, is nu een
+herhaalbaar en gecontroleerd proces.
+
+**Risico's.** De grootste risico's zitten in het gebruik, niet in de gegevens: een
+sectorcijfer toepassen op één werkgever, werknemerscijfers gebruiken voor zelfstandigen, of
+premies naar sector differentiëren op een manier die indirect een groep benadeelt. Er worden
+geen persoonsgegevens van verzekerden verwerkt.
+
+**Advies.** Gebruik de index als benchmark naast de eigen cijfers en op groepsniveau;
+instrueer analisten en accountmanagers over de randvoorwaarden; laat compliance
+premiedifferentiatie beoordelen; en koppel aan eigen schadegegevens pas na een DPIA.
+Technisch zijn een back-up, de overstap naar Azure volgens het clouddesign en meldingen bij
+fouten de volgende stappen.
 
 ---
 
@@ -32,14 +69,9 @@ portefeuille te bewaken en werkgevers te adviseren over preventie.
 De verzekeraar heeft eigen benchmarks, gebaseerd op polis- en schadegegevens. Die bevatten
 privacygevoelige gegevens, waaronder gezondheidsgegevens van verzekerden, en kunnen in dit
 project niet worden gebruikt. De op één na beste bron is openbaar: de verzuimstatistieken
-van het CBS. Die vervangen de eigen cijfers niet, maar voegen iets toe wat de eigen cijfers
-niet kunnen bieden:
-
-- **geen privacyrisico:** geaggregeerde openbare gegevens die vrij te combineren en zelfs
-  met werkgevers te delen zijn;
-- **de hele markt:** cijfers voor elke sector en grootteklasse, ook waar de verzekeraar
-  weinig polissen heeft en de eigen benchmark dun is;
-- **onafhankelijk:** een externe referentie om de eigen cijfers aan te toetsen.
+van het CBS. Die vervangen de eigen cijfers niet, maar zijn **privacyvrij**, beslaan **de
+hele markt** (ook sectoren waar de verzekeraar weinig polissen heeft) en zijn
+**onafhankelijk** van de eigen portefeuille.
 
 Het probleem is dat die cijfers verspreid staan over meerdere CBS-tabellen met eigen
 codes, voorlopige en definitieve versies, en een sectorindeling die in 2025 is vernieuwd
@@ -59,9 +91,7 @@ herleidbaar tot de bron.
 4. **Elk risico wegen naar omvang:** hoeveel bedrijven een sector en grootteklasse omvatten,
    ook bedrijven van zelfstandigen.
 
-Daarnaast gelden technische doelen: dezelfde gegevens nooit dubbel opvragen of opslaan,
-geen foute gegevens in het eindresultaat, automatisch en alleen werken als er iets nieuws
-is, en draaien op elke machine met één commando.
+De technische doelen volgen uit de eisen in hoofdstuk 2.
 
 ### 1.3 Onderzoeksvragen en aannames
 
@@ -281,10 +311,8 @@ Bij elke keuze is gekeken naar wat past bij de omvang (ongeveer 120 MB, met onge
 | **pytest** en **GitHub Actions** | testen | tests bij elke wijziging, op een schone machine met Python 3.12 |
 | **Ollama** met een lokaal taalmodel | KVK-intake | draait op de eigen machine: er gaat niets naar een externe dienst |
 
-De gegevens doorlopen drie lagen (*medallion*-architectuur): **bronze** bewaart wat binnenkwam,
-**silver** schoont op en koppelt, **gold** bevat de tabellen voor het dashboard. Elke laag
-wordt alleen gebouwd uit de laag eronder, zodat elke stap opnieuw kan worden uitgevoerd
-zonder de bron opnieuw te bevragen.
+Elke laag (bronze, silver, gold; zie 3.1) wordt alleen gebouwd uit de laag eronder, zodat
+elke stap opnieuw kan zonder de bron opnieuw te bevragen.
 
 ### 4.2 Toepassingen: het dashboard en de risico-index
 
@@ -351,9 +379,8 @@ gelijk. Het clouddesign beschrijft de stap naar Azure.
 **Workflow.** Dagster haalt op de eerste van de maand de CBS-gegevens op. Is er niets
 nieuws, dan gebeurt er verder niets; anders worden silver en gold opnieuw gebouwd, maar
 alleen als de controles van de laag eronder zijn geslaagd. Het KVK-bestand wordt door een
-medewerker geladen. Er schrijft nooit meer dan één run tegelijk. Op de vijftiende van de
-maand ruimt onderhoud op: quarantaine na 90 dagen, KVK-momentopnamen (de nieuwste plus één
-per maand) en oude bestandsversies na zeven dagen.
+medewerker geladen. Er schrijft nooit meer dan één run tegelijk, en maandelijks onderhoud
+ruimt op volgens vaste bewaartermijnen.
 
 **Monitoring.** Mislukte runs en controles zijn zichtbaar in Dagster; versheidscontroles
 waarschuwen als een bron te oud is of door het CBS is gestopt. Elke silver- en goldrun
@@ -424,10 +451,9 @@ verklaring:
   dezelfde vijf secties boven landelijk, dezelfde hoogste en laagste. Maar dan stijgt niet
   "overige dienstverlening" maar "delfstoffenwinning". Een stijgende trend moet de analist
   dus altijd ook met definitieve cijfers bekijken voordat hij die doorgeeft.
-- **Datakwaliteit KVK.** Bij 90% van de actieve bedrijven is de sector eenduidig te bepalen;
-  de rest is gemarkeerd. Het KVK-bestand bevat 381.513 identieke rijen. Omdat het bestand
-  geen KVK-nummer bevat, is niet vast te stellen of dat dubbele regels zijn of verschillende
-  bedrijven met dezelfde kenmerken; ze zijn daarom bewaard en niet verwijderd.
+- **Datakwaliteit KVK.** Bij 90% van de actieve bedrijven is de sector eenduidig; de rest
+  is gemarkeerd. De 381.513 identieke rijen zijn bewaard: zonder KVK-nummer is niet vast te
+  stellen of het dubbelingen zijn.
 
 Voor de verzekeraar betekent dit: de index wijst betrouwbaar aan *waar* het risico hoger
 ligt en of het verandert, en de enquête geeft aanknopingspunten voor preventie. *Waarom*
@@ -436,10 +462,8 @@ analist en accountmanager.
 
 ### 5.2 Verwachte voordelen en risico's
 
-**Voordelen.** Een privacyvrije, onafhankelijke benchmark van de hele markt naast de eigen
-cijfers; een kwartaalsignaal vóórdat stijgend verzuim in de schadelast zichtbaar wordt;
-onderbouwing voor preventiegesprekken met werkgevers; en cijfers die automatisch actueel
-blijven en tot de bron herleidbaar zijn, waar dat eerder handwerk was.
+**Voordelen.** Een privacyvrije benchmark naast de eigen cijfers, een vroeg signaal per
+kwartaal en onderbouwing voor preventiegesprekken, automatisch actueel en herleidbaar.
 
 **Risico's.** Het risicoregister (in de repository: R1 tot en met R18) laat zien dat de
 grootste risico's niet in de gegevens zitten, maar in het **gebruik** ervan:
@@ -450,9 +474,8 @@ grootste risico's niet in de gegevens zitten, maar in het **gebruik** ervan:
   heeft bijvoorbeeld vooral vrouwelijke werknemers). Dat moet compliance beoordelen
   voordat de index invloed krijgt op premies.
 
-Technisch zijn de belangrijkste open punten een back-up van de KVK-historie (een oude
-momentopname is niet opnieuw te downloaden) en het automatisch scannen van de gebruikte
-pakketten op kwetsbaarheden.
+Technisch ontbreken nog een back-up van de KVK-historie en het scannen van pakketten op
+kwetsbaarheden.
 
 ### 5.3 Onderhoud, privacy en beveiliging
 
@@ -461,16 +484,12 @@ het KVK-bestand laden. Onderhoud is vastgelegd in een README per fase, een
 instructiebestand en de tests. Het grootste onderhoudsrisico is afhankelijkheid van één
 beheerder; een overdracht aan het datateam van de verzekeraar ligt voor de hand.
 
-**Privacy.** Er worden geen persoonsgegevens van verzekerden of burgers verwerkt; alleen de
-KVK-uploadlog legt vast welke medewerker een bestand bevestigde. Wel kan een bedrijf op
-rijniveau herleidbaar zijn (851.804 van de 1,9 miljoen bedrijven zijn uniek op regio,
-SBI-code en startdatum); het dashboard toont daarom alleen aantallen, met groepen onder de
-10 verborgen. Een DPIA is pas nodig als deze cijfers aan eigen schadegegevens worden
-gekoppeld.
-
-**Beveiliging.** Alles is alleen bereikbaar vanaf de eigen machine, er zijn geen geheimen
-nodig en containers draaien zonder beheerdersrechten. Het clouddesign voegt inloggen via
-Entra ID, rollen, Key Vault en afgeschermde netwerkverbindingen toe.
+**Privacy en beveiliging.** Er worden geen persoonsgegevens van verzekerden verwerkt. Wel
+is een bedrijf op rijniveau herleidbaar (851.804 van de 1,9 miljoen bedrijven zijn uniek op
+regio, SBI-code en startdatum); het dashboard toont daarom alleen aantallen, met kleine
+groepen verborgen. Alles is alleen bereikbaar vanaf de eigen machine; het clouddesign voegt
+inloggen, rollen en een kluis voor geheimen toe. Details staan in
+[docs/privacy_and_risks.md](privacy_and_risks.md).
 
 ### 5.4 Gebruik van generatieve AI
 
@@ -480,15 +499,12 @@ analyses. Dat is in de repository transparant vastgelegd: alle commits, op de
 plaatshouder van GitHub na, vermelden Claude als co-auteur, en een apart document beschrijft de werkwijze
 ([docs/genai_use.md](genai_use.md)).
 
-**Werkwijze.** Ik bepaalde de richting en nam de beslissingen; de assistent onderzocht,
-stelde opties voor, bouwde de gekozen oplossing en testte die. Belangrijke keuzes kwamen van
-mij, zoals bijzondere gevallen markeren in plaats van aannames doen, een gestructureerde
-bronzelaag, de vraag of de oplossing schaalt, en de keuze voor een verzekeraar als
-organisatie.
+**Werkwijze.** Ik nam de beslissingen, zoals bijzondere gevallen markeren in plaats van
+aannames doen en de vraag of de oplossing schaalt; de assistent stelde opties voor, bouwde
+en testte.
 
-**Voordelen:** veel meer omvang en grondigheid (tests, metingen, documentatie) dan anders
-haalbaar was, en uitleg op de eigen code. **Nadelen en risico's:** generatieve AI kan met
-stelligheid iets beweren wat niet klopt. Dat gebeurde ook: zo werden testen in GitHub
+**Voordelen:** meer omvang en grondigheid dan anders haalbaar was, en uitleg op de eigen
+code. **Risico's:** generatieve AI kan stellig iets beweren wat niet klopt. Dat gebeurde ook: zo werden testen in GitHub
 Actions als gedaan afgevinkt terwijl ze nog nooit hadden gedraaid, en werd een functie in
 Dagster beschreven die in de gratis versie niet bestaat. Beide zijn ontdekt en
 gecorrigeerd, onder meer door de vraag "hoe heb je dat getest?". Daarom is niets op
