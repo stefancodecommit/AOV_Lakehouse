@@ -29,6 +29,7 @@ as [Delta Lake](https://delta.io) tables in the folder `lakehouse/`.
 | [`docs/cloud_design.md`](docs/cloud_design.md) | Design (not built) for running the project on Azure: options considered, architecture, security, monitoring, CI/CD, indicative costs, migration path |
 | [`docs/privacy_and_risks.md`](docs/privacy_and_risks.md) | Privacy (GDPR) and risks: data inventory, GDPR principles, DPIA, other rules (KVK terms, EU AI Act, equal treatment), risk register with measures, actions |
 | [`docs/rapport.md`](docs/rapport.md) | The assignment report, in Dutch (≤5000 words); exported to Word and PDF with `python -m tools.export_report` |
+| [`docs/presentatie.pptx`](docs/presentatie.pptx), [`docs/demo.md`](docs/demo.md) | The presentation (Dutch, 10 slides with speaker notes) and the script for the live demo |
 | [`docs/genai_use.md`](docs/genai_use.md) | How generative AI (Claude) was used to build the project: why, the way of working, which decisions were the author's, how results were checked, advantages and risks with real examples |
 | [`docs/bronze_to_silver.md`](docs/bronze_to_silver.md) | How bronze becomes silver, table by table, with real examples |
 | [`docs/lineage.md`](docs/lineage.md) | Column lineage: for every silver column, the bronze field(s) it comes from; for every gold column, the silver column(s) it is made from; as diagrams and tables (generated from `tools/lineage.py`) |

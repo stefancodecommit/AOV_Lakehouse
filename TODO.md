@@ -31,7 +31,10 @@ data & AI engineering 20%, documentation 15%. See section "Assignment" below.
 3. ~~Requirements~~ and ~~README per phase~~ (done 2026-10-17)
 4. ~~Azure design~~, ~~GDPR and risks~~, ~~GenAI section~~ (done 2026-10-17; the
    author's own reflection in docs/genai_use.md is still to write)
-5. Report (≤5000 words) + executive summary + canvas; presentation and demo
+5. ~~Report~~ (Dutch, 4,676 words, exported with `python -m tools.export_report`) and
+   ~~presentation + demo script~~ (done 2026-10-17). Still for the author: the GenAI
+   reflection (report 5.4 and docs/genai_use.md), name/student number/date on the title
+   page, rehearsing the demo
 
 Technical items, lower priority for the assignment:
 - **pandas 3** (section 7): make the code work with it, then raise the pin
@@ -214,7 +217,12 @@ documentation, AI-driven automation (KVK agent).
       summary** (slide 16) and the canvas (slide 20). **In Dutch** (decided
       2026-10-15); everything else (code, comments, documentation, dashboard) stays in
       English
-- [ ] **Presentation with demo** (January): dashboard, Dagster, lineage explorer,
+- [x] **Presentation with demo**, prepared (2026-10-17): docs/presentatie.pptx (Dutch, 10
+      slides, ~15 min, slides 5 and 8 can be dropped for a 10-minute slot; speaker notes
+      with timing; native chart of the relative risk per section) and docs/demo.md (five
+      steps with Dutch talking points, preparation, fallbacks). Still for the author:
+      rehearse, make the fallback screenshots the day before, check the Dagster menu labels.
+      Original item: dashboard, Dagster, lineage explorer,
       lakehouse viewer
 
 ## 0. Foundations
