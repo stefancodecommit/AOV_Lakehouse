@@ -29,7 +29,8 @@ data & AI engineering 20%, documentation 15%. See section "Assignment" below.
 1. ~~Frame the project for the insurer~~ (done 2026-10-15)
 2. ~~Gold for the insurer~~ (done 2026-10-15: risk index, dashboard page)
 3. ~~Requirements~~ and ~~README per phase~~ (done 2026-10-17)
-4. ~~Azure design~~ (done 2026-10-17, design only); GDPR and risks; GenAI section
+4. ~~Azure design~~ (done 2026-10-17, design only); ~~GDPR and risks~~ (done
+   2026-10-17); GenAI section
 5. Report (≤5000 words) + executive summary + canvas; presentation and demo
 
 Technical items, lower priority for the assignment:
@@ -191,9 +192,16 @@ documentation, AI-driven automation (KVK agent).
       managed identities, Key Vault, private endpoints), monitoring and alerts, CI/CD
       with OIDC and Bicep, indicative costs (~€50–200/month), migration path, risks.
       Would close FR-19 and NFR-15 when built
-- [ ] **GDPR and risks** (learning objective 6, criterion 7): public aggregated data
-      only; the real risk is linking it to claims data (health data, GDPR art. 9);
-      correlation vs causation in premium differentiation
+- [x] **GDPR and risks** (2026-10-17; learning objective 6, criterion 7):
+      [docs/privacy_and_risks.md](docs/privacy_and_risks.md): data inventory checked on the
+      real lakehouse (no personal data about insured persons; minimal personal data of
+      employees: `confirmed_by` in the KVK upload log; 851,804 of 1.92M KVK companies
+      unique on postcode region + SBI code + start date, so row-level KVK stays
+      internal), GDPR principles, DPIA needed only before linking claims data, other
+      rules (KVK terms, CC BY, EU AI Act, equal treatment in pricing), risk register
+      R1–R18 with measures, actions. New open actions from it: backup of lakehouse/ and
+      inbox/kvk/ (R14), vulnerability scanning in CI (R13), retention for the KVK upload
+      log and Dagster history (R10)
 - [ ] **GenAI section** (slide 15, required): why and how Claude was used, what was
       decided by the author, how results were checked, pros and risks with real
       examples from the sessions (e.g. a CI status wrongly marked done, a test that
