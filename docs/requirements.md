@@ -165,7 +165,7 @@ How well the system must work, per quality attribute.
 | NFR-20 | Automated tests on every change | Must | ✅ | 372 tests; GitHub Actions on every push (Python 3.12 and the Docker image) | GitHub Actions runs |
 | NFR-21 | The same package versions everywhere (locally, CI, Docker) | Must | ✅ | exact versions in `requirements.txt` and `constraints.txt` | CI install; found and fixed a pandas 3 mismatch (2026-10-08) |
 | NFR-22 | Runs the same on any machine with one command | Should | ✅ | Docker Compose | `docker compose config`; image built in CI |
-| NFR-23 | Documentation a reviewer can follow: what, why and how to run, per phase | Must | ⚠️ | README, INSTRUCTIONS, PROJECT, bronze_to_silver, lineage. **Gap:** a README per phase (course slide 22) | open item in TODO |
+| NFR-23 | Documentation a reviewer can follow: what, why and how to run, per phase | Must | ✅ | README, INSTRUCTIONS, PROJECT, bronze_to_silver, lineage, and a README per phase (course slide 22) with a proof of working | README → *The six phases* |
 
 ### Usability and explainability
 
@@ -220,8 +220,7 @@ Under which conditions the results may be used, and what they can't be used for.
 | Group | Met | Partly | Not yet |
 |---|---|---|---|
 | Functional (FR-1 – FR-19) | 18 | 0 | 1 (FR-19 alerts, *Could*) |
-| Non-functional (NFR-1 – NFR-27) | 24 | 3 (NFR-13 local dashboard network, NFR-15 default password, NFR-23 README per phase) | 0 |
+| Non-functional (NFR-1 – NFR-27) | 25 | 2 (NFR-13 local dashboard network, NFR-15 default password) | 0 |
 
-All *Must* requirements are met except two partly met ones: NFR-13 (the locally started
-dashboard listens on the network; Docker doesn't) and NFR-23 (a README per phase). Both
-are open items in [TODO.md](../TODO.md).
+All *Must* requirements are met except one partly met: NFR-13 (the locally started
+dashboard listens on the network; Docker doesn't), an open item in [TODO.md](../TODO.md).

@@ -35,6 +35,7 @@ as [Delta Lake](https://delta.io) tables in the folder `lakehouse/`.
 
 1. [Concepts in two minutes](#concepts-in-two-minutes)
 2. [How the scripts fit together](#how-the-scripts-fit-together)
+   - [The six phases, each with its README](#the-six-phases-each-with-its-readme)
 3. [Setup](#setup)
 4. [Running the pipeline](#running-the-pipeline)
 5. [Running it automatically: Dagster](#running-it-automatically-dagster)
@@ -123,6 +124,21 @@ Reading the diagram:
   a newer classification (SBI 2025) than CBS (SBI 2008).
 - They can be run by hand (below), or by Dagster, which runs them on a schedule and
   only when new data arrived (see [Dagster](#running-it-automatically-dagster)).
+
+### The six phases, each with its README
+
+The course describes data and AI engineering as six phases. Each has a README next to its
+code: what the phase does, the design decisions, how to run it, and a **proof of
+working** (the test command and what to expect).
+
+| Phase | README | In this project |
+|---|---|---|
+| 1. Ingestion | [pipeline/bronze/](pipeline/bronze/README.md) | CBS API, the SBI crosswalk, the KVK file with an AI intake agent; checks and quarantine before writing |
+| 2. Transformation | [pipeline/silver/](pipeline/silver/README.md) | typed dimensions and facts; KVK companies translated to SBI 2008; edge cases flagged |
+| 3. Serving | [pipeline/gold/](pipeline/gold/README.md), [dashboard/](dashboard/README.md) | 7 gold tables; the Streamlit dashboard for the data analyst |
+| 4. Model design and testing | [pipeline/gold/](pipeline/gold/README.md#phase-4--model-design-and-testing-the-risk-index), [tests/](tests/README.md) | the risk index (a white-box model) and how everything is tested |
+| 5. Model integration | [pipeline/silver/](pipeline/silver/README.md#phase-5--model-integration) | CBS and KVK joined through the SBI crosswalk; absence with business counts; an LLM inside the KVK intake |
+| 6. Deployment and monitoring | [orchestration/](orchestration/README.md) | Dagster schedules and checks, Docker Compose, GitHub Actions, the run log |
 
 ## Setup
 

@@ -26,7 +26,7 @@ data & AI engineering 20%, documentation 15%. See section "Assignment" below.
 **Next steps, in order** (details and slide references in section "Assignment"):
 1. ~~Frame the project for the insurer~~ (done 2026-10-15)
 2. ~~Gold for the insurer~~ (done 2026-10-15: risk index, dashboard page)
-3. ~~Requirements~~ (done 2026-10-17: docs/requirements.md); README per phase
+3. ~~Requirements~~ and ~~README per phase~~ (done 2026-10-17)
 4. Azure design (cloud), GDPR and risks, GenAI section
 5. Report (≤5000 words) + executive summary + canvas; presentation and demo
 
@@ -176,9 +176,12 @@ documentation, AI-driven automation (KVK agent).
       requirements with MoSCoW priority, status and the test or measurement that verifies
       each (50 tests cited, all checked to exist), 6 organisational requirements, 9
       conditions for use. Open: FR-19 alerts (Could); partly met: NFR-13 local dashboard
-      listens on the network, NFR-15 default Postgres password, NFR-23 README per phase
-- [ ] **README per phase** (slide 22): ingestion, transformation, serving, model,
-      deployment & monitoring, each pointing to its code and tests
+      listens on the network, NFR-15 default Postgres password
+- [x] **README per phase** (2026-10-17; slide 22): pipeline/bronze (1 ingestion),
+      pipeline/silver (2 transformation, 5 model integration), pipeline/gold (3 serving,
+      4 the risk model), dashboard (3), orchestration (6 deployment & monitoring), tests
+      (testing); each with design decisions, how to run, and a proof of working (test
+      command + expected result). Phase map in the README. Closes NFR-23
 - [ ] **Cloud design, Azure** (learning objective 3): architecture, costs, security,
       EU region; optionally run one part there
 - [ ] **GDPR and risks** (learning objective 6, criterion 7): public aggregated data
