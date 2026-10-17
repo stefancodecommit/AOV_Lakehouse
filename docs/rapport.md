@@ -497,3 +497,79 @@ Gegevens van de verzekeraar zijn nooit met de assistent gedeeld.
 
 *Eigen reflectie (door de auteur te schrijven): wat generatieve AI betekende voor het leren
 en het resultaat, en wat ik een volgende keer anders zou doen.*
+
+## 6. Conclusies en aanbevelingen
+
+### 6.1 Conclusies
+
+**Hoofdvraag.** Zowel sector als bedrijfsgrootte gaan duidelijk samen met hoger verzuim.
+De antwoorden op de deelvragen:
+
+1. **Hoogste en laagste sectoren:** de zorg ligt 40% boven landelijk, horeca en landbouw
+   ongeveer 40% eronder; vijf van de negentien secties liggen in elk kwartaal boven
+   landelijk.
+2. **Bedrijfsgrootte:** het verzuim stijgt met de grootte, van ongeveer de helft van
+   landelijk bij kleine bedrijven tot 16% erboven bij grote.
+3. **Stabiliteit:** de niveaus zijn over twee jaar stabiel; het trendsignaal hangt af van
+   de voorlopige kwartalen en moet met definitieve cijfers worden bevestigd.
+4. **Wat erachter zit:** in de zorg verzuimen meer mensen, langer en vaker door het werk,
+   vooral door besmetting en emotioneel zwaar werk.
+5. **Echt of toeval:** voor de zorg wijken 23 van de 65 enquêtematen buiten de foutmarge
+   af van landelijk; de rest niet. De index toont de stabiliteit per sector.
+6. **Omvang:** per sector is het aantal bedrijven bekend, ook het aandeel zelfstandigen
+   (in de zorg 88% van ruim 233.000 bedrijven), wat de cijfers bruikbaar maakt voor
+   producten voor zelfstandigen, met de kanttekening dat het verzuim dat van werknemers is.
+
+Als dataproduct voldoet de oplossing aan alle *must*-eisen: zij haalt de gegevens
+automatisch en zonder dubbelingen op, controleert ze op elke laag, maakt elk getal
+herleidbaar en uitlegbaar, en is aangetoond met 373 tests. Daarmee verschuift het werken
+met deze cijfers van incidenteel handwerk naar een herhaalbaar en gecontroleerd proces.
+
+### 6.2 Aanbevelingen
+
+**Voor de organisatie:**
+
+1. Gebruik de risico-index als **externe benchmark naast de eigen cijfers**, niet als
+   vervanging, en altijd op groepsniveau.
+2. **Instrueer analisten en accountmanagers** over de randvoorwaarden: werknemers geen
+   zelfstandigen, samenhang geen oorzaak, en trends met definitieve cijfers bevestigen.
+3. Laat **compliance** beoordelen of premiedifferentiatie naar sector indirect een groep
+   benadeelt, vóórdat de index invloed krijgt op premies.
+4. Koppel de cijfers pas aan eigen schadegegevens **na een DPIA**, in een aparte, strenger
+   beveiligde omgeving.
+
+**Technisch, in volgorde:**
+
+1. Een **back-up** van de KVK-historie en automatisch **scannen op kwetsbare pakketten**.
+2. De stap naar **Azure** volgens het clouddesign, met inloggen via Entra ID, geheimen in
+   Key Vault en **meldingen** bij fouten.
+3. **pandas 3** ondersteunen, en Polars overwegen als KVK verder groeit.
+4. De **eigen datum van het KVK-bestand** gebruiken in plaats van de downloaddatum, voor een
+   zuiverdere herkomst.
+
+---
+
+## Bijlagen
+
+### A. Literatuur en bronnen
+
+- Bruijn, H. de, Janssen, M., & Warnier, M. (2022). The perils and pitfalls of explainable
+  AI: Strategies for explaining algorithmic decision-making in government. *Government
+  Information Quarterly*.
+- Reis, J., & Housley, M. (2022). *Fundamentals of data engineering*. O'Reilly Media.
+- CBS StatLine, tabellen 80072NED, 86009NED, 83130NED, 81589NED en 81644NED, en de omzettabel
+  SBI 2008–SBI 2025 (CC BY 4.0).
+- KVK, open dataset basisbedrijfsgegevens (CC BY 4.0).
+
+### B. Documenten in de repository
+
+| Document | Inhoud |
+|---|---|
+| `README.md` | wat het project doet, de zes fasen met elk een README, en hoe het te draaien |
+| `INSTRUCTIONS.md` | alle commando's, voor het hele project of een deel |
+| `docs/PROJECT.md` | het ontwerp en de keuzes |
+| `docs/requirements.md` | alle eisen met prioriteit, status en bewijs |
+| `docs/cloud_design.md` | het clouddesign voor Azure (niet gebouwd) |
+| `docs/privacy_and_risks.md` | AVG-beoordeling en risicoregister |
+| `docs/genai_use.md` | gebruik van generatieve AI |
+| `docs/bronze_to_silver.md`, `docs/lineage.md`, `docs/lineage_explorer.html` | herkomst van elke kolom |
