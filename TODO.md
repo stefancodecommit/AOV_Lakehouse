@@ -29,8 +29,8 @@ data & AI engineering 20%, documentation 15%. See section "Assignment" below.
 1. ~~Frame the project for the insurer~~ (done 2026-10-15)
 2. ~~Gold for the insurer~~ (done 2026-10-15: risk index, dashboard page)
 3. ~~Requirements~~ and ~~README per phase~~ (done 2026-10-17)
-4. ~~Azure design~~ (done 2026-10-17, design only); ~~GDPR and risks~~ (done
-   2026-10-17); GenAI section
+4. ~~Azure design~~, ~~GDPR and risks~~, ~~GenAI section~~ (done 2026-10-17; the
+   author's own reflection in docs/genai_use.md is still to write)
 5. Report (≤5000 words) + executive summary + canvas; presentation and demo
 
 Technical items, lower priority for the assignment:
@@ -202,10 +202,14 @@ documentation, AI-driven automation (KVK agent).
       R1–R18 with measures, actions. New open actions from it: backup of lakehouse/ and
       inbox/kvk/ (R14), vulnerability scanning in CI (R13), retention for the KVK upload
       log and Dagster history (R10)
-- [ ] **GenAI section** (slide 15, required): why and how Claude was used, what was
-      decided by the author, how results were checked, pros and risks with real
-      examples from the sessions (e.g. a CI status wrongly marked done, a test that
-      briefly pointed at the real lakehouse)
+- [x] **GenAI section** (2026-10-17; slide 15, required): [docs/genai_use.md](docs/genai_use.md),
+      in English (the report summarises it in Dutch): tools, why, the way of working,
+      the decisions and ideas that came from the author (from the session record), how
+      results were checked, advantages, risks with 7 real incidents and how each was
+      caught, general risks (understanding, confidentiality: no insurer data shared,
+      reliability, over-reliance, licensing). 55 of 56 commits credit Claude
+- [ ] **Author's own reflection** in docs/genai_use.md section 6 (only the author can
+      write it)
 - [ ] **Report** ≤5000 words in the structure of slide 17, with an **executive
       summary** (slide 16) and the canvas (slide 20). **In Dutch** (decided
       2026-10-15); everything else (code, comments, documentation, dashboard) stays in
