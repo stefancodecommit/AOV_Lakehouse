@@ -143,7 +143,7 @@ already in place.
 | ID | Risk | Likelihood | Impact | Measures in place | Residual | Next step |
 |---|---|---|---|---|---|---|
 | R17 | The LLM in the KVK intake misunderstands or proposes the wrong file | medium | low | the LLM can't load anything itself: files are verified by ordinary code and loaded only after a person types `YES`; the Dagster route doesn't use the LLM at all | low | — |
-| R18 | Errors in code written with GenAI assistance | medium | medium | 383 tests, CI, mutation checks, real-data comparisons, review by the author | medium | described in the GenAI section of the report |
+| R18 | Errors in code written with GenAI assistance | medium | medium | 388 tests, CI, mutation checks, real-data comparisons, review by the author | medium | described in the GenAI section of the report |
 
 ## 6. Value against risk
 

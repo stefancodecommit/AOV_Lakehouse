@@ -26,7 +26,7 @@ Transparency in the history: **every commit except one** carries the line
 ## 2. Why
 
 - **Scope within the time available.** A complete pipeline (three sources, three layers,
-  orchestration, deployment, a dashboard, 383 tests, CI) in about two weeks. Without an
+  orchestration, deployment, a dashboard, 388 tests, CI) in about two weeks. Without an
   assistant the project would have stopped at a smaller scope.
 - **Learning.** Many questions were "how does this work?" rather than "build this": what
   `python -m` does, how Delta Lake decides which Parquet files are current, what GitHub
@@ -88,7 +88,7 @@ GenAI output was not accepted on trust. The checks used:
 
 | Check | Example |
 |---|---|
-| **Automated tests** (383), on every change and in GitHub Actions on a clean machine | the tests run before every commit; CI found that a fresh install got pandas 3, which the code didn't support (fixed by pinning versions) |
+| **Automated tests** (388), on every change and in GitHub Actions on a clean machine | the tests run before every commit; CI found that a fresh install got pandas 3, which the code didn't support (fixed by pinning versions) |
 | **Tests on purpose-broken code** (mutation checks): does a test actually catch the error? | breaking the `is_latest` flag, the delete-before-write, the dashboard's network setting: each time the right test failed |
 | **Comparison with the real data** before and after a change | silver identical after restructuring bronze (11 tables); KVK identical after the incremental redesign (1,921,911 rows) |
 | **Measurements instead of assumptions** | memory of silver KVK measured for 1 to 4 snapshots; the first design turned out to grow with each snapshot, and was improved until it didn't |
@@ -121,6 +121,7 @@ These happened during the project; each was caught and corrected:
 | A claim that the Docker image "would crash" on pandas 3 turned out wrong when tested on the real data | **Plausible but untested conclusions** | testing it; corrected in the same session |
 | The assistant cleaned up all unused Docker images on the machine, not just this project's, without asking | **Actions beyond the request** | reported by the assistant itself; scoped to the project afterwards |
 | A command meant to stop a test server stopped the wrong process (twice) | **Errors in routine commands** | checking the result; stopped by process number |
+| Gold joined the business counts to the risk index on SBI code; two CBS aggregates (no code) or one code with two sector keys would have received the wrong count. Not in the real data, but a latent error in generated code that its own tests missed | **Subtle errors that tests written by the same assistant don't catch** | a review by a second AI assistant, asked by the author (2026-10-26); fixed with a test that fails on the old code. The same review led to the backtest of the risk index |
 
 General risks, beyond these incidents:
 

@@ -1,5 +1,5 @@
 """Risk index: for the insurer's data analyst. Which sectors and size classes carry a higher
-absence risk than the national figure, how certain is that, and where is it rising?
+absence risk than the national figure, how stable is that, and where has it risen?
 
 Reads gold_risk_index (one row per sector and size class) and gold_risk_index_history
 (the quarterly relative risk behind it). Every number is simple arithmetic, explained on
@@ -19,9 +19,11 @@ LEVELS = {"section": "Sections (A, B, C, ...)", "division": "Divisions (2 digits
 st.title("Risk index")
 st.caption("**Relative risk** = the group's absence over the last 4 quarters ÷ the national "
            "absence over the same quarters; **1.00 = national**, 1.20 = 20% more absence. "
-           "The **band** is the lowest and highest quarter of the last 8: red when the group "
-           "was above national in every quarter, blue when below in every quarter, grey when "
-           "it varies. CBS absence figures describe employees, not the self-employed.")
+           "The **stability band** is the lowest and highest quarter of the last 8: red when the "
+           "group was above national in every quarter, blue when below in every quarter, grey "
+           "when it varies. It shows how stable the figure is, not a margin of error. The "
+           "**trend** describes the last two years; it is no forecast. CBS absence figures "
+           "describe employees, not the self-employed.")
 
 t = common.load(["gold_risk_index", "gold_risk_index_history"])
 final = st.session_state.get("final_only", False)
@@ -55,7 +57,7 @@ m2.metric("Rising", int((assessed["trend"] == "rising").sum()),
           help="Relative risk rising by more than 0.05 per year over the last 8 quarters.")
 m3.metric("Falling", int((assessed["trend"] == "falling").sum()))
 
-st.subheader("Relative risk with its band")
+st.subheader("Relative risk with its stability band")
 if assessed.empty:
     st.info("Too few quarters with figures to assess this group.")
 else:

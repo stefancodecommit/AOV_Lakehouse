@@ -31,8 +31,8 @@ verzuim is dan landelijk, hoe stabiel dat is en of het stijgt.
   ongeveer 40% lager.
 - Het verzuim **stijgt met de bedrijfsgrootte**: kleine bedrijven zitten op de helft van
   landelijk, grote 16% erboven.
-- De niveaus zijn over twee jaar stabiel. Een **stijgende trend** is zichtbaar, maar moet
-  met definitieve cijfers worden bevestigd.
+- De niveaus zijn stabiel: in een **terugtoets** lag een sector die hoger of lager scoorde,
+  een jaar later steeds nog aan dezelfde kant. Een trend beschrijft, maar voorspelt niet.
 - Per sector is bekend hoeveel bedrijven het betreft, ook hoeveel van zelfstandigen.
 
 **Waarde.** Een onafhankelijke, privacyvrije benchmark van de hele markt naast onze eigen
@@ -270,8 +270,8 @@ rekenregels, en niet voor machine learning:
 
 Er is daarom geen training in de gebruikelijke zin. Wat er wel is, is **kalibratie en
 validatie**: de parameters (een venster van acht kwartalen, een trenddrempel van 0,05 per
-jaar) staan in één configuratiebestand, en tests op gegevens met een vooraf bekend
-antwoord bewijzen dat de berekening klopt.
+jaar) staan in één configuratiebestand, tests op gegevens met een vooraf bekend
+antwoord bewijzen dat de berekening klopt, en een terugtoets (5.1) toetst de oordelen.
 
 ### 3.4 Systeemintegratie
 
@@ -340,7 +340,7 @@ datakwaliteitsstatistieken toont.
 
 ### 4.3 Testen en validatie
 
-Er zijn **383 geautomatiseerde tests**, van vier soorten:
+Er zijn **388 geautomatiseerde tests**, van vier soorten:
 
 - **eenheidstests** op de logica (codes ontleden, controles, de berekening van de
   risico-index) met kleine, zelfgemaakte gegevens waarvan het juiste antwoord vooraf
@@ -352,9 +352,8 @@ Er zijn **383 geautomatiseerde tests**, van vier soorten:
 - **workflowtests:** Dagster voert de stappen uit met de controles ertussen.
 
 De tests draaien bij elke wijziging in **GitHub Actions** op een schone machine met de
-exacte pakketversies, gevolgd door het bouwen van de Docker-image. Dat leverde al een
-echte vondst op: een nieuwe installatie kreeg pandas 3, waarmee de code nog niet werkt.
-De pakketversies liggen sindsdien vast.
+exacte pakketversies, gevolgd door het bouwen van de Docker-image. Dat vond al een echte
+fout (pandas 3 in een nieuwe installatie); sindsdien liggen de versies vast.
 
 Drie aanvullende manieren van valideren:
 
@@ -417,13 +416,11 @@ kwartalen. De gezondheids- en welzijnszorg springt eruit met een relatief risico
 (7,7%), gevolgd door water en afval (1,24), openbaar bestuur (1,17), vervoer en opslag
 (1,15) en industrie (1,15). Het laagst zijn horeca (0,61), landbouw (0,61) en
 specialistische zakelijke dienstverlening (0,64). Alleen "overige dienstverlening" stijgt
-(+0,06 per jaar), al ligt die sectie nog onder landelijk: precies het soort vroeg signaal
-waarvoor de index bedoeld is.
+(+0,06 per jaar), al ligt die sectie nog onder landelijk.
 
 **Wat erachter zit.** De jaarenquête van 2025 laat voor de zorg zien waaróm het risico hoger
 is, en dat is relevant voor een inkomensverzekeraar: meer werknemers verzuimen (54,3% tegen
-50,7%), het verzuim duurt langer (19,4 tegen 17,3 dagen; langdurig verzuim van 20 tot 210
-dagen 14,3% tegen 11,4%) en is vaker werkgerelateerd (27,5% tegen 22,5%), met als
+50,7%), het verzuim duurt langer (19,4 tegen 17,3 dagen) en is vaker werkgerelateerd (27,5% tegen 22,5%), met als
 opvallendste redenen besmetting op het werk (28,7% tegen 14,0%) en emotioneel zwaar werk.
 Tegelijk liggen 42 van de 65 enquêtematen voor de zorg binnen de foutmarge: niet elk
 verschil is echt.
@@ -431,7 +428,7 @@ verschil is echt.
 **Bedrijfsgrootte.** Het verzuim stijgt met de grootte: kleine bedrijven (1 tot 10
 werkzame personen) zitten op 0,48 van landelijk, grote (100 of meer) op 1,16. De enquête
 bevestigt het patroon: het aandeel werknemers dat verzuimt, loopt op van 33,8% bij 1 tot 5
-werknemers tot ongeveer 53% vanaf 50 werknemers, en vlakt af vanaf zo'n 20 werknemers.
+werknemers tot ongeveer 53% vanaf 50 werknemers.
 
 **Kritische kanttekeningen.** De cijfers zijn betrouwbaar als beschrijving, maar beperkt als
 verklaring:
@@ -442,25 +439,27 @@ verklaring:
 - **Het grootte-effect is niet eenduidig.** Kleine bedrijven verzuimen minder, maar of dat
   komt door het werk, door doorwerken bij ziekte of door hoe verzuim wordt geregistreerd,
   blijkt niet uit de cijfers.
-- **Stabiliteit is geen zekerheid.** De bandbreedte van de index laat zien hoe stabiel een
-  sector is, geen statistische foutmarge.
-- **Het trendsignaal is gevoelig voor voorlopige cijfers.** Met alleen definitieve cijfers
-  (tot en met het vierde kwartaal van 2025) blijven de niveaus en de rangorde gelijk:
-  dezelfde vijf secties boven landelijk, dezelfde hoogste en laagste. Maar dan stijgt niet
-  "overige dienstverlening" maar "delfstoffenwinning". Een stijgende trend moet de analist
-  dus altijd ook met definitieve cijfers bekijken voordat hij die doorgeeft.
+- **Stabiliteit is geen zekerheid.** De bandbreedte laat zien hoe stabiel een sector is,
+  geen foutmarge.
+- **Het oordeel houdt stand, de trend voorspelt niet.** Een terugtoets bouwde de index
+  voor 13 eerdere kwartalen met alleen de definitieve cijfers tot dat moment (494
+  combinaties): een sector die *hoger* of *lager* scoorde, lag een jaar later in alle
+  gevallen nog aan dezelfde kant van landelijk. Een stijgende trend zette zich niet vaker
+  voort dan een stabiele (44% tegen 45%), en met alleen definitieve cijfers stijgt niet
+  "overige dienstverlening" maar "delfstoffenwinning". Een trend is een aanleiding om te
+  kijken, geen voorspelling.
 - **Datakwaliteit KVK.** Bij 90% van de actieve bedrijven is de sector eenduidig; de rest
   is gemarkeerd. De 381.513 identieke rijen zijn bewaard: zonder KVK-nummer is niet vast te
   stellen of het dubbelingen zijn.
 
 Voor de verzekeraar betekent dit: de index wijst betrouwbaar aan *waar* het risico hoger
-ligt en of het verandert, en de enquête geeft aanknopingspunten voor preventie. *Waarom*
+ligt, en de enquête geeft aanknopingspunten voor preventie. *Waarom*
 een sector hoger ligt en wat dat voor één werkgever betekent, vraagt het eigen oordeel van
 analist en accountmanager.
 
 ### 5.2 Verwachte voordelen en risico's
 
-**Voordelen.** Een privacyvrije benchmark naast de eigen cijfers, een vroeg signaal per
+**Voordelen.** Een privacyvrije benchmark naast de eigen cijfers, een actueel beeld per
 kwartaal en onderbouwing voor preventiegesprekken, automatisch actueel en herleidbaar.
 
 **Risico's.** Het risicoregister (in de repository: R1 tot en met R18) laat zien dat de
@@ -527,8 +526,8 @@ De antwoorden op de deelvragen:
    landelijk.
 2. **Bedrijfsgrootte:** het verzuim stijgt met de grootte, van ongeveer de helft van
    landelijk bij kleine bedrijven tot 16% erboven bij grote.
-3. **Stabiliteit:** de niveaus zijn over twee jaar stabiel; het trendsignaal hangt af van
-   de voorlopige kwartalen en moet met definitieve cijfers worden bevestigd.
+3. **Stabiliteit:** de niveaus zijn stabiel en hielden in een terugtoets een jaar later
+   stand; de trend beschrijft het verleden en voorspelt niet.
 4. **Wat erachter zit:** in de zorg verzuimen meer mensen, langer en vaker door het werk,
    vooral door besmetting en emotioneel zwaar werk.
 5. **Echt of toeval:** voor de zorg wijken 23 van de 65 enquêtematen buiten de foutmarge
@@ -539,7 +538,7 @@ De antwoorden op de deelvragen:
 
 Als dataproduct voldoet de oplossing aan alle *must*-eisen: zij haalt de gegevens
 automatisch en zonder dubbelingen op, controleert ze op elke laag, maakt elk getal
-herleidbaar en uitlegbaar, en is aangetoond met 383 tests. Daarmee verschuift het werken
+herleidbaar en uitlegbaar, en is aangetoond met 388 tests. Daarmee verschuift het werken
 met deze cijfers van incidenteel handwerk naar een herhaalbaar en gecontroleerd proces.
 
 ### 6.2 Aanbevelingen
@@ -549,7 +548,7 @@ met deze cijfers van incidenteel handwerk naar een herhaalbaar en gecontroleerd 
 1. Gebruik de risico-index als **externe benchmark naast de eigen cijfers**, niet als
    vervanging, en altijd op groepsniveau.
 2. **Instrueer analisten en accountmanagers** over de randvoorwaarden: werknemers geen
-   zelfstandigen, samenhang geen oorzaak, en trends met definitieve cijfers bevestigen.
+   zelfstandigen, samenhang geen oorzaak, en een trend niet als voorspelling lezen.
 3. Laat **compliance** beoordelen of premiedifferentiatie naar sector indirect een groep
    benadeelt, vóórdat de index invloed krijgt op premies.
 4. Koppel de cijfers pas aan eigen schadegegevens **na een DPIA**, in een aparte, strenger

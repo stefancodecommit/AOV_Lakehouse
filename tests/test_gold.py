@@ -295,6 +295,23 @@ def test_business_counts_and_explanation():
     assert risk({"total": [5.0] * 8, "A": [7.0] * 8}, counts=False).businesses.isna().all()
 
 
+def test_business_counts_follow_the_sector_key_not_the_sbi_code():
+    # two CBS aggregates (no SBI code, level "aggregate") and one SBI code with two keys:
+    # each row must get its own sector's count
+    t = risk_inputs({"total": [5.0] * 8, "X1": [6.0] * 8, "X2": [7.0] * 8,
+                     "K1": [6.5] * 8, "K2": [5.5] * 8})
+    t["dim_sector"] = pd.DataFrame({"sector_key": ["X1", "X2", "K1", "K2"],
+                                    "sbi_code": [None, None, "56102", "56102"],
+                                    "sbi_level": ["aggregate", "aggregate", "subclass", "subclass"],
+                                    "sector_name": ["B-N excl. K", "A-U excl. O", "a", "b"]})
+    totals = {"X1": 100, "X2": 200, "K1": 300, "K2": 400}
+    b = t["fct_business_count"]
+    b.loc[b["breakdown"] == "total", "count"] = b["sector_key"].map(totals)
+    df = g.build_risk_index(t, SETTINGS)
+    got = df[df["basis"] == "all"].set_index("group_key")["businesses"].to_dict()
+    assert got == totals
+
+
 def test_risk_index_history_is_the_quarterly_ratio(silver_tables):
     h = g.build_risk_index_history(silver_tables)
     assert set(h["group_type"]) <= {"sector", "size"}

@@ -50,7 +50,8 @@ project:
    `map_sbi2008_sbi2025`, so KVK companies join CBS's sectors; cases the crosswalk can't
    decide unambiguously are flagged (`sbi_mapping`), not guessed.
 2. **Absence and business counts.** Gold's risk index joins CBS absence (80072NED) with
-   CBS business counts (81589NED) on SBI code and level, so a risk can be weighed by how
+   CBS business counts (81589NED) on the sector key, which both CBS tables share (not on the
+   SBI code: aggregates have none, and one code can have two keys), so a risk can be weighed by how
    many businesses, and how many self-employed, it concerns
    ([gold's README](../gold/README.md#phase-4--model-design-and-testing-the-risk-index)).
 3. **An LLM in the ingestion.** The KVK intake agent uses a local language model to guide

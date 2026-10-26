@@ -439,12 +439,14 @@ def build_risk_index_history(t: dict) -> pd.DataFrame:
 
 
 def _business_counts(t: dict) -> pd.DataFrame:
-    """Per SBI code and level, from CBS 81589NED's latest quarter: all businesses, those
-    run by natural persons (sole traders, partnerships: the self-employed), and those with
-    one person employed. The KVK open data has no sole traders, so these come from CBS."""
+    """Per sector_key, from CBS 81589NED's latest quarter: all businesses, those run by
+    natural persons (sole traders, partnerships: the self-employed), and those with one
+    person employed. The KVK open data has no sole traders, so these come from CBS.
+    Keyed by sector_key, which the CBS tables share (silver dim_sector), not by SBI code:
+    aggregates such as "B-N excl. K" have no SBI code, and one SBI code can have two keys."""
     b = t["fct_business_count"]
     if b.empty:
-        return pd.DataFrame(columns=["sbi_code", "sbi_level", "businesses", "businesses_natural_persons",
+        return pd.DataFrame(columns=["sector_key", "businesses", "businesses_natural_persons",
                                      "businesses_one_person", "businesses_period"])
     b = b[b["period_key"] == b["period_key"].max()]
     picks = {"businesses": b["breakdown"] == "total",
@@ -455,12 +457,11 @@ def _business_counts(t: dict) -> pd.DataFrame:
     for name, mask in picks.items():
         part = b[mask].groupby("sector_key")["count"].first().rename(name)
         out = part.to_frame() if out is None else out.join(part, how="outer")
-    out = out.reset_index().merge(t["dim_sector"][["sector_key", "sbi_code", "sbi_level"]],
-                                  on="sector_key", how="left")
+    out = out.reset_index()
     out["businesses_period"] = b["period_key"].iloc[0]
     for c in picks:
         out[c] = out[c].astype("Int64")
-    return out.drop(columns="sector_key").drop_duplicates(["sbi_code", "sbi_level"])
+    return out
 
 
 def _explain(r) -> str:
@@ -531,7 +532,9 @@ def build_risk_index(t: dict, settings_: dict | None = None) -> pd.DataFrame:
     df = pd.DataFrame(rows)
     if df.empty:
         return df
-    df = df.merge(counts, on=["sbi_code", "sbi_level"], how="left")
+    # sector rows only: a size class's key is no sector_key (and its units differ)
+    counts = counts.rename(columns={"sector_key": "group_key"}).assign(group_type="sector")
+    df = df.merge(counts, on=["group_type", "group_key"], how="left")
     for c in ("businesses", "businesses_natural_persons", "businesses_one_person"):
         df[c] = df[c].astype("Int64")
     df["explanation"] = [_explain(r) for r in df.itertuples()]

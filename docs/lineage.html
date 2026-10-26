@@ -1062,6 +1062,7 @@ flowchart LR
   n_src_silver_fct_business_count_count["fct_business_count<br/>count"]:::silverref
   n_src_silver_fct_business_count_legal_form["fct_business_count<br/>legal_form"]:::silverref
   n_src_silver_fct_business_count_period_key["fct_business_count<br/>period_key"]:::silverref
+  n_src_silver_fct_business_count_sector_key["fct_business_count<br/>sector_key"]:::silverref
   n_src_silver_fct_business_count_size_key["fct_business_count<br/>size_key"]:::silverref
   run(["the gold run (pipeline/common/publish.py)"]):::run
   subgraph n_tbl_gold_risk_index["gold: gold_risk_index"]
@@ -1120,12 +1121,15 @@ flowchart LR
   n_src_silver_fct_absence_rate_member_type --> n_col_trend
   n_src_silver_fct_business_count_count --> n_col_businesses
   n_src_silver_fct_business_count_breakdown --> n_col_businesses
+  n_src_silver_fct_business_count_sector_key --> n_col_businesses
   n_src_silver_fct_business_count_count --> n_col_businesses_natural_persons
   n_src_silver_fct_business_count_breakdown --> n_col_businesses_natural_persons
   n_src_silver_fct_business_count_legal_form --> n_col_businesses_natural_persons
+  n_src_silver_fct_business_count_sector_key --> n_col_businesses_natural_persons
   n_src_silver_fct_business_count_count --> n_col_businesses_one_person
   n_src_silver_fct_business_count_breakdown --> n_col_businesses_one_person
   n_src_silver_fct_business_count_size_key --> n_col_businesses_one_person
+  n_src_silver_fct_business_count_sector_key --> n_col_businesses_one_person
   n_src_silver_fct_business_count_period_key --> n_col_businesses_period
   n_src_silver_fct_absence_rate_absence_pct --> n_col_explanation
   n_src_silver_dim_sector_sector_name --> n_col_explanation

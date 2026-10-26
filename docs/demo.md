@@ -51,7 +51,9 @@ locally: no internet needed during the demo.
 **Zeggen:** "Dit is wat de data-analist ziet: per sector het relatieve risico tegenover
 landelijk, met de bandbreedte over acht kwartalen. Rood ligt in elk kwartaal boven
 landelijk. Kijk wat er gebeurt als ik alleen definitieve cijfers toon: een andere sector
-stijgt. Daarom moet een trend altijd met definitieve cijfers bevestigd worden."
+stijgt. En een terugtoets op de historie laat zien dat het oordeel hoger of lager een jaar
+later standhoudt, maar dat een trend niet voorspelt. Een trend is dus een reden om te
+kijken, geen voorspelling."
 
 ### 2. One sector explained (1 min)
 

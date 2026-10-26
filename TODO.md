@@ -13,7 +13,7 @@ silver (CBS, KVK), gold (7 tables, with the risk index), the Streamlit dashboard
 Docker Compose (including the KVK chat agent), column lineage, config, run log, the
 lakehouse viewer with data quality statistics (`python -m tools.lakehouse_viewer`),
 incremental silver KVK (2026-10-10), backup, log retention and vulnerability scanning
-(2026-10-17), 383 tests. Code is organised in `pipeline/` (per
+(2026-10-17), 388 tests. Code is organised in `pipeline/` (per
 layer) and `tools/` (2026-10-08), with a README per phase. Requirements in
 docs/requirements.md (every Must met; open: FR-19 alerts, NFR-15 default password, left
 open on purpose), Azure design in docs/cloud_design.md (not built). All committed; no containers or servers left running. See the README for how to start
@@ -215,6 +215,19 @@ documentation, AI-driven automation (KVK agent).
       reliability, over-reliance, licensing). Every commit except GitHub's placeholder credits Claude
 - [ ] **Author's own reflection** in docs/genai_use.md section 6 (only the author can
       write it)
+- [x] **Review by a second AI assistant** (2026-10-26, asked by the author), all points
+      handled: (1) **backtest** of the risk index (`tools/backtest_risk.py`, gold's
+      README): *higher*/*lower* held a year later in 440 of 440 cases; the trend doesn't
+      predict (rising 44% vs stable 45%; correlation +0.12, noise gives a negative one);
+      report, dashboard, demo and slides now say "a trend is no forecast"; (2) "band"
+      described as **stability** everywhere (dashboard, READMEs); a t-test on the slope
+      considered, not added (would change 1 verdict; the trend is descriptive anyway);
+      (3) **latent join bug**: business counts were joined on SBI code (aggregates have
+      none; 56102 has two sector keys), now on the sector key, with a test that fails on
+      the old code; real risk index identical; (4) **"Start here (for the teacher)"** in
+      the README; word count checked in the Word export: 4,739 for the whole document,
+      so ~285 words of room for the reflection (replacing the placeholder); (5)
+      **Q&A practice** in docs/qa_practice.md (18 questions, Dutch answers)
 - [ ] **Report** ≤5000 words in the structure of slide 17, with an **executive
       summary** (slide 16) and the canvas (slide 20). **In Dutch** (decided
       2026-10-15); everything else (code, comments, documentation, dashboard) stays in
@@ -708,7 +721,7 @@ crosswalk; `tests/test_checks.py` the CBS and KVK checks and quarantine;
 `tests/test_maintenance.py` the maintenance tasks; `tests/test_backup.py` backup and restore; `tests/test_config.py` the
 configuration; `tests/test_kvk_silver.py` silver KVK; `tests/test_gold.py` gold;
 `tests/test_dashboard.py` the dashboard (every page headless); `tests/test_orchestration.py`
-Dagster; `tests/test_delta.py` writes real Delta tables in `tmp_path` (383 tests, ~85 s). `conftest.py` fails a test when any module still points at the real
+Dagster; `tests/test_delta.py` writes real Delta tables in `tmp_path` (388 tests, ~85 s). `conftest.py` fails a test when any module still points at the real
 lakehouse or inbox. Checked by breaking the code on purpose:
 removing the delete-before-write, an empty `done_keys()` and non-UTC silver timestamps
 each make the right tests fail.
