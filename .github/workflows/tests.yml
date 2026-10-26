@@ -16,20 +16,21 @@ concurrency:                  # a newer push cancels the older run on the same b
 
 jobs:
   pytest:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04         # pinned, like the packages: move to a newer Ubuntu on purpose
     timeout-minutes: 15
     steps:
       - name: Check out the code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.12"
           cache: pip                          # reuse downloaded packages between runs
           cache-dependency-path: |
             requirements.txt
             requirements-dev.txt
+            constraints.txt
 
       - name: Install dependencies
         run: pip install -r requirements-dev.txt
@@ -39,11 +40,11 @@ jobs:
 
   docker-build:
     needs: pytest                 # only when the tests passed
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04         # pinned, like the packages: move to a newer Ubuntu on purpose
     timeout-minutes: 20
     steps:
       - name: Check out the code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Build the image
         run: docker build --build-arg CODE_VERSION=${GITHUB_SHA::7} -t cbs-kvk-lakehouse:ci .

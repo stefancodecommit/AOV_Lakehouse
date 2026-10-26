@@ -25,14 +25,14 @@ permissions:
 
 jobs:
   pip-audit:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04         # pinned, like the packages: move to a newer Ubuntu on purpose
     timeout-minutes: 15
     steps:
       - name: Check out the code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 

@@ -587,6 +587,12 @@ Run: `DAGSTER_HOME=$PWD/orchestration .venv/bin/dagster dev -f orchestration/def
       Checked: 383 tests, silver and gold rebuilt on 3.12 identical to the 3.10 build
       (19 tables, values and row counts), report export, backup, `pip-audit` clean.
       Docker image not rebuilt locally (Docker Desktop was off): CI builds it
+- [x] **CI warnings** (2026-10-26): "Node.js 20 is deprecated" for `actions/checkout@v4`
+      and `actions/setup-python@v5` → both on `@v7` (Node.js 24; the breaking changes in
+      v7 don't affect these workflows). "ubuntu-latest will migrate to Ubuntu 26" → the
+      runner is pinned to `ubuntu-24.04`, like the package versions
+- [ ] Later, on purpose: move CI to `ubuntu-26.04` (one change in both workflows; push
+      and check the runs), well before GitHub retires the 24.04 runner
 - Real runs (2026-10-06): monthly CBS ingest skipped (nothing new), silver + gold built
   with all 12 checks passing, freshness and maintenance jobs succeeded
 - Found while testing: Dagster runs steps in their own process and drops the project
