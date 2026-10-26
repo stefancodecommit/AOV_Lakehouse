@@ -111,6 +111,21 @@ def test_a_later_batch_cannot_change_a_column_type():
     assert bronze_types()["Ziekteverzuimpercentage_1"] == "double"
 
 
+def test_an_all_empty_field_is_text_and_a_later_number_still_fits():
+    """Like CategoryGroupID in 81644NED's RegioS: empty in every record, so its type is
+    unknown. Bronze makes it text, not Arrow's null type: that would become Delta's
+    "void", which isn't in the Delta protocol and other engines may refuse. A number
+    that arrives later is stored as text; raw_json keeps the number."""
+    b.write_bronze(period_request("2025KW04", "Definitief"),
+                   [{**r, "CategoryGroupID": None} for r in records("2025KW04", 5.5)])
+    b.write_bronze(period_request("2026KW01", "Voorlopig"),
+                   [{**r, "CategoryGroupID": 12} for r in records("2026KW01", 6.0)])
+    assert bronze_types()["CategoryGroupID"] == "string"
+    df = bronze_rows()
+    assert df["CategoryGroupID"].isna().iloc[0] and df["CategoryGroupID"].iloc[1] == "12"
+    assert json.loads(df["raw_json"].iloc[1])["CategoryGroupID"] == 12
+
+
 def test_a_field_cbs_adds_later_becomes_a_new_column():
     b.write_bronze(period_request("2025KW04", "Definitief"), records("2025KW04", 5.5))
     newer = [{**r, "Nieuw_2": 7} for r in records("2026KW01", 6.0)]

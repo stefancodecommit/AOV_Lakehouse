@@ -32,7 +32,10 @@ keeps the original, every later step can be rebuilt without asking a source agai
   verified the same way ([`checks/kvk.py`](../../checks/kvk.py)).
 - **Raw and structured.** A CBS record is kept as received in `raw_json` *and* as one
   column per field (typed from the table's metadata), so bronze can be queried directly
-  and still proves what was received.
+  and still proves what was received. A field that is empty in every record (e.g. `CategoryGroupID`
+  in 81644NED's region list) has no knowable type and becomes text, not Arrow's null type:
+  that would be Delta's `void`, which isn't in the Delta protocol, so other engines (Spark,
+  Fabric) may refuse the table. Nothing reads that column, and `raw_json` has the original.
 - **A human confirms the KVK load.** An AI agent (a local LLM via Ollama) helps the user
   find and verify the file, but it can't write: loading happens only after the user
   types `YES` (or, in Dagster, the file name). The LLM chooses *which* tool to call; the

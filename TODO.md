@@ -13,7 +13,7 @@ silver (CBS, KVK), gold (7 tables, with the risk index), the Streamlit dashboard
 Docker Compose (including the KVK chat agent), column lineage, config, run log, the
 lakehouse viewer with data quality statistics (`python -m tools.lakehouse_viewer`),
 incremental silver KVK (2026-10-10), backup, log retention and vulnerability scanning
-(2026-10-17), 395 tests. Code is organised in `pipeline/` (per
+(2026-10-17), 396 tests. Code is organised in `pipeline/` (per
 layer) and `tools/` (2026-10-08), with a README per phase. Requirements in
 docs/requirements.md (every Must met; open: FR-19 alerts, NFR-15 default password, left
 open on purpose), Azure design in docs/cloud_design.md (not built). All committed; no containers or servers left running. See the README for how to start
@@ -34,9 +34,7 @@ per phase, Azure design, GDPR and risks, GenAI section, report and presentation
 Python 3.12 (2026-10-17 to 10-26); the review follow-up with the backtest (2026-10-26).
 
 Still open, technical (most useful first):
-1. **`CategoryGroupID`** in `81644ned_regios` is typed as text because every value is
-   empty; give all-empty fields Arrow's null type? (Lakehouse viewer section)
-2. **Backup to another disk**: point `backup.path` at it in config.local.yaml (the
+1. **Backup to another disk**: point `backup.path` at it in config.local.yaml (the
    author's choice of disk; section 5)
 
 Later or optional, not needed for the assignment:
@@ -694,8 +692,14 @@ Run: `docker compose up -d` (Dagster http://localhost:3000, dashboard :8501)
       most common value per column; flag true counts; duplicate rows; duplicate keys
       (keys from `checks/layers.py`). Real data: 381,513 duplicate rows in bronze KVK (as
       known), 0 duplicate keys everywhere, no padded text in silver or gold
-- [ ] Open question: `CategoryGroupID` in `81644ned_regios` is text (every value is
-      empty, so bronze inferred text) while it is a number in other code lists
+- [x] `CategoryGroupID` in `81644ned_regios` is text (every value is empty, so bronze
+      inferred text) while it is a number in other code lists. **Decided 2026-10-26: keep
+      text.** Arrow's null type works in delta-rs but becomes Delta's `void`, which isn't
+      in the Delta protocol (Spark/Fabric may refuse the table; the cloud design reads
+      Delta with other engines). Nothing reads the column (silver uses CategoryGroupID
+      only for the sector and size lists), raw_json keeps the original, and a later
+      number still fits (stored as text). Recorded in bronze's README, pinned by a test
+      (`test_an_all_empty_field_is_text_and_a_later_number_still_fits`)
 
 ## Documentation
 - [x] `docs/bronze_to_silver.md`: how each silver table is made, with real examples
@@ -741,7 +745,7 @@ crosswalk; `tests/test_checks.py` the CBS and KVK checks and quarantine;
 `tests/test_maintenance.py` the maintenance tasks; `tests/test_backup.py` backup and restore; `tests/test_config.py` the
 configuration; `tests/test_kvk_silver.py` silver KVK; `tests/test_gold.py` gold;
 `tests/test_dashboard.py` the dashboard (every page headless); `tests/test_orchestration.py`
-Dagster; `tests/test_delta.py` writes real Delta tables in `tmp_path` (395 tests, ~85 s). `conftest.py` fails a test when any module still points at the real
+Dagster; `tests/test_delta.py` writes real Delta tables in `tmp_path` (396 tests, ~85 s). `conftest.py` fails a test when any module still points at the real
 lakehouse or inbox. Checked by breaking the code on purpose:
 removing the delete-before-write, an empty `done_keys()` and non-UTC silver timestamps
 each make the right tests fail.

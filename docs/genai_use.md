@@ -26,7 +26,7 @@ Transparency in the history: **every commit except one** carries the line
 ## 2. Why
 
 - **Scope within the time available.** A complete pipeline (three sources, three layers,
-  orchestration, deployment, a dashboard, 395 tests, CI) in about two weeks. Without an
+  orchestration, deployment, a dashboard, 396 tests, CI) in about two weeks. Without an
   assistant the project would have stopped at a smaller scope.
 - **Learning.** Many questions were "how does this work?" rather than "build this": what
   `python -m` does, how Delta Lake decides which Parquet files are current, what GitHub
@@ -88,7 +88,7 @@ GenAI output was not accepted on trust. The checks used:
 
 | Check | Example |
 |---|---|
-| **Automated tests** (395), on every change and in GitHub Actions on a clean machine | the tests run before every commit; CI found that a fresh install got pandas 3, which the code didn't support (fixed by pinning versions) |
+| **Automated tests** (396), on every change and in GitHub Actions on a clean machine | the tests run before every commit; CI found that a fresh install got pandas 3, which the code didn't support (fixed by pinning versions) |
 | **Tests on purpose-broken code** (mutation checks): does a test actually catch the error? | breaking the `is_latest` flag, the delete-before-write, the dashboard's network setting: each time the right test failed |
 | **Comparison with the real data** before and after a change | silver identical after restructuring bronze (11 tables); KVK identical after the incremental redesign (1,921,911 rows) |
 | **Measurements instead of assumptions** | memory of silver KVK measured for 1 to 4 snapshots; the first design turned out to grow with each snapshot, and was improved until it didn't |
