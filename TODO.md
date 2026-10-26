@@ -5,7 +5,7 @@ Open work, in the order of `docs/PROJECT.md`. Each phase builds on the one befor
 Rule for every phase: run each new layer on real data and check it before building the
 next layer on top of it.
 
-## Where to continue (status 2026-10-17)
+## Where to continue (status 2026-10-26)
 
 Built and run on real data: bronze (CBS, KVK, SBI crosswalk) with checks and quarantine
 (CBS bronze with a column per field next to `raw_json`),
@@ -27,27 +27,38 @@ for work). Proposal approved. Code on GitHub:
 data & AI engineering 20%, documentation 15%. See section "Assignment" below.
 
 **Next steps, in order** (details and slide references in section "Assignment"):
-1. ~~Frame the project for the insurer~~ (done 2026-10-15)
-2. ~~Gold for the insurer~~ (done 2026-10-15: risk index, dashboard page)
-3. ~~Requirements~~ and ~~README per phase~~ (done 2026-10-17)
-4. ~~Azure design~~, ~~GDPR and risks~~, ~~GenAI section~~ (done 2026-10-17; the
-   author's own reflection in docs/genai_use.md is still to write)
-5. ~~Report~~ (Dutch, 4,676 words, exported with `python -m tools.export_report`) and
-   ~~presentation + demo script~~ (done 2026-10-17). Still for the author: the GenAI
-   reflection (report 5.4 and docs/genai_use.md), name/student number/date on the title
-   page, rehearsing the demo
 
-Technical items, lower priority for the assignment:
+Done: framing for the insurer, gold with the risk index (2026-10-15); requirements, README
+per phase, Azure design, GDPR and risks, GenAI section, report and presentation
+(2026-10-17); backup, log retention, vulnerability scanning incl. the Docker image,
+Python 3.12 (2026-10-17 to 10-26); the review follow-up with the backtest (2026-10-26).
+
+Still open, technical (most useful first):
+1. **KVK's own file date** instead of the upload date as `snapshot_date` (Silver KVK,
+   open question): a cleaner provenance; the report recommends it
+2. **`CategoryGroupID`** in `81644ned_regios` is typed as text because every value is
+   empty; give all-empty fields Arrow's null type? (Lakehouse viewer section)
+3. **Backup to another disk**: point `backup.path` at it in config.local.yaml (the
+   author's choice of disk; section 5)
+
+Later or optional, not needed for the assignment:
 - **pandas 3** (section 7): make the code work with it, then raise the pin
+- **Ubuntu 26** for CI, on purpose (section 5)
 - **When CBS publishes a new SBI crosswalk version:** update
   `reference.sbi_crosswalk_url` in config.yaml (section 1, Reference)
-- **Open question** (Lakehouse viewer section): `CategoryGroupID` in `81644ned_regios`
-  is typed as text because every value is empty; give all-empty fields Arrow's null type?
-- **Open question** (Silver KVK): `snapshot_date` is the upload date, not KVK's own date
-  of the file (matters for data provenance)
-- Optional: Polars for silver KVK (Silver KVK); email/Slack alerts (section 5); re-run
-  the palette validator (needs Node.js, section 4); report the deltalake exit race
-  upstream (Known issues)
+- Polars for silver KVK (Silver KVK); email/Slack alerts (section 5); re-run the palette
+  validator (needs Node.js, section 4); report the deltalake exit race upstream (Known
+  issues)
+
+**Last: the author's part** (only the author can do this):
+1. **GenAI reflection** in report section 5.4 (replaces the placeholder; ~285 words of
+   room by the strictest count, the whole Word document) and in docs/genai_use.md,
+   section 6
+2. **Title page** of the report: name, student number, date; then export again
+   (`python -m tools.export_report`) and tick the Report item in section "Assignment"
+3. **Presentation:** practise the Q&A (docs/qa_practice.md), rehearse the demo
+   (docs/demo.md), make the fallback screenshots the day before, check the Dagster menu
+   labels
 
 Run order (from the project folder, with the virtualenv):
 
