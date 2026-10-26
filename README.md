@@ -31,7 +31,7 @@ Four things, about 20 minutes, in this order:
    *lower* verdict held a year later in all 440 cases; the trend describes, it doesn't
    predict).
 3. **Proof that it works**: [the six phases, each with its README](#the-six-phases-each-with-its-readme),
-   [`tests/README.md`](tests/README.md) (388 tests, run by GitHub Actions on every push,
+   [`tests/README.md`](tests/README.md) (395 tests, run by GitHub Actions on every push,
    plus a weekly vulnerability scan) and [`docs/requirements.md`](docs/requirements.md)
    (every requirement with its status and the test that verifies it).
 4. **How GenAI was used**: [`docs/genai_use.md`](docs/genai_use.md): which decisions were
@@ -467,7 +467,7 @@ lakehouse/                              (not in git; rebuilt from the sources)
   bronze/<table>_<entity>/              CBS raw records, one Delta table per endpoint
   bronze/_ingestion_log/                which CBS requests are already loaded
   bronze/kvk/basis_bedrijfsgegevens/    KVK rows, one batch per uploaded file
-  bronze/kvk/_batch_log/                which KVK files are loaded (by SHA-256)
+  bronze/kvk/_batch_log/                which KVK files are loaded (by SHA-256), with KVK's file date
   bronze/reference/...                  the SBI crosswalk and its batch log
   silver/                               11 CBS tables + kvk_company, each with run_id
   gold/                                 7 dashboard tables, each with run_id
@@ -508,7 +508,7 @@ A misspelled setting name stops the script with an error instead of being ignore
 ## Tests
 
 ```bash
-.venv/bin/pytest              # 388 tests, ~85 s, no internet needed
+.venv/bin/pytest              # 395 tests, ~85 s, no internet needed
 .venv/bin/pytest -m live      # one extra test against the real CBS API
 ```
 

@@ -257,3 +257,15 @@ def test_dagster_command_runs_a_step_in_its_own_process(bronze_delta, tmp_path):
     assert out.returncode == 0, out.stderr[-3000:]
     assert "RUN_SUCCESS" in out.stderr + out.stdout
     assert (tmp_path / "silver" / "fct_absence_rate" / "_delta_log").exists()
+
+
+def test_kvk_freshness_uses_the_file_date_when_known():
+    import pyarrow as pa
+    from datetime import date
+    from deltalake import write_deltalake
+    from pipeline.bronze import kvk_agent
+    ts = pa.array([__import__("pandas").Timestamp("2026-10-05", tz="UTC")] * 1, pa.timestamp("us", tz="UTC"))
+    write_deltalake(str(kvk_agent.LOG_TABLE), pa.table({
+        "batch_id": ["b1"], "ingested_at": ts, "status": ["success"],
+        "file_date": pa.array([date(2026, 10, 1)], pa.date32())}))
+    assert d.latest_kvk_snapshot() == date(2026, 10, 1)     # the data's age, not the upload's

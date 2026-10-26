@@ -39,6 +39,11 @@ and [docs/lineage.md](../../docs/lineage.md) (generated, complete).
   new snapshots and removes the ones maintenance retired, one at a time, so memory stays
   at about one snapshot however many months are kept (measured: 1.65 GB for a full
   rebuild of 4 snapshots, 0.18 GB when nothing is new).
+- **A snapshot is dated by KVK, not by us.** `snapshot_date` is KVK's export date, read
+  from the zip when the file is verified (bronze's batch log, `file_date`); the newest
+  start date in the file must not be later. A file without a usable date (a loose CSV)
+  gets the upload day, and `snapshot_date_source` says which one it is (`kvk_file` or
+  `upload`).
 
 ## Phase 5 — Model integration
 

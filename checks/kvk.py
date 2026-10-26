@@ -9,6 +9,12 @@ Errors (the file is rejected):
 Warnings (counted per value check, the file is still accepted):
   - actief not J/N, rechtsvorm not BV/NV, postcode region not 2 digits, start date not
     in a known date format
+  - a zip without a usable date on its CSV, or a start date after that date (the file
+    date is then doubtful)
+
+The file date: KVK's export moment, read from the date of the CSV inside the zip (the
+CSV itself has no date column; the KVK page states none). It becomes the snapshot date
+in silver. A loose CSV has no reliable date: its file_date stays empty, not guessed.
 """
 from __future__ import annotations
 
@@ -18,6 +24,7 @@ import io
 import re
 import zipfile
 from dataclasses import dataclass, field
+from datetime import date
 from pathlib import Path
 
 DELIMITER = ";"
@@ -32,6 +39,7 @@ class FileCheck:
     encoding: str | None = None
     header: list[str] = field(default_factory=list)
     row_count: int = 0
+    file_date: date | None = None        # KVK's export date, from the zip (see above)
     errors: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     details: dict = field(default_factory=dict)       # extra report fields
@@ -115,6 +123,15 @@ def find_csv(path: Path, check: FileCheck) -> None:
                                           f"{largest.filename}")
                 check.details["csv_member"] = largest.filename
                 check.details["csv_size_mb"] = round(largest.file_size / 1e6, 1)
+                # zip times are local time without a zone; the day is what counts. A zip
+                # written without times holds 1980-01-01, the format's earliest date
+                stamp = date(*largest.date_time[:3])
+                if stamp.year > 1980:
+                    check.file_date = stamp
+                    check.details["file_date"] = stamp.isoformat()
+                else:
+                    check.warnings.append("no file date in the zip: the upload date will "
+                                          "be used as the snapshot date")
     elif Path(path).suffix.lower() != ".csv":
         check.errors.append("File is neither a zip nor a .csv")
 
@@ -133,9 +150,12 @@ def match_columns(header: list[str], required: dict[str, set[str]],
     return found, errors
 
 
-def check_rows(rows, n_fields: int, found: dict[str, int]) -> tuple[int, int, dict[str, int]]:
-    """Count rows, malformed rows and value-check hits (data rows only, no header)."""
+def check_rows(rows, n_fields: int, found: dict[str, int]
+               ) -> tuple[int, int, dict[str, int], str | None]:
+    """Count rows, malformed rows and value-check hits (data rows only, no header), and
+    find the newest start date written as YYYYMMDD (the file's format)."""
     total = malformed = 0
+    newest = ""
     hits = {"active_not_J_N": 0, "legal_form_not_BV_NV": 0,
             "postcode_region_not_2_digits": 0, "start_date_unparsed": 0}
     for row in rows:
@@ -152,7 +172,9 @@ def check_rows(rows, n_fields: int, found: dict[str, int]) -> tuple[int, int, di
         d = row[found["start_date"]].strip()
         if d and not DATE_RE.fullmatch(d):
             hits["start_date_unparsed"] += 1
-    return total, malformed, hits
+        elif len(d) == 8 and d.isdigit() and d > newest:
+            newest = d
+    return total, malformed, hits, newest or None
 
 
 def check_file(path: Path, required: dict[str, set[str]], optional: dict[str, set[str]],
@@ -184,7 +206,7 @@ def check_file(path: Path, required: dict[str, set[str]], optional: dict[str, se
     if check.errors:
         return check
 
-    rows, malformed, hits = check_rows(reader, len(check.header), found)
+    rows, malformed, hits, newest = check_rows(reader, len(check.header), found)
     check.row_count = rows
     check.details["row_count"] = rows
     check.details["malformed_rows"] = malformed
@@ -195,4 +217,10 @@ def check_file(path: Path, required: dict[str, set[str]], optional: dict[str, se
     for name, n in hits.items():
         if n:
             check.warnings.append(f"{name}: {n} rows ({n / max(rows, 1):.2%})")
+    if newest:
+        check.details["newest_start_date"] = f"{newest[:4]}-{newest[4:6]}-{newest[6:]}"
+        if check.file_date and newest > check.file_date.strftime("%Y%m%d"):
+            check.warnings.append(f"start dates after the file date: newest "
+                                  f"{check.details['newest_start_date']}, file date "
+                                  f"{check.file_date}; the file date is doubtful")
     return check

@@ -9,9 +9,12 @@ why one is empty. Gold and the dashboard can filter on the flags.
 
 Columns
 -------
-snapshot_date, batch_id, is_latest   which upload the row comes from (snapshot_date =
-                                     the day the batch was ingested); count companies
+snapshot_date, batch_id, is_latest   which upload the row comes from; count companies
                                      with is_latest, never across snapshots
+snapshot_date_source                 where snapshot_date comes from: kvk_file (KVK's
+                                     export date, read from the zip; the normal case)
+                                     or upload (the day the batch was loaded, when the
+                                     file had no usable date)
 source_row_number                    row in the uploaded CSV
 start_date, has_invalid_start_date   date; the flag is set when a non-empty value
                                      doesn't parse (the original is in bronze)
@@ -104,8 +107,13 @@ def read_kvk_bronze(versions: dict | None = None, batches: list[str] | None = No
     if versions is not None:
         versions["bronze/kvk/_batch_log"] = log_dt.version()
         versions["bronze/kvk/basis_bedrijfsgegevens"] = data_dt.version()
-    logged = log_dt.to_pandas(columns=["batch_id", "ingested_at", "status"])
+    log_columns = log_dt.schema().to_arrow().names if hasattr(log_dt.schema(), "to_arrow") \
+        else [f.name for f in log_dt.schema().fields]
+    logged = log_dt.to_pandas(columns=["batch_id", "ingested_at", "status",
+                                       *(["file_date"] if "file_date" in log_columns else [])])
     good = set(logged.loc[logged["status"] == "success", "batch_id"])
+    file_dates = (logged.dropna(subset=["file_date"]).set_index("batch_id")["file_date"].to_dict()
+                  if "file_date" in logged else {})
 
     # Memory: 1.9M rows per snapshot. Read only the columns kvk_company uses (not the
     # long lineage texts _source_file/_source_sha256 or SBI_activiteiten), and keep
@@ -121,6 +129,8 @@ def read_kvk_bronze(versions: dict | None = None, batches: list[str] | None = No
     df = table.to_pandas(strings_to_categorical=True)
     df = df[df["_batch_id"].isin(good)]
     df["_batch_id"] = df["_batch_id"].cat.remove_unused_categories()
+    # KVK's own export date per batch (from the batch log), one value per row
+    df["_file_date"] = df["_batch_id"].map(file_dates).astype(object)
     # a fixed row order: reading the Delta files doesn't guarantee one
     return df.sort_values(["_batch_id", "_row_number"], ignore_index=True)
 
@@ -220,8 +230,16 @@ def build_kvk_company(bronze: pd.DataFrame, crosswalk: pd.DataFrame,
     start = pd.to_datetime(raw_start, format="%Y%m%d", errors="coerce")
     active = bronze[col["active"]].str.strip().str.upper().map({"J": True, "N": False})
 
+    # KVK's export date when the batch log has it; otherwise the upload day, and the
+    # source column says which (flag, don't assume)
+    upload_day = bronze["_ingested_at"].dt.date
+    file_day = (bronze["_file_date"] if "_file_date" in bronze
+                else pd.Series(None, index=bronze.index, dtype=object))
+    has_file_day = file_day.notna()
     out = pd.DataFrame({
-        "snapshot_date": bronze["_ingested_at"].dt.date,
+        "snapshot_date": file_day.where(has_file_day, upload_day),
+        "snapshot_date_source": pd.Series("upload", index=bronze.index).where(~has_file_day,
+                                                                              "kvk_file"),
         "batch_id": bronze["_batch_id"],
         "is_latest": bronze["_batch_id"] == (latest if latest is not None else batches.index[-1]),
         "source_row_number": bronze["_row_number"],
@@ -269,8 +287,9 @@ def build_kvk_company(bronze: pd.DataFrame, crosswalk: pd.DataFrame,
 TABLE = "kvk_company"
 # Raise this when build_kvk_company changes what it produces (a column, a rule) or how
 # the table is stored: the next run then rebuilds every snapshot instead of only adding
-# new ones. 2: partitioned by batch_id (one folder per snapshot).
-LOGIC_VERSION = 2
+# new ones. 2: partitioned by batch_id (one folder per snapshot). 3: snapshot_date is
+# KVK's file date, with snapshot_date_source.
+LOGIC_VERSION = 3
 PARTITION = ["batch_id"]       # one folder per snapshot: removing one drops its folder
 
 

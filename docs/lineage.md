@@ -27,7 +27,7 @@ flowchart LR
     n_source_CBS_83130NED["<b>CBS 83130NED</b><br/>83130ned_bedrijfskenmerken<br/>83130ned_categorygroups<br/>83130ned_dataproperties<br/>83130ned_typeddataset"]:::bronze
     n_source_CBS_86009NED["<b>CBS 86009NED</b><br/>86009ned_bedrijfskenmerken<br/>86009ned_categorygroups<br/>86009ned_dataproperties<br/>86009ned_typeddataset"]:::bronze
     n_source_CBS_SBI_crosswalk__xlsx_["<b>CBS SBI crosswalk (xlsx)</b><br/>reference/sbi2008_sbi2025"]:::bronze
-    n_source_KVK_file["<b>KVK file</b><br/>kvk/basis_bedrijfsgegevens"]:::bronze
+    n_source_KVK_file["<b>KVK file</b><br/>kvk/_batch_log<br/>kvk/basis_bedrijfsgegevens"]:::bronze
   end
   subgraph silver_layer["silver"]
     n_silver_map_characteristic["map_characteristic"]:::silver
@@ -756,6 +756,7 @@ A silver table, built by `pipeline/silver/kvk.py`.
 
 ```mermaid
 flowchart LR
+  n_src_kvk__batch_log_file_date["kvk/_batch_log<br/>file_date"]:::bronze
   n_src_kvk_basis_bedrijfsgegevens_Actief["kvk/basis_bedrijfsgegevens<br/>Actief"]:::bronze
   n_src_kvk_basis_bedrijfsgegevens_Datum_aanvang["kvk/basis_bedrijfsgegevens<br/>Datum_aanvang"]:::bronze
   n_src_kvk_basis_bedrijfsgegevens_Hoofdactiviteiten["kvk/basis_bedrijfsgegevens<br/>Hoofdactiviteiten"]:::bronze
@@ -771,6 +772,7 @@ flowchart LR
   run(["the silver run (pipeline/common/publish.py)"]):::run
   subgraph n_tbl_kvk_company["silver: kvk_company"]
     n_col_snapshot_date["snapshot_date"]:::silver
+    n_col_snapshot_date_source["snapshot_date_source"]:::silver
     n_col_batch_id["batch_id"]:::silver
     n_col_is_latest["is_latest"]:::silver
     n_col_source_row_number["source_row_number"]:::silver
@@ -794,7 +796,11 @@ flowchart LR
     n_col_sbi2008_section["sbi2008_section"]:::silver
     n_col_run_id["run_id"]:::silver
   end
+  n_src_kvk__batch_log_file_date --> n_col_snapshot_date
+  n_src_kvk_basis_bedrijfsgegevens__batch_id --> n_col_snapshot_date
   n_src_kvk_basis_bedrijfsgegevens__ingested_at --> n_col_snapshot_date
+  n_src_kvk__batch_log_file_date --> n_col_snapshot_date_source
+  n_src_kvk_basis_bedrijfsgegevens__batch_id --> n_col_snapshot_date_source
   n_src_kvk_basis_bedrijfsgegevens__batch_id --> n_col_batch_id
   n_src_kvk_basis_bedrijfsgegevens__batch_id --> n_col_is_latest
   n_src_kvk_basis_bedrijfsgegevens__ingested_at --> n_col_is_latest
@@ -841,7 +847,8 @@ flowchart LR
 
 | Column | Comes from | How |
 |---|---|---|
-| `snapshot_date` | `kvk/basis_bedrijfsgegevens._ingested_at` | the day the upload was loaded |
+| `snapshot_date` | `kvk/_batch_log.file_date`<br>`kvk/basis_bedrijfsgegevens._batch_id`<br>`kvk/basis_bedrijfsgegevens._ingested_at` | KVK's export date of the file (batch log, from the zip); the day the upload was loaded when the file had no date |
+| `snapshot_date_source` | `kvk/_batch_log.file_date`<br>`kvk/basis_bedrijfsgegevens._batch_id` | kvk_file when the batch log has the file date, else upload |
 | `batch_id` | `kvk/basis_bedrijfsgegevens._batch_id` | the upload (one batch per file) |
 | `is_latest` | `kvk/basis_bedrijfsgegevens._batch_id`<br>`kvk/basis_bedrijfsgegevens._ingested_at` | true for the newest successfully loaded upload |
 | `source_row_number` | `kvk/basis_bedrijfsgegevens._row_number` | the row's line in the CSV file |

@@ -3,6 +3,7 @@ import json
 import zipfile
 from pathlib import Path
 
+import pandas as pd
 import pytest
 
 from pipeline.bronze import kvk_agent as k
@@ -131,3 +132,60 @@ def test_dagster_entry_point_is_not_an_agent_tool():
     assert "ingest_confirmed_file" not in k.TOOLS and "_ingest" not in k.TOOLS
     assert set(k.TOOLS) == {"get_dataset_info", "list_inbox", "verify_dataset",
                             "ingest_verified_dataset", "list_batches"}
+
+
+# =========================================================================== KVK's own file date
+def dated_zip(path, when=(2026, 10, 1, 23, 34, 22), rows=REAL_ROWS):
+    """A KVK zip whose CSV carries the export time `when`, as in the real file."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with zipfile.ZipFile(path, "w") as z:
+        z.writestr(zipfile.ZipInfo("kvk.csv", date_time=when),
+                   "\r\n".join([REAL_HEADER, *rows]) + "\r\n")
+    return path
+
+
+def test_the_file_date_comes_from_the_zip(tmp_path):
+    report = json.loads(k.verify_dataset(str(dated_zip(tmp_path / "kvk.zip"))))
+    assert report["file_date"] == "2026-10-01"
+    assert report["newest_start_date"] == "2006-07-21" and report["warnings"] == []
+
+
+def test_no_file_date_in_a_loose_csv_or_an_undated_zip(tmp_path):
+    csv = tmp_path / "kvk.csv"
+    csv.write_text("\r\n".join([REAL_HEADER, *REAL_ROWS]) + "\r\n")
+    assert "file_date" not in json.loads(k.verify_dataset(str(csv)))
+    undated = json.loads(k.verify_dataset(str(dated_zip(tmp_path / "u.zip", (1980, 1, 1, 0, 0, 0)))))
+    assert "file_date" not in undated and "no file date in the zip" in undated["warnings"][0]
+
+
+def test_a_start_date_after_the_file_date_makes_it_doubtful(tmp_path):
+    rows = [*REAL_ROWS, '"20261015";"J";"";"BV";"30";"6420";"6420";"NL"']
+    report = json.loads(k.verify_dataset(str(dated_zip(tmp_path / "kvk.zip", rows=rows))))
+    assert report["status"] == "PASSED"                    # a warning, not a rejection
+    assert any("start dates after the file date" in w for w in report["warnings"])
+
+
+def test_the_batch_log_records_the_file_date():
+    from deltalake import DeltaTable
+    dated_zip(k.INBOX / "kvk.zip")
+    assert k.ingest_confirmed_file("kvk.zip", "kvk.zip", confirmed_by="t")["status"] == "INGESTED"
+    log = DeltaTable(str(k.LOG_TABLE)).to_pandas()
+    assert str(log["file_date"].iloc[0]) == "2026-10-01"
+
+
+def test_backfill_fills_old_batches_from_the_same_file_in_the_inbox():
+    import pyarrow as pa
+    from deltalake import DeltaTable, write_deltalake
+    path = dated_zip(k.INBOX / "kvk.zip")
+    # a log as written before file_date existed: no such column
+    write_deltalake(str(k.LOG_TABLE), pa.table({
+        "batch_id": ["old", "gone"], "file_sha256": [k._sha256(path), "no-such-file"],
+        "status": ["success", "success"]}))
+    assert k.backfill_file_dates() == {"old": "2026-10-01"}
+    log = DeltaTable(str(k.LOG_TABLE)).to_pandas().set_index("batch_id")
+    assert str(log.loc["old", "file_date"]) == "2026-10-01" and pd.isna(log.loc["gone", "file_date"])
+    assert k.backfill_file_dates() == {}                   # nothing left that can be filled
+    # a later load appends to the log that now has the column
+    dated_zip(k.INBOX / "new.zip", (2026, 11, 2, 22, 0, 0), rows=REAL_ROWS[:2])
+    assert k.ingest_confirmed_file("new.zip", "new.zip", confirmed_by="t")["status"] == "INGESTED"
+    assert len(DeltaTable(str(k.LOG_TABLE)).to_pandas()) == 3

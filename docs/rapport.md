@@ -340,7 +340,7 @@ datakwaliteitsstatistieken toont.
 
 ### 4.3 Testen en validatie
 
-Er zijn **388 geautomatiseerde tests**, van vier soorten:
+Er zijn **395 geautomatiseerde tests**, van vier soorten:
 
 - **eenheidstests** op de logica (codes ontleden, controles, de berekening van de
   risico-index) met kleine, zelfgemaakte gegevens waarvan het juiste antwoord vooraf
@@ -392,13 +392,13 @@ herbouw (eerst 3,2 GB) en 0,18 GB als er niets nieuws is.
 
 ### 4.5 Data provenance en uitlegbaarheid
 
-**Herkomst.** Voor elk van de 282 kolommen in silver en gold is vastgelegd uit welke
+**Herkomst.** Voor elk van de 283 kolommen in silver en gold is vastgelegd uit welke
 kolommen in de laag eronder ze komen en wat ermee gebeurt. Een test faalt zodra een nieuwe
 kolom geen herkomst heeft. De herkomst is te volgen in een interactieve verkenner (van een
 goldkolom terug naar de bronvelden, of andersom), in gegenereerde documentatie en in
 Dagster. Daarnaast draagt elke rij in silver en gold het nummer van de run die haar
 maakte, bewaart bronze elk record precies zoals ontvangen, en krijgt elke afgekeurde batch
-een rapport.
+een rapport. Een KVK-momentopname draagt de exportdatum van KVK zelf, uit het bestand.
 
 **Uitlegbaarheid.** De risico-index is met de hand na te rekenen en geeft per rij een
 toelichting in woorden. Bijzondere gevallen zijn zichtbaar gemarkeerd, voorlopige cijfers
@@ -538,7 +538,7 @@ De antwoorden op de deelvragen:
 
 Als dataproduct voldoet de oplossing aan alle *must*-eisen: zij haalt de gegevens
 automatisch en zonder dubbelingen op, controleert ze op elke laag, maakt elk getal
-herleidbaar en uitlegbaar, en is aangetoond met 388 tests. Daarmee verschuift het werken
+herleidbaar en uitlegbaar, en is aangetoond met 395 tests. Daarmee verschuift het werken
 met deze cijfers van incidenteel handwerk naar een herhaalbaar en gecontroleerd proces.
 
 ### 6.2 Aanbevelingen
@@ -560,8 +560,6 @@ met deze cijfers van incidenteel handwerk naar een herhaalbaar en gecontroleerd 
 2. De stap naar **Azure** volgens het clouddesign, met inloggen via Entra ID, geheimen in
    Key Vault en **meldingen** bij fouten.
 3. **pandas 3** ondersteunen, en Polars overwegen als KVK verder groeit.
-4. De **eigen datum van het KVK-bestand** gebruiken in plaats van de downloaddatum, voor een
-   zuiverdere herkomst.
 
 ---
 

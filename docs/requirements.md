@@ -162,7 +162,7 @@ How well the system must work, per quality attribute.
 | ID | Requirement | Prio | Status | How | Verified by |
 |---|---|---|---|---|---|
 | NFR-19 | All settings in one file; a typo is an error, not a silent default | Must | ✅ | `config.yaml`, `pipeline/common/config.py` | `test_typos_are_errors` |
-| NFR-20 | Automated tests on every change | Must | ✅ | 388 tests; GitHub Actions on every push (Python 3.12 and the Docker image) | GitHub Actions runs |
+| NFR-20 | Automated tests on every change | Must | ✅ | 395 tests; GitHub Actions on every push (Python 3.12 and the Docker image) | GitHub Actions runs |
 | NFR-21 | The same package versions everywhere (locally, CI, Docker) | Must | ✅ | exact versions in `requirements.txt` and `constraints.txt` | CI install; found and fixed a pandas 3 mismatch (2026-10-08) |
 | NFR-22 | Runs the same on any machine with one command | Should | ✅ | Docker Compose | `docker compose config`; image built in CI |
 | NFR-23 | Documentation a reviewer can follow: what, why and how to run, per phase | Must | ✅ | README, INSTRUCTIONS, PROJECT, bronze_to_silver, lineage, and a README per phase (course slide 22) with a proof of working | README → *The six phases* |

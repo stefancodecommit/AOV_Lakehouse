@@ -70,6 +70,7 @@ SURVEY = ["86009ned_typeddataset", "83130ned_typeddataset"]
 SURVEY_PROPS = ["86009ned_dataproperties", "83130ned_dataproperties"]
 COUNT_PROPS = ["81589ned_dataproperties", "81644ned_dataproperties"]
 KVK = "kvk/basis_bedrijfsgegevens"
+KVK_LOG = "kvk/_batch_log"
 CROSSWALK = "reference/sbi2008_sbi2025"
 MAP = "silver:map_characteristic"
 
@@ -279,7 +280,12 @@ SILVER_LINEAGE: dict[str, dict[str, Column]] = {
         "region_key": Column(src(TYPED["81644NED"], "RegioS"),
                              "as given (padding removed); joins to dim_region")}),
     "kvk_company": {
-        "snapshot_date": Column(src(KVK, "_ingested_at"), "the day the upload was loaded"),
+        "snapshot_date": Column(src(KVK_LOG, "file_date") + src(KVK, "_batch_id", "_ingested_at"),
+                                "KVK's export date of the file (batch log, from the zip); "
+                                "the day the upload was loaded when the file had no date"),
+        "snapshot_date_source": Column(src(KVK_LOG, "file_date") + src(KVK, "_batch_id"),
+                                       "kvk_file when the batch log has the file date, "
+                                       "else upload"),
         "batch_id": Column(src(KVK, "_batch_id"), "the upload (one batch per file)"),
         "is_latest": Column(src(KVK, "_batch_id", "_ingested_at"),
                             "true for the newest successfully loaded upload"),

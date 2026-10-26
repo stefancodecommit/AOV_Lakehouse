@@ -47,6 +47,9 @@ def bronze_fields() -> dict[str, set[str]]:
         out[t] = out["80072ned_categorygroups"]
     out[L.KVK] = set(KVK_HEADER) | {"_batch_id", "_ingested_at", "_source_file",
                                      "_source_sha256", "_row_number"}
+    out[L.KVK_LOG] = {"batch_id", "ingested_at", "source_file", "file_sha256", "csv_member",
+                      "row_count", "column_count", "verified_at", "verification_report",
+                      "confirmed_by", "status", "file_date"}
     out[L.CROSSWALK] = set(r.COLUMNS) | {"_batch_id", "_ingested_at", "_source_file",
                                          "_source_url", "_source_sha256", "_source_version",
                                          "_row_number"}
@@ -82,7 +85,7 @@ def test_gold_reads_only_silver():
 
 # =========================================================================== correctness
 def test_every_bronze_source_table_is_a_real_bronze_table():
-    configured = {e.name for e in b.ENDPOINTS} | {L.KVK, L.CROSSWALK}
+    configured = {e.name for e in b.ENDPOINTS} | {L.KVK, L.KVK_LOG, L.CROSSWALK}
     for table, columns in L.SILVER_LINEAGE.items():
         for column, c in columns.items():
             for s in c.sources:

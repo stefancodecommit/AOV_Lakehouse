@@ -1,5 +1,6 @@
 """Silver KVK: kvk_company from bronze KVK and the SBI crosswalk."""
 import json
+from datetime import date
 
 import pandas as pd
 import pyarrow as pa
@@ -366,3 +367,16 @@ def test_a_full_rebuild_writes_the_newest_snapshot_first_and_is_finished_after_a
     assert set(silver_kvk().batch_id) == {"kvk_2026_08", "kvk_2026_09", "kvk_2026_10"}
     assert inspect_lakehouse.silver_run_problems(k.LAKEHOUSE, "silver_kvk")[1] == []
     same_as_full_rebuild()
+
+
+def test_snapshot_date_is_kvks_file_date_with_its_source():
+    b = bronze(batches=(("kvk_b1", "2026-10-05"), ("kvk_b2", "2026-11-04")))
+    # b1's file date is known (2026-10-01), b2's isn't (a loose CSV): upload day, flagged
+    b["_file_date"] = b["_batch_id"].map({"kvk_b1": date(2026, 10, 1)}).astype(object)
+    df = k.build_kvk_company(b, CROSSWALK).drop_duplicates("batch_id").set_index("batch_id")
+    assert str(df.loc["kvk_b1", "snapshot_date"]) == "2026-10-01"
+    assert df.loc["kvk_b1", "snapshot_date_source"] == "kvk_file"
+    assert str(df.loc["kvk_b2", "snapshot_date"]) == "2026-11-04"
+    assert df.loc["kvk_b2", "snapshot_date_source"] == "upload"
+    # bronze rows without the column at all: the upload day everywhere
+    assert set(k.build_kvk_company(bronze(), CROSSWALK)["snapshot_date_source"]) == {"upload"}

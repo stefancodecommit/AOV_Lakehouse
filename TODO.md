@@ -13,7 +13,7 @@ silver (CBS, KVK), gold (7 tables, with the risk index), the Streamlit dashboard
 Docker Compose (including the KVK chat agent), column lineage, config, run log, the
 lakehouse viewer with data quality statistics (`python -m tools.lakehouse_viewer`),
 incremental silver KVK (2026-10-10), backup, log retention and vulnerability scanning
-(2026-10-17), 388 tests. Code is organised in `pipeline/` (per
+(2026-10-17), 395 tests. Code is organised in `pipeline/` (per
 layer) and `tools/` (2026-10-08), with a README per phase. Requirements in
 docs/requirements.md (every Must met; open: FR-19 alerts, NFR-15 default password, left
 open on purpose), Azure design in docs/cloud_design.md (not built). All committed; no containers or servers left running. See the README for how to start
@@ -34,11 +34,9 @@ per phase, Azure design, GDPR and risks, GenAI section, report and presentation
 Python 3.12 (2026-10-17 to 10-26); the review follow-up with the backtest (2026-10-26).
 
 Still open, technical (most useful first):
-1. **KVK's own file date** instead of the upload date as `snapshot_date` (Silver KVK,
-   open question): a cleaner provenance; the report recommends it
-2. **`CategoryGroupID`** in `81644ned_regios` is typed as text because every value is
+1. **`CategoryGroupID`** in `81644ned_regios` is typed as text because every value is
    empty; give all-empty fields Arrow's null type? (Lakehouse viewer section)
-3. **Backup to another disk**: point `backup.path` at it in config.local.yaml (the
+2. **Backup to another disk**: point `backup.path` at it in config.local.yaml (the
    author's choice of disk; section 5)
 
 Later or optional, not needed for the assignment:
@@ -480,7 +478,18 @@ rebuild every run would need ~1.2 GB more memory per month kept (~23M rows after
       lakehouse or inbox for the whole test session (proven with a probe test)
 - [ ] Optional, later: Polars for silver KVK and gold's KVK table (the one place with
       millions of rows); not needed for memory any more, a learning exercise
-- [ ] Open question: `snapshot_date` is the upload date; KVK's own date may be in the file
+- [x] **KVK's own file date** (2026-10-26; was an open question): the CSV has no date
+      column and KVK's page states none, but the CSV inside the zip carries KVK's export
+      time (real file: 2026-10-01 23:34; loaded 2026-10-05; newest start date
+      2026-09-30, consistent). checks/kvk.py reads it (`file_date`; a 1980 zip date or a
+      loose CSV: none, with a warning) and warns when a start date is later; the batch
+      log stores it (`schema_mode="merge"`); `kvk_agent --backfill-file-dates` filled
+      the existing batch from the same file in the inbox. Silver: `snapshot_date` = file
+      date, else the upload day, with `snapshot_date_source` (kvk_file / upload);
+      LOGIC_VERSION 3 rebuilt it: only snapshot_date changed (2026-10-05 → 2026-10-01),
+      all else identical; gold's median ages moved ≤ 0.1 year. The KVK freshness check
+      now measures the data's age (file date). Side find: KVK refreshes the file every
+      working day; the server had a newer one (2026-10-23)
 
 Notes:
 - There is no KVK number or company ID in the open dataset, so individual companies
@@ -732,7 +741,7 @@ crosswalk; `tests/test_checks.py` the CBS and KVK checks and quarantine;
 `tests/test_maintenance.py` the maintenance tasks; `tests/test_backup.py` backup and restore; `tests/test_config.py` the
 configuration; `tests/test_kvk_silver.py` silver KVK; `tests/test_gold.py` gold;
 `tests/test_dashboard.py` the dashboard (every page headless); `tests/test_orchestration.py`
-Dagster; `tests/test_delta.py` writes real Delta tables in `tmp_path` (388 tests, ~85 s). `conftest.py` fails a test when any module still points at the real
+Dagster; `tests/test_delta.py` writes real Delta tables in `tmp_path` (395 tests, ~85 s). `conftest.py` fails a test when any module still points at the real
 lakehouse or inbox. Checked by breaking the code on purpose:
 removing the delete-before-write, an empty `done_keys()` and non-UTC silver timestamps
 each make the right tests fail.

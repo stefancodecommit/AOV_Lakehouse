@@ -28,7 +28,9 @@ lakehouse/bronze/kvk/basis_bedrijfsgegevens   raw CSV rows (all text) +
 lakehouse/bronze/kvk/_batch_log               batch_id, ingested_at, source_file,
                                               file_sha256, csv_member, row_count,
                                               column_count, verified_at,
-                                              verification_report, confirmed_by, status
+                                              verification_report, confirmed_by, status,
+                                              file_date (KVK's export date, from the zip;
+                                              empty for a loose CSV)
 
 Usage
 -----
@@ -38,6 +40,9 @@ Usage
     python -m pipeline.bronze.kvk_agent --file ~/Downloads/kvk-open-dataset-basis-bedrijfsgegevens.zip
                                                # no LLM: verify, confirm, ingest directly
     python -m pipeline.bronze.kvk_agent --inbox  # no LLM: the newest new file in inbox/kvk/
+    python -m pipeline.bronze.kvk_agent --backfill-file-dates
+                                               # batches loaded before file_date existed:
+                                               # read it from the same file in inbox/kvk/
 """
 from __future__ import annotations
 
@@ -47,7 +52,7 @@ import json
 import re
 import sys
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 from checks.kvk import check_file, iter_rows as _iter_rows, sha256 as _sha256
@@ -88,6 +93,7 @@ class Verification:
     row_count: int
     report: dict
     verified_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    file_date: date | None = None
 
 
 VERIFIED: dict[str, Verification] = {}   # resolved file path -> latest verification
@@ -195,7 +201,8 @@ def verify_dataset(file_path: str) -> str:
         folder = quarantine(QUARANTINE_ROOT, "kvk", path.name, report, file=path)
         report["quarantine"] = str(folder) if folder else "already in quarantine"
     VERIFIED[str(path)] = Verification(str(path), check.sha256, check.passed, check.csv_member,
-                                       check.encoding, check.header, check.row_count, report)
+                                       check.encoding, check.header, check.row_count, report,
+                                       file_date=check.file_date)
     return json.dumps(report, ensure_ascii=False)
 
 
@@ -382,13 +389,49 @@ def write_log(v: Verification, batch_id: str, now: datetime, rows: int,
         "column_count": [len(v.header)], "verified_at": [v.verified_at],
         "verification_report": [json.dumps(v.report, ensure_ascii=False)],
         "confirmed_by": [confirmed_by or getpass.getuser()], "status": ["success"],
+        "file_date": [v.file_date],
     }, schema=pa.schema([
         ("batch_id", pa.string()), ("ingested_at", pa.timestamp("us", tz="UTC")),
         ("source_file", pa.string()), ("file_sha256", pa.string()), ("csv_member", pa.string()),
         ("row_count", pa.int64()), ("column_count", pa.int64()),
         ("verified_at", pa.timestamp("us", tz="UTC")), ("verification_report", pa.string()),
-        ("confirmed_by", pa.string()), ("status", pa.string())]))
-    write_deltalake(str(LOG_TABLE), table, mode="append")
+        ("confirmed_by", pa.string()), ("status", pa.string()), ("file_date", pa.date32())]))
+    # "merge": a log written before file_date existed gets the column (empty for old rows)
+    write_deltalake(str(LOG_TABLE), table, mode="append", schema_mode="merge")
+
+
+def backfill_file_dates(inbox: Path | None = None) -> dict[str, str]:
+    """For logged batches without a file_date (loaded before it was recorded): find the
+    same file (by SHA-256) in the inbox and take the date from its zip. Batches whose file
+    is gone stay empty; silver then uses the upload date and says so. Returns
+    {batch_id: file_date} of the batches filled in."""
+    if not (LOG_TABLE / "_delta_log").exists():
+        return {}
+    import pyarrow as pa
+    from deltalake import DeltaTable, write_deltalake
+    from checks.kvk import FileCheck, find_csv
+    table = DeltaTable(str(LOG_TABLE)).to_pyarrow_table()
+    rows = table.to_pylist()
+    todo = {r["file_sha256"]: r for r in rows if r.get("file_date") is None}
+    filled = {}
+    for f in sorted((inbox or INBOX).glob("*")):
+        if not todo or not f.is_file():
+            continue
+        digest = _sha256(f)
+        if digest in todo:
+            check = FileCheck(f, digest)
+            find_csv(f, check)
+            if check.file_date:
+                row = todo.pop(digest)
+                row["file_date"] = check.file_date
+                filled[row["batch_id"]] = check.file_date.isoformat()
+    if filled:
+        schema = table.schema
+        if "file_date" not in schema.names:
+            schema = schema.append(pa.field("file_date", pa.date32()))
+        write_deltalake(str(LOG_TABLE), pa.Table.from_pylist(rows, schema=schema),
+                        mode="overwrite", schema_mode="overwrite")
+    return filled
 
 
 # --------------------------------------------------------------------------- agent
@@ -488,8 +531,13 @@ if __name__ == "__main__":
                                     "(a bare file name is looked up in the inbox)")
     src.add_argument("--inbox", action="store_true",
                      help="skip the agent: verify and ingest the newest new file in the inbox")
+    src.add_argument("--backfill-file-dates", action="store_true",
+                     help="fill in file_date for batches loaded before it was recorded")
     args = ap.parse_args()
-    if args.inbox:
+    if args.backfill_file_dates:
+        filled = backfill_file_dates()
+        print(f"file_date filled in for {len(filled)} batches: {filled}")
+    elif args.inbox:
         newest = newest_new_inbox_file()
         if newest is None:
             sys.exit(f"No new KVK file in {INBOX}")

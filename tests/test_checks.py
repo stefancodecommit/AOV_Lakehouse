@@ -190,9 +190,10 @@ def test_kvk_match_columns_ignores_case_and_punctuation():
 
 def test_kvk_check_rows_counts():
     found = {"start_date": 0, "active": 1, "legal_form": 2, "postcode_region": 3}
-    total, malformed, hits = check_rows(
+    total, malformed, hits, newest = check_rows(
         [["20060721", "J", "BV", "92"], ["", "N", "NV", "01"], ["short"]], 4, found)
     assert (total, malformed) == (3, 1) and not any(hits.values())
+    assert newest == "20060721"
 
 
 # =========================================================================== CBS table lifecycle
