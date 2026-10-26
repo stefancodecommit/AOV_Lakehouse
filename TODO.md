@@ -576,8 +576,19 @@ Run: `DAGSTER_HOME=$PWD/orchestration .venv/bin/dagster dev -f orchestration/def
       --strict` on `requirements-dev.txt` and the new `requirements-docker.txt` (the
       Dockerfile's two extra packages moved there), on pin changes and weekly. Locally
       2026-10-17: no known vulnerabilities
-- [ ] Open: point `backup.path` at another disk; scan the Docker base image's OS packages
-      (Trivy); mention `confirmed_by` in the internal privacy notice (privacy officer)
+- [ ] Open: point `backup.path` at another disk; mention `confirmed_by` in the internal
+      privacy notice (privacy officer)
+- [x] **Image scan with Trivy** (2026-10-26, R13): job `image-scan` in
+      `.github/workflows/audit.yml`: builds the image, fetches Trivy 0.75.0 as a release
+      file with its SHA-256 checked (not the GitHub Action: its tags were hijacked in
+      March 2026, CVE-2026-33634), fails on CRITICAL/HIGH findings that have a fix; also
+      on Dockerfile changes and weekly. First scan found: the base image still ships pip
+      25.0.1 (5 medium advisories) and pip carries old copies of certifi, urllib3,
+      msgpack (1 critical, 4 high); fixed by upgrading pip to 26.2.1 for the install and
+      removing it afterwards (nothing needs it at runtime; image 1.3 → 1.25 GB). Left:
+      44 high findings in Debian 13.7 packages without a fix yet (util-linux, ncurses,
+      systemd libs, perl): shown in the log, they go when Debian fixes them and the
+      image is rebuilt
 - [x] **First audit failure** (weekly run 2026-10-26): new advisories for pillow 12.3.0
       (26, fixed in 13.0.0), filelock 4.0.12 (3, fixed in 4.2.1) and certifi 2026.7.22
       (fixed in 2026.10.19). pillow 13 and filelock 4.2.1 need Python 3.11+, and

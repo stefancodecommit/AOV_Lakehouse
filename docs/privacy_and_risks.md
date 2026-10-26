@@ -133,7 +133,7 @@ already in place.
 |---|---|---|---|---|---|---|
 | R11 | Unauthorised access to the dashboard or the Dagster UI | low (local) | medium | everything listens on 127.0.0.1; containers without root; no secrets; cloud design with Entra ID | low | — |
 | R12 | Default password of Dagster's run-history database (NFR-15) | low | low (no business data in it) | local only; open on purpose for the prototype | low | Key Vault when deployed (cloud design) |
-| R13 | A vulnerable or compromised Python package | medium | medium | exact versions pinned; CI on every change; **`pip-audit` in CI** (2026-10-17, `.github/workflows/audit.yml`): every pinned package of the local install and the Docker image, on each change of the pins and weekly | low | not scanned: the Docker base image's operating-system packages (e.g. Trivy in CI, or the cloud registry's scanning) |
+| R13 | A vulnerable or compromised Python package | medium | medium | exact versions pinned; CI on every change; **`pip-audit` in CI** (2026-10-17, `.github/workflows/audit.yml`): every pinned package of the local install and the Docker image, on each change of the pins and weekly; **Trivy scan of the built image** (2026-10-26), including the Debian packages: fails on a critical or high finding that has a fix; pip removed from the image after installing | low | unfixed findings in the Debian base (44 high on 2026-10-26, none with a fix yet) wait for Debian; the weekly scan shows them |
 | R14 | Data loss: the lakehouse and inbox are not in git; old KVK snapshots can't be downloaded again (the KVK download link serves the current file only) | low | high (KVK history lost) | Delta keeps old versions for 7 days; CBS data can be fetched again; **monthly backup** (2026-10-17, `tools/backup.py`) of `lakehouse/` and `inbox/kvk/`, verified after writing, newest 3 kept; restore tested on the real data | medium (the backup is on the same disk) | point `backup.path` at another disk; in the cloud, zone-redundant storage with soft delete |
 | R15 | Failures go unnoticed: no email or chat alerts (FR-19) | medium | medium | failures and freshness warnings in the Dagster UI; `inspect_lakehouse` exits with an error | medium | someone checks the Dagster UI regularly; alerts in the cloud design |
 | R16 | Dependence on one maintainer | high (now one person) | medium | README, INSTRUCTIONS, a README per phase, requirements, tests and CI | medium | hand-over to the insurer's data team |
@@ -168,7 +168,7 @@ data until it is pointed elsewhere or the project moves to the cloud.
 | Mention `confirmed_by` in the internal privacy notice | R10 | privacy officer | open |
 | Restrict row-level KVK tables to the data team | R7 | data team | in the cloud design (roles) |
 | Vulnerability scanning of dependencies in CI | R13 | data team | done (2026-10-17) |
-| Scan the Docker base image as well | R13 | data team | open |
+| Scan the Docker base image as well | R13 | data team | done (2026-10-26) |
 | Back up `lakehouse/` and `inbox/kvk/` | R14 | data team | done (2026-10-17); still on the same disk |
 | Point the backup at another disk | R14 | data team | open |
 | Alerts by email or chat | R15 | data team | in the cloud design (FR-19) |

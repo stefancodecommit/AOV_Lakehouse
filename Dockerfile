@@ -17,8 +17,13 @@ WORKDIR /app
 # Dependencies first, so a code change doesn't reinstall them (Docker layer cache).
 # requirements-docker.txt: the project's packages plus Dagster's Postgres storage (see
 # that file); exact versions, with constraints.txt.
+# pip itself first: the python:3.12 base image still ships pip 25.0.1, which has known
+# vulnerabilities (found by the image scan, .github/workflows/audit.yml); exact version.
+# After the install pip is removed: nothing in the image needs it at runtime, and pip
+# carries its own older copies of certifi, urllib3 and msgpack, which the scan reports.
 COPY requirements.txt requirements-docker.txt constraints.txt ./
-RUN pip install -r requirements-docker.txt
+RUN pip install "pip==26.2.1" && pip install -r requirements-docker.txt \
+    && pip uninstall -y pip
 
 COPY . .
 

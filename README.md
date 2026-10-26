@@ -494,7 +494,8 @@ tables in a temporary folder; a safety check makes a test fail if any script sti
 at the real `lakehouse/`. A GitHub Actions workflow (`.github/workflows/tests.yml`) runs
 the tests and builds the Docker image on every push; a second one
 (`.github/workflows/audit.yml`) checks every pinned package for known vulnerabilities with
-`pip-audit`, when the pins change and weekly.
+`pip-audit`, and the built Docker image, operating-system packages included, with Trivy;
+when the pins or the Dockerfile change, and weekly.
 
 | Test file | Covers |
 |---|---|

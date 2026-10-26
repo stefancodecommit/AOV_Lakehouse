@@ -244,7 +244,21 @@ project (pip-audit resolves the packages for the Python it runs on):
 ```
 
 If a package is reported: raise its version in `requirements.txt` (or `constraints.txt`
-for an indirect one), run the tests, rebuild the Docker image. Done once so far
+for an indirect one), run the tests, rebuild the Docker image.
+
+The same workflow scans the built Docker image with [Trivy](https://trivy.dev), including
+the operating-system packages of its Debian base. It fails only on a critical or high
+finding that has a fix; findings without a fix are listed in the log. By hand, with
+Docker running (Trivy as a fixed release with its checksum, see the workflow file):
+
+```bash
+docker compose build
+trivy image --scanners vuln --ignore-unfixed --severity CRITICAL,HIGH cbs-kvk-lakehouse:latest
+```
+
+A fixable finding in a Debian package usually disappears by rebuilding on the newest
+`python:3.12-slim` (`docker compose build --pull`); one in a Python package by raising its
+pin as above. Done once so far
 (2026-10-26): pillow 12.3 → 13.0, filelock 4.0 → 4.2.1, certifi; streamlit 1.65 → 1.66.1
 because 1.65 doesn't allow pillow 13.
 

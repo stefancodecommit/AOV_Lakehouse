@@ -1,8 +1,10 @@
-# Dependency audit (risk R13 in docs/privacy_and_risks.md): checks every pinned Python
-# package, of the local install and of the Docker image, against the public vulnerability
-# databases (PyPI advisories, OSV). Fails when a package has a known vulnerability.
-# Runs when the pins change, and weekly, because a new vulnerability can be published
-# for a version that was fine when it was pinned. (GitHub pauses scheduled workflows in
+# Dependency audit (risk R13 in docs/privacy_and_risks.md), two jobs:
+# - pip-audit: every pinned Python package, of the local install and of the Docker image,
+#   against the public vulnerability databases (PyPI advisories, OSV);
+# - image-scan: the built Docker image with Trivy, including the operating-system
+#   packages of its Debian base, which pip-audit can't see.
+# Runs when the pins or the Dockerfile change, and weekly, because a new vulnerability can
+# be published for a version that was fine when it was pinned. (GitHub pauses scheduled workflows in
 # a repository without activity for 60 days; re-enable it on the Actions tab.)
 name: dependency-audit
 
@@ -11,11 +13,13 @@ on:
     paths:
       - "requirements*.txt"
       - constraints.txt
+      - Dockerfile
       - .github/workflows/audit.yml
   pull_request:
     paths:
       - "requirements*.txt"
       - constraints.txt
+      - Dockerfile
   schedule:
     - cron: "0 5 * * 1"         # Mondays 05:00 UTC
   workflow_dispatch:            # also allows a manual run from the Actions tab
@@ -43,3 +47,38 @@ jobs:
       # environment and checks every package in it, including the indirect ones
       - name: Audit the pinned packages
         run: pip-audit --strict --progress-spinner off -r requirements-dev.txt -r requirements-docker.txt
+
+  image-scan:
+    runs-on: ubuntu-24.04         # pinned, like the packages: move to a newer Ubuntu on purpose
+    timeout-minutes: 20
+    env:
+      # Trivy is fetched as a fixed release with its checksum, not through a GitHub Action
+      # tag: in March 2026 Trivy's action tags were moved to malicious code
+      # (CVE-2026-33634). To upgrade: take a release that is a few weeks old, and copy the
+      # Linux-64bit.tar.gz line of its trivy_<version>_checksums.txt.
+      TRIVY_VERSION: "0.75.0"
+      TRIVY_SHA256: c6e65abddb348e25f10549df887045629cf28cc72453cd1c63acb717316b3f3f
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v7
+
+      - name: Build the image
+        run: docker build -t cbs-kvk-lakehouse:scan .
+
+      - name: Install Trivy (fixed version, checksum checked)
+        run: |
+          curl -sSfL -o trivy.tar.gz \
+            "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
+          echo "${TRIVY_SHA256}  trivy.tar.gz" | sha256sum -c -
+          tar -xzf trivy.tar.gz trivy
+          ./trivy --version
+
+      # For the log: every CRITICAL and HIGH finding, also the ones without a fix yet
+      # (Debian hasn't released one; nothing to do but wait for a newer base image)
+      - name: Report all serious findings
+        run: ./trivy image --scanners vuln --severity CRITICAL,HIGH cbs-kvk-lakehouse:scan
+
+      # The rule: fail only on a CRITICAL or HIGH finding that has a fix, because that is
+      # one we can act on (a newer package version, or a rebuild on a newer base image)
+      - name: Fail on fixable critical or high findings
+        run: ./trivy image --quiet --scanners vuln --ignore-unfixed --severity CRITICAL,HIGH --exit-code 1 cbs-kvk-lakehouse:scan
