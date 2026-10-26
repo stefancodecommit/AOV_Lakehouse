@@ -10,6 +10,6 @@ pandas==2.3.3             # not 3.x yet: see TODO.md, "pandas 3"
 openpyxl==3.1.5           # read the SBI crosswalk xlsx
 pyyaml==6.0.3             # config.yaml
 ollama==0.6.3
-streamlit==1.65.0         # dashboard (includes Altair for the charts)
+streamlit==1.66.1         # dashboard (includes Altair for the charts)
 dagster==1.13.25          # orchestration (orchestration/definitions.py)
 dagster-webserver==1.13.25  # the Dagster UI (dagster dev)

@@ -29,10 +29,13 @@ data in `lakehouse/`.
 
 ## 1. One-time setup
 
-Python 3.10 or newer (Linux or macOS):
+Python 3.11 or newer (Linux or macOS); CI and the Docker image use 3.12. Ubuntu 22.04
+comes with 3.10, which is too old since the security updates of 2026-10-26 (pillow 13,
+filelock 4.2 need 3.11+); get 3.12 without sudo through [uv](https://docs.astral.sh/uv/):
 
 ```bash
-python3 -m venv .venv
+uv python install 3.12
+"$(uv python find 3.12)" -m venv .venv            # or: python3 -m venv .venv, if that is 3.11+
 .venv/bin/pip install -r requirements-dev.txt
 ```
 
@@ -232,15 +235,18 @@ cp -n ../restore/inbox/kvk/* inbox/kvk/       # KVK uploads that are missing
 ### Known vulnerabilities in the packages
 
 GitHub checks the pinned packages weekly (`.github/workflows/audit.yml`). To check by hand,
-in a separate environment so the project's own stays as pinned:
+in a separate environment so the project's own stays as pinned, on the same Python as the
+project (pip-audit resolves the packages for the Python it runs on):
 
 ```bash
-python3 -m venv /tmp/audit && /tmp/audit/bin/pip install pip-audit==2.10.1
+.venv/bin/python -m venv /tmp/audit && /tmp/audit/bin/pip install pip-audit==2.10.1
 /tmp/audit/bin/pip-audit -r requirements-dev.txt -r requirements-docker.txt
 ```
 
 If a package is reported: raise its version in `requirements.txt` (or `constraints.txt`
-for an indirect one), run the tests, rebuild the Docker image.
+for an indirect one), run the tests, rebuild the Docker image. Done once so far
+(2026-10-26): pillow 12.3 → 13.0, filelock 4.0 → 4.2.1, certifi; streamlit 1.65 → 1.66.1
+because 1.65 doesn't allow pillow 13.
 
 ### Remove data outside the configuration
 

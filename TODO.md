@@ -578,6 +578,15 @@ Run: `DAGSTER_HOME=$PWD/orchestration .venv/bin/dagster dev -f orchestration/def
       2026-10-17: no known vulnerabilities
 - [ ] Open: point `backup.path` at another disk; scan the Docker base image's OS packages
       (Trivy); mention `confirmed_by` in the internal privacy notice (privacy officer)
+- [x] **First audit failure** (weekly run 2026-10-26): new advisories for pillow 12.3.0
+      (26, fixed in 13.0.0), filelock 4.0.12 (3, fixed in 4.2.1) and certifi 2026.7.22
+      (fixed in 2026.10.19). pillow 13 and filelock 4.2.1 need Python 3.11+, and
+      streamlit 1.65 requires pillow<13: raised streamlit to 1.66.1, and moved the local
+      `.venv` from Python 3.10 (Ubuntu 22.04's) to 3.12 through uv, the same as CI and
+      Docker (the old one kept as `.venv-py310` until this is confirmed, then delete it).
+      Checked: 383 tests, silver and gold rebuilt on 3.12 identical to the 3.10 build
+      (19 tables, values and row counts), report export, backup, `pip-audit` clean.
+      Docker image not rebuilt locally (Docker Desktop was off): CI builds it
 - Real runs (2026-10-06): monthly CBS ingest skipped (nothing new), silver + gold built
   with all 12 checks passing, freshness and maintenance jobs succeeded
 - Found while testing: Dagster runs steps in their own process and drops the project

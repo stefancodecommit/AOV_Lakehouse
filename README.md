@@ -148,7 +148,8 @@ working** (the test command and what to expect).
 
 ## Setup
 
-Requirements: Linux or macOS, Python 3.10 or newer, about 2 GB free memory (silver KVK
+Requirements: Linux or macOS, Python 3.11 or newer (3.12 in CI and Docker; on Ubuntu
+22.04, whose Python is 3.10, see [INSTRUCTIONS.md](INSTRUCTIONS.md#1-one-time-setup)), about 2 GB free memory (silver KVK
 peaks at ~1.5–1.8 GB) and ~100 MB disk for the data.
 
 ```bash
