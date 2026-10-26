@@ -21,9 +21,12 @@ Restore
 `restore` unpacks into a new, empty folder and never over the live lakehouse: check the
 result, stop Dagster, then swap the folders by hand (INSTRUCTIONS.md, section 7).
 
-The backup folder is on the same disk by default (backups/, not in git). Point
-backup.path at another disk or a synchronised folder for a real backup; in the cloud
-design, storage with soft delete and zone redundancy replaces this tool.
+The backup folder is on the same disk by default (backups/, not in git), which protects
+against mistakes but not against losing the disk: each backup then logs a warning. Point
+backup.path at another disk or a synchronised folder for a real backup, and set
+backup.require_other_disk: true, so a backup refuses to run when that disk is missing
+(a folder for an unplugged USB drive would otherwise be created on the internal disk). In
+the cloud design, storage with soft delete and zone redundancy replaces this tool.
 
 Usage
 -----
@@ -50,6 +53,7 @@ LAKEHOUSE = project_path(settings["paths"]["lakehouse"])
 INBOX_KVK = project_path(settings["paths"]["inbox"]) / "kvk"
 BACKUP_DIR = project_path(settings["backup"]["path"])
 KEEP = int(settings["backup"]["keep"])
+REQUIRE_OTHER_DISK = bool(settings["backup"]["require_other_disk"])
 PREFIX = "backup_"
 
 log = logging.getLogger("backup")
@@ -80,10 +84,30 @@ def _manifest(lakehouse: Path) -> dict:
             "tables": tables}
 
 
-def create(backup_dir: Path | None = None, keep: int | None = None) -> Path:
+def same_disk(a: Path, b: Path) -> bool:
+    """True when a and b are on the same file system (disk). For a path that doesn't
+    exist yet, its nearest existing parent counts: where it would be created."""
+    def device(p: Path) -> int:
+        p = p.resolve()
+        while not p.exists():
+            p = p.parent
+        return p.stat().st_dev
+    return device(a) == device(b)
+
+
+def create(backup_dir: Path | None = None, keep: int | None = None,
+           require_other_disk: bool | None = None) -> Path:
     """Write a new archive, verify it, then remove all but the newest `keep` archives.
-    Returns the new archive's path."""
+    Returns the new archive's path. On the lakehouse's own disk: a warning, or with
+    `require_other_disk` an error before anything is written."""
     backup_dir, keep = backup_dir or BACKUP_DIR, KEEP if keep is None else keep
+    strict = REQUIRE_OTHER_DISK if require_other_disk is None else require_other_disk
+    if same_disk(backup_dir, LAKEHOUSE):
+        if strict:
+            raise RuntimeError(f"backup.path {backup_dir} is on the same disk as the lakehouse "
+                               "(is the backup disk connected?); nothing written")
+        log.warning("backup on the same disk as the lakehouse: it protects against mistakes, "
+                    "not against losing the disk (backup.path in config.yaml)")
     backup_dir.mkdir(parents=True, exist_ok=True)
     manifest = _manifest(LAKEHOUSE) if LAKEHOUSE.exists() else {"tables": {}}
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")

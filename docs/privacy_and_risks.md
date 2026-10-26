@@ -143,7 +143,7 @@ already in place.
 | ID | Risk | Likelihood | Impact | Measures in place | Residual | Next step |
 |---|---|---|---|---|---|---|
 | R17 | The LLM in the KVK intake misunderstands or proposes the wrong file | medium | low | the LLM can't load anything itself: files are verified by ordinary code and loaded only after a person types `YES`; the Dagster route doesn't use the LLM at all | low | — |
-| R18 | Errors in code written with GenAI assistance | medium | medium | 396 tests, CI, mutation checks, real-data comparisons, review by the author | medium | described in the GenAI section of the report |
+| R18 | Errors in code written with GenAI assistance | medium | medium | 397 tests, CI, mutation checks, real-data comparisons, review by the author | medium | described in the GenAI section of the report |
 
 ## 6. Value against risk
 
@@ -170,5 +170,5 @@ data until it is pointed elsewhere or the project moves to the cloud.
 | Vulnerability scanning of dependencies in CI | R13 | data team | done (2026-10-17) |
 | Scan the Docker base image as well | R13 | data team | done (2026-10-26) |
 | Back up `lakehouse/` and `inbox/kvk/` | R14 | data team | done (2026-10-17); still on the same disk |
-| Point the backup at another disk | R14 | data team | open |
+| Point the backup at another disk | R14 | data team | decided 2026-10-26: not now (no second disk); each backup warns that it's on the same disk, and `backup.require_other_disk` makes it refuse once a disk is set; in the cloud, storage with soft delete |
 | Alerts by email or chat | R15 | data team | in the cloud design (FR-19) |

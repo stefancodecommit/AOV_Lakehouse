@@ -131,5 +131,9 @@ backup:
   # another disk, e.g. in config.local.yaml.
   path: backups
   keep: 3                         # newest archives kept; older ones are removed
+  # true: refuse to back up when backup.path is on the same disk as the lakehouse (e.g.
+  # a USB drive that isn't plugged in, so its folder would land on the internal disk).
+  # false: back up anyway, with a warning (the default while there is no second disk)
+  require_other_disk: false
 
 # Still to add when they are built (see TODO.md): alert targets (FR-19).

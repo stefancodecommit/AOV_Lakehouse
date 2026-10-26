@@ -87,3 +87,14 @@ def test_restore_into_an_empty_folder_only(tmp_path_factory):
 def test_backup_of_an_empty_lakehouse():
     archive = bk.create()
     assert members(archive) == ["manifest.json"] and bk.verify(archive) == []
+
+
+def test_a_backup_on_the_lakehouse_disk_warns_or_refuses(caplog):
+    some_data()
+    assert bk.same_disk(bk.BACKUP_DIR, bk.LAKEHOUSE)       # both in tmp_path
+    bk.create(require_other_disk=False)
+    assert "same disk as the lakehouse" in caplog.text
+    unplugged = bk.LAKEHOUSE / "media" / "usb" / "backups"  # a drive that isn't there
+    with pytest.raises(RuntimeError, match="same disk"):
+        bk.create(unplugged, require_other_disk=True)
+    assert not unplugged.exists()                          # nothing created on this disk

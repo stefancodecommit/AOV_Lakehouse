@@ -13,7 +13,7 @@ silver (CBS, KVK), gold (7 tables, with the risk index), the Streamlit dashboard
 Docker Compose (including the KVK chat agent), column lineage, config, run log, the
 lakehouse viewer with data quality statistics (`python -m tools.lakehouse_viewer`),
 incremental silver KVK (2026-10-10), backup, log retention and vulnerability scanning
-(2026-10-17), 396 tests. Code is organised in `pipeline/` (per
+(2026-10-17), 397 tests. Code is organised in `pipeline/` (per
 layer) and `tools/` (2026-10-08), with a README per phase. Requirements in
 docs/requirements.md (every Must met; open: FR-19 alerts, NFR-15 default password, left
 open on purpose), Azure design in docs/cloud_design.md (not built). All committed; no containers or servers left running. See the README for how to start
@@ -33,11 +33,12 @@ per phase, Azure design, GDPR and risks, GenAI section, report and presentation
 (2026-10-17); backup, log retention, vulnerability scanning incl. the Docker image,
 Python 3.12 (2026-10-17 to 10-26); the review follow-up with the backtest (2026-10-26).
 
-Still open, technical (most useful first):
-1. **Backup to another disk**: point `backup.path` at it in config.local.yaml (the
-   author's choice of disk; section 5)
+Still open, technical: nothing for the assignment.
 
 Later or optional, not needed for the assignment:
+- **Backup to another disk** (section 5): decided 2026-10-26 to keep it on this disk for
+  now (no second disk); when there is one: `backup.path` and `require_other_disk: true`
+  in config.local.yaml
 - **pandas 3** (section 7): make the code work with it, then raise the pin
 - **Ubuntu 26** for CI, on purpose (section 5)
 - **When CBS publishes a new SBI crosswalk version:** update
@@ -607,8 +608,13 @@ Run: `DAGSTER_HOME=$PWD/orchestration .venv/bin/dagster dev -f orchestration/def
       --strict` on `requirements-dev.txt` and the new `requirements-docker.txt` (the
       Dockerfile's two extra packages moved there), on pin changes and weekly. Locally
       2026-10-17: no known vulnerabilities
-- [ ] Open: point `backup.path` at another disk; mention `confirmed_by` in the internal
-      privacy notice (privacy officer)
+- [ ] Open: mention `confirmed_by` in the internal privacy notice (privacy officer)
+- [x] **Backup location** (2026-10-26): this machine has one disk and no synced folder;
+      the author chose to keep the backups here for now. Guard added: a backup on the
+      lakehouse's disk logs a warning (also in Dagster); with
+      `backup.require_other_disk: true` it refuses before writing anything (an unplugged
+      USB drive would otherwise get its folder on the internal disk). Test
+      `test_a_backup_on_the_lakehouse_disk_warns_or_refuses`
 - [x] **Image scan with Trivy** (2026-10-26, R13): job `image-scan` in
       `.github/workflows/audit.yml`: builds the image, fetches Trivy 0.75.0 as a release
       file with its SHA-256 checked (not the GitHub Action: its tags were hijacked in
@@ -745,7 +751,7 @@ crosswalk; `tests/test_checks.py` the CBS and KVK checks and quarantine;
 `tests/test_maintenance.py` the maintenance tasks; `tests/test_backup.py` backup and restore; `tests/test_config.py` the
 configuration; `tests/test_kvk_silver.py` silver KVK; `tests/test_gold.py` gold;
 `tests/test_dashboard.py` the dashboard (every page headless); `tests/test_orchestration.py`
-Dagster; `tests/test_delta.py` writes real Delta tables in `tmp_path` (396 tests, ~85 s). `conftest.py` fails a test when any module still points at the real
+Dagster; `tests/test_delta.py` writes real Delta tables in `tmp_path` (397 tests, ~85 s). `conftest.py` fails a test when any module still points at the real
 lakehouse or inbox. Checked by breaking the code on purpose:
 removing the delete-before-write, an empty `done_keys()` and non-UTC silver timestamps
 each make the right tests fail.

@@ -8,4 +8,6 @@ Dagster's monthly maintenance job (risk R14 in
 The archives are not in git (they hold the data). This folder is on the same disk as the
 lakehouse, so it protects against mistakes (a wrong delete, a broken table), not against
 a broken disk or a lost laptop: point `backup.path` at another disk or a synchronised
-folder in `config.local.yaml` for that. How to restore: INSTRUCTIONS.md, section 7.
+folder in `config.local.yaml` for that, with `require_other_disk: true`. Until then each
+backup logs a warning that it is on the same disk. How to restore: INSTRUCTIONS.md,
+section 7.

@@ -350,6 +350,9 @@ def dagster_history_retention(context: dg.OpExecutionContext) -> None:
 
 @dg.op(ins=AFTER)
 def backup_lakehouse(context: dg.OpExecutionContext) -> None:
+    if backup.same_disk(backup.BACKUP_DIR, backup.LAKEHOUSE) and not backup.REQUIRE_OTHER_DISK:
+        context.log.warning("Backup on the same disk as the lakehouse: it protects against "
+                            "mistakes, not against losing the disk (backup.path in config.yaml)")
     path = backup.create()
     context.log.info("Backup %s (%.0f MB), verified", path.name, path.stat().st_size / 1e6)
 

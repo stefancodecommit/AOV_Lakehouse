@@ -7,7 +7,7 @@ phase 4 (model design and testing) and the proof of working for every phase.
 .venv/bin/pytest            # all tests, ~85 s, no internet needed
 ```
 
-Expected: all pass (396 at the time of writing, 1 deselected: the live test below). The
+Expected: all pass (397 at the time of writing, 1 deselected: the live test below). The
 same suite runs on every push in GitHub Actions, on a clean Python 3.12.
 
 ## What is tested, per phase
@@ -18,7 +18,7 @@ same suite runs on every push in GitHub Actions, on a clean Python 3.12.
 | 2. Transformation | `test_silver_logic.py`, `test_kvk_silver.py` | 117 | every silver table and its keys; no padded keys; unknown keys flagged; SBI translation per case; incremental KVK equals a full rebuild |
 | 3. Serving | `test_gold.py`, `test_dashboard.py` | 47 | every gold table; every dashboard page, with and without *Final figures only* |
 | 4. Model | `test_gold.py` (risk index), `test_backtest.py` | (in 47) + 4 | the risk index on data with known answers, and its backtest (each verdict judged on the year after it) (see [gold's README](../pipeline/gold/README.md#phase-4--model-design-and-testing-the-risk-index)) |
-| 6. Deployment & monitoring | `test_orchestration.py`, `test_maintenance.py`, `test_backup.py` | 36 | the Dagster graph, blocking checks, automation, the one-writer limit, maintenance (in order), log retention, backup and restore |
+| 6. Deployment & monitoring | `test_orchestration.py`, `test_maintenance.py`, `test_backup.py` | 37 | the Dagster graph, blocking checks, automation, the one-writer limit, maintenance (in order), log retention, backup and restore |
 | All layers on real Delta tables | `test_delta.py` | 30 | bronze writes (revisions replace, repeats add nothing), silver end to end with types read back, publishing all-or-nothing, the run log |
 | Documentation and tools | `test_lineage.py`, `test_config.py`, `test_lakehouse_viewer.py` | 69 | every silver and gold column has a documented origin; the generated docs are up to date; config errors are caught; the viewer's statistics |
 

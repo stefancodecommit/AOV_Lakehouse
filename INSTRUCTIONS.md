@@ -212,8 +212,16 @@ The retention periods are in `config.yaml`, section `retention`.
 ### Backup and restore
 
 A backup is one archive of `lakehouse/` and `inbox/kvk/` in `backups/` (`backup.path` in
-`config.yaml`; point it at another disk in `config.local.yaml` for a real backup). Each new
-archive is checked right after writing; the newest three are kept.
+`config.yaml`). Each new archive is checked right after writing; the newest three are kept.
+On the lakehouse's own disk (the default) every backup logs a warning. For a real backup,
+point it at another disk in `config.local.yaml`, and refuse to back up when that disk is
+missing (otherwise the folder of an unplugged USB drive is created on the internal disk):
+
+```yaml
+backup:
+  path: /media/<you>/<drive>/lakehouse-backups
+  require_other_disk: true
+```
 
 ```bash
 .venv/bin/python -m tools.backup create      # make, verify and rotate (~15 s, ~160 MB)
