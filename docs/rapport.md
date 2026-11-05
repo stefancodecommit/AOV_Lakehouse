@@ -511,8 +511,29 @@ gecorrigeerd, onder meer door de vraag "hoe heb je dat getest?". Daarom is niets
 vertrouwen aangenomen: tests, metingen op de echte gegevens en controles tegen de bron.
 Gegevens van de verzekeraar zijn nooit met de assistent gedeeld.
 
-*Eigen reflectie (door de auteur te schrijven): wat generatieve AI betekende voor het leren
-en het resultaat, en wat ik een volgende keer anders zou doen.*
+**Eigen reflectie.** Ik had eerder met AI-chatbots gewerkt, maar nooit met een assistent
+die mijn vragen direct in de code verwerkt. Daardoor ging bouwen zo veel sneller dat het
+project, hoewel groot voor deze opdracht, niet zo voelde. Zonder Claude was het resultaat
+zeker veel kleiner geweest.
+
+Ik heb dingen geleerd die ik nog nooit had gedaan. Ik heb zelf een AI-agent gebouwd: klein,
+maar hij doet zijn taak goed en laadt pas na mijn bevestiging. En ik heb met Docker leren
+werken: een image bouwen en met een docker-compose-bestand meerdere diensten samen laten
+draaien, zodat mijn werk ook op andere machines werkt.
+
+Mijn rol veranderde daardoor: ik voelde me meer een manager dan een programmeur. Ik besliste
+en controleerde, en heb het werk vaak nagelopen. De assistent kon stellig iets beweren wat
+niet klopte, maar loste gevonden fouten ook op. De verantwoordelijkheid voor het resultaat
+bleef bij mij.
+
+De gegevens kan ik in mijn werk goed gebruiken: het risicoprofiel van de sector en
+grootteklasse van een werkgever is een vertrekpunt voor een strategie om het verzuim
+samen terug te dringen.
+
+Een volgende keer zou ik een vast raamwerk gebruiken, zoals GitHub Spec Kit, in plaats van
+te bouwen op mijn eigen ervaring. Ik werkte al vergelijkbaar, met eisen, een ontwerp en een
+takenlijst, maar die ontstonden gaandeweg. Een raamwerk zorgt dat je niets vergeet en
+dwingt om vooraf vast te leggen hoe je het resultaat toetst.
 
 ## 6. Conclusies en aanbevelingen
 

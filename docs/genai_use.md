@@ -139,9 +139,3 @@ General risks, beyond these incidents:
 - **Licensing and ownership** of generated code: the code uses common open-source
   libraries under their licences; the generated code is part of the author's submission,
   with the assistant credited in every commit.
-
-## 6. Reflection by the author
-
-*To be written by the author: what GenAI meant for your learning and your result, what
-you would do the same or differently next time, and where you think the line lies
-between your work and the assistant's.*

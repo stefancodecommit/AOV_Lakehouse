@@ -48,9 +48,9 @@ Later or optional, not needed for the assignment:
   issues)
 
 **Last: the author's part** (only the author can do this):
-1. **GenAI reflection** in report section 5.4 (replaces the placeholder; ~285 words of
-   room by the strictest count, the whole Word document) and in docs/genai_use.md,
-   section 6
+1. ~~**GenAI reflection**~~ in report section 5.4 (done 2026-11-05, 237 words; the whole
+   Word document is now 4,945 words). Not in docs/genai_use.md (the author's choice);
+   its placeholder section 6 was removed
 2. **Title page** of the report: name, student number, date; then export again
    (`python -m tools.export_report`) and tick the Report item in section "Assignment"
 3. **Presentation:** practise the Q&A (docs/qa_practice.md), rehearse the demo
@@ -221,8 +221,10 @@ documentation, AI-driven automation (KVK agent).
       results were checked, advantages, risks with 7 real incidents and how each was
       caught, general risks (understanding, confidentiality: no insurer data shared,
       reliability, over-reliance, licensing). Every commit except GitHub's placeholder credits Claude
-- [ ] **Author's own reflection** in docs/genai_use.md section 6 (only the author can
-      write it)
+- [x] **Author's own reflection** (2026-11-05): in the report, section 5.4 (learning
+      to build an AI agent and to use Docker and Docker Compose; the project's size
+      and speed; feeling more a manager than a coder, checking the work; use at work;
+      next time GitHub Spec Kit). Not repeated in docs/genai_use.md (author's choice)
 - [x] **Review by a second AI assistant** (2026-10-26, asked by the author), all points
       handled: (1) **backtest** of the risk index (`tools/backtest_risk.py`, gold's
       README): *higher*/*lower* held a year later in 440 of 440 cases; the trend doesn't
