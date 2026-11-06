@@ -38,7 +38,11 @@ Four things, about 20 minutes, in this order:
    the author's, how the output was checked, and eight real mistakes that were caught.
 
 To see it running: the [dashboard](#the-dashboard) (`streamlit run dashboard/app.py`) on
-the page *Risk index*. Everything else below is reference.
+the page *Risk index*. To look inside: the **lakehouse viewer** (every table with its data
+quality, `python -m tools.lakehouse_viewer`) and the **lineage explorer** (where every
+column comes from, `docs/lineage_explorer.html`, opened in a browser); how to use both is
+in [INSTRUCTIONS.md, section 4](INSTRUCTIONS.md#4-look-at-the-results). Everything else
+below is reference.
 
 | Document | What it's for |
 |---|---|

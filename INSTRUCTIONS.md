@@ -141,9 +141,48 @@ finished by the next one.
 `inspect_lakehouse` exits with code 1 when it finds problems. The viewer and the
 dashboard keep running until Ctrl+C; both can run at the same time.
 
-The column lineage (where every silver and gold column comes from) is in
-[docs/lineage_explorer.html](docs/lineage_explorer.html) (open it in a browser, works
-offline) and [docs/lineage.md](docs/lineage.md).
+### The lakehouse viewer: every table, with data quality
+
+Needs data in the lakehouse (run the pipeline first, section 2). Start it, then open the
+address it prints:
+
+```bash
+.venv/bin/python -m tools.lakehouse_viewer       # http://localhost:8502, stop with Ctrl+C
+```
+
+In the sidebar, choose a **layer** (bronze, silver, gold, other), a **table**, a
+**version** (older versions too, Delta time travel) and a **view**:
+
+- **Rows**: the rows, with a text filter on one column that searches the whole table.
+- **Data quality**: per column how complete it is, text with padding spaces (normal in
+  bronze, 0 in silver), distinct values, min/max, the most common value; the flag
+  columns' counts; duplicate rows and duplicate keys. Computed on the whole table: the
+  KVK tables (1.9 million rows) take about 13 seconds the first time, then it is cached.
+- **History**: one line per write to the table.
+
+The viewer only reads; it never changes a table. It is reachable from this machine only.
+
+### The lineage explorer: where every column comes from
+
+A single web page, [docs/lineage_explorer.html](docs/lineage_explorer.html), that works
+offline and needs no data. Open it **in a browser**; clicking the link in VS Code or on
+GitHub shows its HTML source instead of the page:
+
+```bash
+xdg-open docs/lineage_explorer.html              # Linux (macOS: open, Windows: start)
+```
+
+or double-click the file in the file manager. Then pick a gold or silver column, or a
+bronze field, in the list on the left (or search for it). The diagram shows **left**
+where it comes from, back to the bronze fields, and **right** every column that depends
+on it; click a box to follow the path. The address bar keeps the chosen column, so a link
+opens it directly, for example
+`docs/lineage_explorer.html#gold:gold_risk_index.relative_risk` (add the part from `#` to
+the address in the browser).
+
+The same lineage as tables and static diagrams: [docs/lineage.md](docs/lineage.md) and
+[docs/lineage.html](docs/lineage.html). All three are generated from `tools/lineage.py`:
+after changing the lineage there, run `.venv/bin/python -m tools.lineage`.
 
 ## 5. Run it automatically: Dagster
 
