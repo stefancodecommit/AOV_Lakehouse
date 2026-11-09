@@ -55,7 +55,9 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from pathlib import Path
 
-from checks.kvk import check_file, iter_rows as _iter_rows, sha256 as _sha256
+from checks.kvk import check_file
+from checks.kvk import iter_rows as _iter_rows
+from checks.kvk import sha256 as _sha256
 from pipeline.common.config import project_path, settings
 
 # --------------------------------------------------------------------------- config
@@ -327,7 +329,6 @@ def write_batch(v: Verification, batch_id: str, now: datetime) -> int:
     remove_orphan_rows()
     seen: set[str] = set()
     cols = [_clean_name(h, seen) for h in v.header]
-    meta = ["_batch_id", "_ingested_at", "_source_file", "_source_sha256", "_row_number"]
     schema = pa.schema([pa.field(c, pa.string()) for c in cols] + [
         pa.field("_batch_id", pa.string()), pa.field("_ingested_at", pa.timestamp("us", tz="UTC")),
         pa.field("_source_file", pa.string()), pa.field("_source_sha256", pa.string()),
@@ -409,6 +410,7 @@ def backfill_file_dates(inbox: Path | None = None) -> dict[str, str]:
         return {}
     import pyarrow as pa
     from deltalake import DeltaTable, write_deltalake
+
     from checks.kvk import FileCheck, find_csv
     table = DeltaTable(str(LOG_TABLE)).to_pyarrow_table()
     rows = table.to_pylist()

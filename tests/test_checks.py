@@ -1,16 +1,14 @@
 """checks/: the CBS record checks and the quarantine folder, without the pipeline."""
 import json
+from datetime import datetime, timezone
 
 import pytest
 
-from datetime import datetime, timezone
-
 from checks import all_passed, failures, warnings
-from checks.cbs import (check_metadata, check_table_lifecycle, check_typed_dataset,
-                        table_structure)
-from conftest import table_info
+from checks.cbs import check_metadata, check_table_lifecycle, check_typed_dataset, table_structure
 from checks.kvk import check_file, check_rows, match_columns
 from checks.quarantine import list_entries, quarantine
+from conftest import table_info
 
 DP = [{"Type": "Dimension", "Key": "Bedrijfskenmerken"},
       {"Type": "Dimension", "Key": "Marges"},

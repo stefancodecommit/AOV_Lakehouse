@@ -807,6 +807,17 @@ Later, as each part is built:
       same. The Docker image had pandas 3.0.6 and still the code from before the
       reorganisation; rebuilt (`docker compose build`): new layout, pandas 2.3.3
 
+- [x] **Linter** (2026-11-09): Ruff 0.17.2 (pinned in requirements-dev.txt, settings
+      in pyproject.toml): Ruff's defaults (errors, undefined/unused names), bug patterns
+      (B) and import order (I); B905 (zip strict) left out on purpose. First run: no
+      real bugs; fixed 4 unused imports, 1 unused variable (kvk_agent), import order in
+      26 files, `raise SystemExit(1) from None` (3), and in the tests a shadowed import,
+      two mutable-default counters, two lambdas, mid-file imports. GitHub Actions runs
+      `ruff check .` before the tests. Checked: 402 tests, Dagster validate, lineage
+      docs unchanged, every module imports
+- [ ] Later: `ruff format` (would rewrite 53 of 66 files: after the deadline), the
+      line-length rule (133 long lines), and a type checker (mypy)
+
 ### pandas 3 (to do)
 - [ ] Make the code work with pandas 3 (text columns are Arrow strings by default), then
       raise the pin in requirements.txt and regenerate constraints.txt. Known so far, in

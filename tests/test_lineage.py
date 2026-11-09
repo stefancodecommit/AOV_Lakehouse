@@ -6,13 +6,15 @@ from pathlib import Path
 
 import pytest
 
+from conftest import sample_bronze
 from pipeline.bronze import cbs as b
+from pipeline.bronze import reference as r
 from pipeline.gold import build as g
 from pipeline.silver import kvk as k
+from test_kvk_silver import COLUMNS as KVK_HEADER
+from test_kvk_silver import CROSSWALK
+from test_kvk_silver import bronze as kvk_bronze
 from tools import lineage as L
-from pipeline.bronze import reference as r
-from conftest import sample_bronze
-from test_kvk_silver import COLUMNS as KVK_HEADER, CROSSWALK, bronze as kvk_bronze
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -174,6 +176,7 @@ def test_overview_links_every_silver_table():
 def test_dagster_shows_the_lineage():
     sys.path.insert(0, str(ROOT / "orchestration"))
     import dagster as dg
+
     import definitions as d
     meta = d.silver_cbs.specs_by_key[dg.AssetKey("silver_cbs")].metadata
     deps = meta["dagster/column_lineage"].deps_by_column

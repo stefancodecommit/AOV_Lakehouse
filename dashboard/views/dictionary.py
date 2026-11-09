@@ -8,7 +8,6 @@ written here.
 import pandas as pd
 import streamlit as st
 
-import common
 import data
 
 DESCRIPTIONS = {

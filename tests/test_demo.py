@@ -6,8 +6,8 @@ from urllib.parse import parse_qs, urlparse
 
 from streamlit.testing.v1 import AppTest
 
-from tools import demo, lineage
 from pipeline.bronze import kvk_agent
+from tools import demo, lineage
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "orchestration"))
@@ -56,10 +56,10 @@ def demo_layers():
 
 
 def test_a_link_opens_one_sector_on_the_risk_page():
-    from test_dashboard import APP
-    from test_gold import F, V, SETTINGS, risk_inputs
     from pipeline.common import publish
     from pipeline.gold import build as g
+    from test_dashboard import APP
+    from test_gold import SETTINGS, F, V, risk_inputs
     t = risk_inputs({"total": [5.0] * 8, "Q": [7.0] * 8, "I": [3.0] * 8}, [F] * 6 + [V, V])
     for name, df in {"gold_risk_index": g.build_risk_index(t, SETTINGS),
                      "gold_risk_index_history": g.build_risk_index_history(t)}.items():

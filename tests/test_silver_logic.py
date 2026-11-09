@@ -4,8 +4,8 @@ from datetime import date
 import pandas as pd
 import pytest
 
-from pipeline.silver import cbs as s
 from conftest import INGESTED_AT, raw
+from pipeline.silver import cbs as s
 
 
 # =========================================================================== parsers

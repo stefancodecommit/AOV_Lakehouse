@@ -5,12 +5,11 @@ import sys
 import pandas as pd
 import pytest
 
-from pipeline.silver import cbs as s
+from pipeline.common import publish, runlog
 from pipeline.gold import build as g
-from tools import inspect_lakehouse
-from pipeline.common import publish
-from pipeline.common import runlog
+from pipeline.silver import cbs as s
 from test_delta import bronze_delta  # noqa: F401  (fixture)
+from tools import inspect_lakehouse
 
 F, V = "Definitief", "Voorlopig"
 
@@ -188,7 +187,6 @@ def test_gold_fails_when_silver_is_missing():
 
 def test_gold_reads_only_the_latest_kvk_snapshot_and_the_columns_it_needs():
     """kvk_company is large: gold reads seven columns of the latest snapshot only."""
-    import pyarrow as pa
     rows = pd.DataFrame({"snapshot_date": [pd.Timestamp("2026-10-01").date()] * 3,
                          "batch_id": ["old", "new", "new"], "is_latest": [False, True, True],
                          "is_active": [True, True, False], "start_date": [None] * 3,

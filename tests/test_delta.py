@@ -9,11 +9,13 @@ import pyarrow as pa
 import pytest
 from deltalake import DeltaTable
 
-from pipeline.bronze import cbs as b
-from pipeline.silver import cbs as s
-from pipeline.bronze import reference as r
 from conftest import CROSSWALK_BATCH, INGESTED_AT, sample_bronze, sample_crosswalk, table_info
+from pipeline.bronze import cbs as b
+from pipeline.bronze import reference as r
+from pipeline.common import publish, runlog
+from pipeline.silver import cbs as s
 from test_bronze_logic import periods
+from tools import inspect_lakehouse
 
 Endpoint = b.Endpoint
 ABSENCE = Endpoint("80072NED", "TypedDataSet", split_by_period=True)
@@ -187,9 +189,9 @@ def test_done_keys_is_empty_without_a_log():
 
 def test_done_keys_reads_back_what_log_success_wrote():
     reqs = [period_request("2025KW04", "Definitief"), period_request("2026KW01", "Voorlopig")]
-    for r in reqs:
-        b.log_success(r, row_count=39, pages=1)
-    assert b.done_keys() == {r.key for r in reqs}
+    for req in reqs:
+        b.log_success(req, row_count=39, pages=1)
+    assert b.done_keys() == {req.key for req in reqs}
     log = DeltaTable(str(b.LOG_TABLE)).to_pandas()
     assert list(log.row_count) == [39, 39] and set(log.period) == {"2025KW04", "2026KW01"}
 
@@ -390,8 +392,8 @@ def test_cleanup_scope_removes_tables_no_longer_configured(cbs_api, monkeypatch)
 
 
 def test_cleanup_scope_leaves_kvk_and_reference_alone(tmp_path):
-    from deltalake import write_deltalake
     import pyarrow as pa
+    from deltalake import write_deltalake
     write_deltalake(str(b.BRONZE_ROOT / "kvk" / "basis_bedrijfsgegevens"), pa.table({"a": [1]}))
     write_deltalake(str(b.BRONZE_ROOT / "reference" / "sbi2008_sbi2025"), pa.table({"a": [1]}))
     assert b.cleanup_scope(session=object(), dry_run=False) == []
@@ -399,9 +401,6 @@ def test_cleanup_scope_leaves_kvk_and_reference_alone(tmp_path):
 
 
 # =========================================================================== silver runs and run log
-from tools import inspect_lakehouse  # noqa: E402
-from pipeline.common import publish  # noqa: E402
-from pipeline.common import runlog  # noqa: E402
 
 
 def run_ids(name):
@@ -463,8 +462,9 @@ def test_empty_optional_table_is_skipped(bronze_delta, monkeypatch):
 def test_staging_failure_leaves_live_tables_untouched(bronze_delta, monkeypatch):
     first = s.run()
     real = publish.write_table
+    calls = []
 
-    def fail_on_fifth(path, df, calls=[]):
+    def fail_on_fifth(path, df):
         calls.append(path)
         if len(calls) == 5:
             raise OSError("disk full")
@@ -481,8 +481,9 @@ def test_staging_failure_leaves_live_tables_untouched(bronze_delta, monkeypatch)
 def test_publish_stopping_halfway_is_logged_and_detected(bronze_delta, monkeypatch):
     first = s.run()
     real = publish._overwrite
+    calls = []
 
-    def fail_on_third(path, table, calls=[]):
+    def fail_on_third(path, table):
         if "_staging" not in str(path):           # count only writes to live tables
             calls.append(path)
             if len(calls) == 3:

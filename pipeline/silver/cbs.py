@@ -57,7 +57,6 @@ import json
 import logging
 import re
 from datetime import date
-from pathlib import Path
 
 import pandas as pd
 
@@ -699,6 +698,7 @@ def run() -> str:
     """Build, stage, publish and log one silver CBS run (pipeline/common/publish.py). Returns the run_id;
     raises (after logging the failed run) when something went wrong."""
     from functools import partial
+
     from pipeline.common.publish import run_pipeline
 
     def build(inputs: dict) -> dict:
@@ -725,7 +725,7 @@ def main() -> None:
     try:
         run()
     except Exception:
-        raise SystemExit(1)
+        raise SystemExit(1) from None      # already logged by the run; exit code 1 only
 
 
 if __name__ == "__main__":

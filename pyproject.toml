@@ -1,0 +1,28 @@
+# Settings for the linter, Ruff (https://docs.astral.sh/ruff/). The project isn't a
+# package: this file only configures tools. Run from the project folder:
+#   .venv/bin/ruff check .          # what Ruff finds
+#   .venv/bin/ruff check --fix .    # fix what it can fix safely (e.g. import order)
+# GitHub Actions runs `ruff check .` before the tests (.github/workflows/tests.yml).
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"                 # Python 3.11 or newer (README, Setup)
+extend-exclude = [".venv-*", "build", "lakehouse", "inbox", "backups"]
+# Folders whose modules are this project's own, so the import order puts them last:
+# the dashboard and the tests import their neighbours by name (common, data, conftest)
+src = [".", "dashboard", "tests", "orchestration"]
+
+[tool.ruff.lint]
+# E4, E7, E9, F: Ruff's defaults (errors, undefined and unused names)
+# B: common bug patterns (flake8-bugbear)
+# I: import order (isort)
+select = ["E4", "E7", "E9", "F", "B", "I"]
+ignore = [
+    # zip() without strict=: adding strict=True changes behaviour (it raises on unequal
+    # lengths), so not changed in bulk; the zips here pair lists of equal length
+    "B905",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# pytest fixtures are imported to be used as arguments, which looks like a redefinition
+"tests/*" = ["F811"]

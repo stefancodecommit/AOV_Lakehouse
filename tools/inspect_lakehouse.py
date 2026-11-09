@@ -69,8 +69,8 @@ def summarize(path: Path) -> dict:
     """Facts about one Delta table for the overview: rows, version, first/last period,
     latest ingest, and notes (batches, unknown keys, provisional rows). It reads only
     the columns it needs, so even the 1.9M-row KVK table is quick."""
-    from deltalake import DeltaTable
     import pyarrow.compute as pc
+    from deltalake import DeltaTable
 
     dt = DeltaTable(str(path))
     ds = dt.to_pyarrow_dataset()
@@ -134,6 +134,7 @@ def silver_run_problems(root: Path, pipeline: str = "silver_cbs") -> tuple[list[
     pipeline's latest successful run published (silver or gold)."""
     import pyarrow.compute as pc
     from deltalake import DeltaTable
+
     from pipeline.common import runlog
     runs = runlog.read_runs(root / "_run_log")
     runs = runs[runs["pipeline"] == pipeline]
@@ -177,7 +178,9 @@ def silver_run_problems(root: Path, pipeline: str = "silver_cbs") -> tuple[list[
 def lifecycle_warnings(bronze: Path) -> list[str]:
     """Lifecycle warnings from the newest TableInfos snapshot of each CBS table."""
     import json
+
     from deltalake import DeltaTable
+
     from checks import warnings
     from checks.cbs import check_table_lifecycle
     out = []

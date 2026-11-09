@@ -6,9 +6,9 @@ from pathlib import Path
 import dagster as dg
 import pytest
 
+from conftest import table_info
 from pipeline.bronze import cbs as b
 from pipeline.common import publish
-from conftest import table_info
 from test_bronze_logic import DP_81589_FULL, business_record, periods
 from test_delta import bronze_delta  # noqa: F401  (fixture)
 
@@ -87,9 +87,10 @@ def test_cbs_bronze_materialises_only_when_something_is_new(fake_cbs):
 def test_kvk_bronze_needs_the_file_name_typed_as_confirmation(tmp_path):
     from test_kvk_logic import inbox_zip
     inbox_zip("kvk.zip")
-    run = lambda confirm: dg.materialize(
-        [d.kvk_bronze], raise_on_error=False,
-        run_config={"ops": {"kvk_bronze": {"config": {"confirm_file_name": confirm}}}})
+    def run(confirm):
+        return dg.materialize(
+            [d.kvk_bronze], raise_on_error=False,
+            run_config={"ops": {"kvk_bronze": {"config": {"confirm_file_name": confirm}}}})
     assert not run("YES").success
     ok = run("kvk.zip")
     assert ok.success and keys(ok) == ["kvk_bronze"]
@@ -109,8 +110,8 @@ def test_silver_and_gold_with_their_checks(bronze_delta, monkeypatch):   # noqa:
 
 
 def test_failing_blocking_check_stops_gold(bronze_delta, monkeypatch):   # noqa: F811
-    from checks import CheckResult
     import checks.layers as layers
+    from checks import CheckResult
     real = layers.check_silver_cbs
     monkeypatch.setattr(layers, "check_silver_cbs", lambda t: [
         r if r.name != "unique_keys" else CheckResult("unique_keys", False, "duplicates")
@@ -212,8 +213,8 @@ def test_without_registration_silver_never_starts(bronze_delta):   # noqa: F811
 
 def test_failed_blocking_check_stops_automation(bronze_delta, monkeypatch):   # noqa: F811
     """Gold needs new silver data AND passing blocking checks on all its inputs."""
-    from checks import CheckResult
     import checks.layers as layers
+    from checks import CheckResult
     instance = dg.DagsterInstance.ephemeral()
     for key in ("cbs_bronze", "sbi_crosswalk", "kvk_bronze"):
         instance.report_runless_asset_event(dg.AssetMaterialization(key))
@@ -260,9 +261,11 @@ def test_dagster_command_runs_a_step_in_its_own_process(bronze_delta, tmp_path):
 
 
 def test_kvk_freshness_uses_the_file_date_when_known():
-    import pyarrow as pa
     from datetime import date
+
+    import pyarrow as pa
     from deltalake import write_deltalake
+
     from pipeline.bronze import kvk_agent
     ts = pa.array([__import__("pandas").Timestamp("2026-10-05", tz="UTC")] * 1, pa.timestamp("us", tz="UTC"))
     write_deltalake(str(kvk_agent.LOG_TABLE), pa.table({

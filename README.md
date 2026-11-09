@@ -516,6 +516,7 @@ A misspelled setting name stops the script with an error instead of being ignore
 ```bash
 .venv/bin/pytest              # 402 tests, ~85 s, no internet needed
 .venv/bin/pytest -m live      # one extra test against the real CBS API
+.venv/bin/ruff check .        # the linter (settings in pyproject.toml); CI runs it too
 ```
 
 The tests use small samples copied from real CBS and KVK responses, and write real Delta

@@ -7,10 +7,10 @@ import pandas as pd
 import pytest
 from streamlit.testing.v1 import AppTest
 
-from pipeline.silver import cbs as s
-from pipeline.gold import build as g
-from pipeline.common import publish
 from conftest import dashboard_data as data
+from pipeline.common import publish
+from pipeline.gold import build as g
+from pipeline.silver import cbs as s
 from test_delta import bronze_delta  # noqa: F401  (fixture)
 
 APP = str(Path(__file__).resolve().parents[1] / "dashboard" / "app.py")
@@ -112,8 +112,9 @@ def test_pages_warn_when_gold_tables_come_from_different_runs(gold_lakehouse):
 
 def test_logo_when_the_file_exists_otherwise_the_note(tmp_path, monkeypatch):
     """st.logo isn't part of the page tree AppTest inspects, so calls to it are recorded."""
-    from pipeline.common import config
     import streamlit
+
+    from pipeline.common import config
     calls = []
     monkeypatch.setattr(streamlit, "logo", lambda image, **kw: calls.append(image))
     monkeypatch.setitem(config.settings, "dashboard", {
@@ -130,9 +131,10 @@ def test_logo_when_the_file_exists_otherwise_the_note(tmp_path, monkeypatch):
 
 
 def test_dark_logo_in_dark_mode(tmp_path, monkeypatch):
+    import streamlit
+
     import charts
     from pipeline.common import config
-    import streamlit
     calls = []
     monkeypatch.setattr(streamlit, "logo", lambda image, **kw: calls.append(image))
     monkeypatch.setattr(charts, "theme_mode", lambda: "dark")
@@ -147,7 +149,7 @@ def test_dark_logo_in_dark_mode(tmp_path, monkeypatch):
 def test_risk_page_shows_the_analyst_what_is_above_national_and_rising():
     """A risk index over 8 quarters (the sample data has too few): the page counts the
     groups above national and rising, names the rising ones and explains the chosen one."""
-    from test_gold import F, V, risk_inputs, SETTINGS
+    from test_gold import SETTINGS, F, V, risk_inputs
     t = risk_inputs({"total": [5.0] * 8, "Q": [7.0] * 8, "I": [3.0] * 8,
                      "S": [5.0 * (0.85 + 0.02 * i) for i in range(8)]}, [F] * 6 + [V, V])
     for name, df in {"gold_risk_index": g.build_risk_index(t, SETTINGS),
@@ -170,7 +172,7 @@ def test_dashboard_is_reachable_from_this_machine_only():
     """Requirement NFR-13: started locally, Streamlit listens on 127.0.0.1 only (its default
     is every network interface); in Docker the port is published on 127.0.0.1 only."""
     try:
-        import tomllib                       # Python 3.11+
+        import tomllib  # Python 3.11+
     except ModuleNotFoundError:              # Python 3.10
         import tomli as tomllib
     import yaml

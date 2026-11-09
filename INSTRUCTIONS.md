@@ -350,7 +350,13 @@ run; a quarantined KVK file is checked again when you load it again.
 .venv/bin/pytest tests/test_gold.py           # one file
 .venv/bin/pytest -m live                      # the one test that calls the real CBS API
 .venv/bin/python -m tools.lineage             # regenerate docs/lineage.md, .html and the explorer
+.venv/bin/ruff check .                        # the linter: errors, bug patterns, import order
+.venv/bin/ruff check --fix .                  # fix what it can fix safely
 ```
+
+GitHub Actions runs `ruff check .` before the tests; its settings (which rules, and why
+some are left out) are in `pyproject.toml`. The formatter (`ruff format`) is not used
+yet: it would rewrite most files.
 
 After changing a silver or gold column, regenerate the lineage: a test fails until
 `tools/lineage.py` describes the new column.

@@ -63,18 +63,6 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))   # the project's modules
 
-from pipeline.bronze import cbs as cbs_bronze  # noqa: E402
-from pipeline.silver import cbs as cbs_silver  # noqa: E402
-from pipeline.gold import build as gold_layer  # noqa: E402
-from pipeline.bronze import kvk_agent as kvk_bronze_agent  # noqa: E402
-from pipeline.silver import kvk as kvk_silver  # noqa: E402
-from tools import lineage  # noqa: E402
-from tools import backup  # noqa: E402
-from tools import maintenance  # noqa: E402
-from pipeline.bronze import reference as reference_bronze  # noqa: E402
-from checks import CheckResult  # noqa: E402
-from pipeline.common.config import settings  # noqa: E402
-
 # Dagster runs each step in its own process and restores Python's search path after
 # loading this file, so the project folder added above is gone by the time a step
 # runs. The scripts import some modules inside functions (late, when needed); importing
@@ -85,8 +73,23 @@ import checks.freshness  # noqa: E402,F401
 import checks.kvk  # noqa: E402,F401
 import checks.layers  # noqa: E402,F401
 import checks.quarantine  # noqa: E402,F401
-from pipeline.common import publish  # noqa: E402,F401
-from pipeline.common import runlog  # noqa: E402,F401
+from checks import CheckResult  # noqa: E402
+from pipeline.bronze import cbs as cbs_bronze  # noqa: E402
+from pipeline.bronze import kvk_agent as kvk_bronze_agent  # noqa: E402
+from pipeline.bronze import reference as reference_bronze  # noqa: E402
+from pipeline.common import (
+    publish,  # noqa: E402,F401
+    runlog,  # noqa: E402,F401
+)
+from pipeline.common.config import settings  # noqa: E402
+from pipeline.gold import build as gold_layer  # noqa: E402
+from pipeline.silver import cbs as cbs_silver  # noqa: E402
+from pipeline.silver import kvk as kvk_silver  # noqa: E402
+from tools import (
+    backup,  # noqa: E402
+    lineage,  # noqa: E402
+    maintenance,  # noqa: E402
+)
 
 WRITE = {"lakehouse": "write"}       # see dagster.yaml: one writing run at a time
 # rebuild after new upstream data, but only when every upstream blocking check passed
@@ -191,8 +194,8 @@ def gold() -> dg.MaterializeResult:
 
 # =========================================================================== checks
 def _read(root: Path, names) -> dict:
-    from deltalake import DeltaTable
     import pandas as pd
+    from deltalake import DeltaTable
     return {n: (DeltaTable(str(root / n)).to_pandas() if (root / n / "_delta_log").exists()
                 else pd.DataFrame()) for n in names}
 
@@ -252,6 +255,7 @@ def kvk_fresh() -> dg.AssetCheckResult:
 def bronze_cbs_state() -> tuple[dict[str, str], set[str]]:
     """(table_id -> newest period in bronze, tables CBS has stopped) for the freshness check."""
     from deltalake import DeltaTable
+
     from checks import warnings
     from checks.cbs import check_table_lifecycle
     latest, stopped = {}, set()

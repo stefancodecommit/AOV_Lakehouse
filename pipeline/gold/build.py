@@ -94,6 +94,7 @@ def read_silver(names: list[str], inputs: dict | None = None,
     tables are new and some old. Combining them could pair, for example, a new fact
     table with an old dimension, so gold refuses and asks for a silver rerun."""
     from deltalake import DeltaTable
+
     from pipeline.common.publish import RunFailed
     out, run_ids = {}, {}
     for name in names:
@@ -586,7 +587,7 @@ def main() -> None:
     try:
         run()
     except Exception:
-        raise SystemExit(1)
+        raise SystemExit(1) from None      # already logged by the run; exit code 1 only
 
 
 if __name__ == "__main__":

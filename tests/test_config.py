@@ -96,6 +96,7 @@ def test_exit_pause_prevents_the_deltalake_crash_at_exit(tmp_path):
     table and exits right away aborts in about half of all runs (exit code 134)."""
     import subprocess
     import sys
+
     import pyarrow as pa
     from deltalake import write_deltalake
     write_deltalake(str(tmp_path / "t"), pa.table({"v": list(range(1000))}))

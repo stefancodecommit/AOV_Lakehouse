@@ -5,12 +5,12 @@ from datetime import datetime, timedelta, timezone
 
 import pandas as pd
 
-from pipeline.bronze import cbs as b
-from tools import maintenance as m
 from checks.quarantine import cleanup, list_entries, quarantine
-from test_delta import ABSENCE, DP_80072, records
 from conftest import table_info
+from pipeline.bronze import cbs as b
 from test_bronze_logic import periods
+from test_delta import ABSENCE, DP_80072, records
+from tools import maintenance as m
 
 NOW = datetime(2026, 10, 5, 12, tzinfo=timezone.utc)
 
@@ -34,7 +34,8 @@ def test_cleanup_removes_resolved_and_old_keeps_recent(tmp_path):
     entry_at(tmp_path, "recent", NOW - timedelta(days=10))
     entry_at(tmp_path, "old", NOW - timedelta(days=91))
     entry_at(tmp_path, "fixed", NOW - timedelta(days=1))
-    resolved = lambda e: "resolved: fixed" if e["name"] == "fixed" else None
+    def resolved(e):
+        return "resolved: fixed" if e["name"] == "fixed" else None
     removed = cleanup(tmp_path, resolved, 90, now=NOW)
     assert sorted(r for _, r in removed) == ["older than 90 days (91 days)", "resolved: fixed"]
     assert names(tmp_path) == ["recent"]

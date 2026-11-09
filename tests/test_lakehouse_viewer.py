@@ -8,8 +8,8 @@ from streamlit.testing.v1 import AppTest
 
 from pipeline.bronze import cbs as b
 from pipeline.silver import cbs as s
-from tools import lakehouse_viewer as v
 from test_delta import ABSENCE, period_request, records
+from tools import lakehouse_viewer as v
 
 APP = str(Path(__file__).resolve().parents[1] / "tools/lakehouse_viewer.py")
 

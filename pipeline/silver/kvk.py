@@ -405,6 +405,7 @@ def lean_memory() -> None:
     a run's peak still grew with the number of snapshots; with it, it stays flat. Arrow
     uses the system allocator, and glibc keeps at most 2 memory arenas (no-op elsewhere)."""
     import ctypes
+
     import pyarrow as pa
     pa.set_memory_pool(pa.system_memory_pool())
     try:
@@ -423,6 +424,7 @@ def _write_snapshot(path, batch_id: str, latest: str, crosswalk: pd.DataFrame, r
     from files, and one write call per snapshot keeps the libraries from holding on to
     memory in proportion to everything written."""
     import shutil
+
     from deltalake import DeltaTable, write_deltalake
     staging = SILVER_ROOT / "_staging" / run_id
     snap = _snapshot(batch_id, latest, crosswalk, run_id, schema)
@@ -478,6 +480,7 @@ def _write_incremental(path, plan: Plan, crosswalk: pd.DataFrame, run_id: str) -
 def _last_success_inputs() -> tuple[dict | None, set[str]]:
     """Inputs of the last successful silver KVK run, and the run_ids of all successful ones."""
     import json
+
     from pipeline.common import runlog
     runs = runlog.read_runs(RUN_LOG)
     ok = runs[(runs["pipeline"] == PIPELINE) & (runs["status"] == "success")]
@@ -490,7 +493,9 @@ def run(full: bool = False) -> str:
     """Bring silver kvk_company in line with bronze KVK and log the run (lakehouse/_run_log).
     Incremental unless a full rebuild is needed or asked for (`full`). Returns the run_id."""
     from datetime import datetime, timezone
+
     from deltalake import DeltaTable
+
     from pipeline.common import runlog
     from pipeline.common.publish import RunFailed
     lean_memory()
@@ -562,7 +567,7 @@ def main() -> None:
     try:
         run(full=args.full)
     except Exception:
-        raise SystemExit(1)
+        raise SystemExit(1) from None      # already logged by the run; exit code 1 only
 
 
 if __name__ == "__main__":

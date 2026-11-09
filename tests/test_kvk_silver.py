@@ -7,11 +7,10 @@ import pyarrow as pa
 import pytest
 from deltalake import DeltaTable, write_deltalake
 
-from tools import inspect_lakehouse
-from pipeline.silver import kvk as k
-from pipeline.common import publish
-from pipeline.common import runlog
 from checks import layers
+from pipeline.common import publish, runlog
+from pipeline.silver import kvk as k
+from tools import inspect_lakehouse
 
 # A small crosswalk with each case (real codes from v2.0 where possible):
 #   01110, 64210 (2025) <- one 2008 code           1:1

@@ -35,6 +35,9 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements-dev.txt
 
+      - name: Lint (Ruff; settings in pyproject.toml)
+        run: ruff check .
+
       - name: Run tests
         run: pytest -m "not live"            # live CBS tests stay off in CI
 

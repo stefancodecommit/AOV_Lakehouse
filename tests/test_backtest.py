@@ -1,7 +1,7 @@
 """Backtest of the risk index (tools/backtest_risk.py) on series with a known answer."""
 import pytest
 
-from test_gold import F, SETTINGS, V, risk_inputs
+from test_gold import SETTINGS, F, V, risk_inputs
 from tools import backtest_risk as bt
 
 

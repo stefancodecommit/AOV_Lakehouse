@@ -371,8 +371,8 @@ def bronze_table(req: "Request", records: list[dict], now: datetime,
 def _fit_to_table(path: Path, table):
     """Cast new rows to the types an existing table already has for the same columns,
     so a batch can't change a column's type; new fields become new columns (merge)."""
-    from deltalake import DeltaTable
     import pyarrow as pa
+    from deltalake import DeltaTable
     if not (path / "_delta_log").exists():
         return table
     existing = pa.schema(DeltaTable(str(path)).schema().to_arrow())
@@ -518,6 +518,7 @@ def cleanup_scope(session=None, dry_run: bool = True) -> list[str]:
     """Remove bronze tables, rows and log entries outside the configuration.
     Returns a description of every action (done, or with dry_run only planned)."""
     import shutil
+
     from deltalake import DeltaTable
     actions: list[str] = []
     log_dt = DeltaTable(str(LOG_TABLE)) if (LOG_TABLE / "_delta_log").exists() else None
@@ -577,7 +578,6 @@ def rebuild_columns(dry_run: bool = False) -> list[str]:
     change in how fields are typed. Each table is overwritten as a whole (a new Delta
     version; the old one stays readable through time travel). The lineage columns,
     raw_json and the ingestion log are left as they are. Returns the tables done."""
-    import pyarrow as pa
     from deltalake import DeltaTable, write_deltalake
     fixed_names = bronze_schema().names
     done = []

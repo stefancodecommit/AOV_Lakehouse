@@ -98,6 +98,7 @@ def to_html(markdown_text: str, workdir: Path) -> str:
 
     def diagram(match: re.Match) -> str:
         import io
+
         from PIL import Image
         png = render_diagram(match.group(1), workdir)
         w, h = Image.open(io.BytesIO(png)).size
