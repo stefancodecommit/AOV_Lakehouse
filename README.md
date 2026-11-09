@@ -31,7 +31,7 @@ Four things, about 20 minutes, in this order:
    *lower* verdict held a year later in all 440 cases; the trend describes, it doesn't
    predict).
 3. **Proof that it works**: [the six phases, each with its README](#the-six-phases-each-with-its-readme),
-   [`tests/README.md`](tests/README.md) (397 tests, run by GitHub Actions on every push,
+   [`tests/README.md`](tests/README.md) (402 tests, run by GitHub Actions on every push,
    plus a weekly vulnerability scan) and [`docs/requirements.md`](docs/requirements.md)
    (every requirement with its status and the test that verifies it).
 4. **How GenAI was used**: [`docs/genai_use.md`](docs/genai_use.md): which decisions were
@@ -233,6 +233,7 @@ Useful options:
 | `python -m tools.lakehouse_viewer` | Browse every bronze, silver and gold table at http://localhost:8502: rows (with a text filter over the whole table), data quality statistics, history, older versions |
 | `python -m tools.maintenance quarantine --dry-run` | Show which quarantine entries the monthly cleanup would remove |
 | `python -m tools.backtest_risk` | Backtest the risk index: do *higher* / *lower* verdicts and trends still hold a year later? |
+| `python -m tools.demo` | The live demo with one command: starts the dashboard, the lakehouse viewer and Dagster, and opens a start page with a button per demo step; Ctrl+C stops all three |
 | `python -m tools.backup create`, `... list`, `... verify`, `... restore <archive> --to <folder>` | Back up `lakehouse/` and `inbox/kvk/`, verified; restore only into an empty folder ([INSTRUCTIONS.md](INSTRUCTIONS.md#7-maintenance-and-repairs)) |
 
 ## Running it automatically: Dagster
@@ -462,6 +463,7 @@ instance settings (one writing run at a time).
 | `tools/lakehouse_viewer.py` | Small Streamlit app to look at any Delta table, any version, read-only; its *Data quality* view shows per column how complete it is, padded text, distinct values, min/max and the most common value, the flags' true counts, duplicate rows and duplicate keys |
 | `tools/maintenance.py` | Monthly maintenance: quarantine cleanup, KVK retention, personal data in the KVK upload log, Delta optimize/vacuum |
 | `tools/backup.py` | Backup of `lakehouse/` and `inbox/kvk/` as one verified archive; restore into an empty folder |
+| `tools/demo.py` | The demo launcher: starts the three web apps, waits until they answer, writes and opens `build/demo_start.html` (a button per step of docs/demo.md), stops them on Ctrl+C |
 | `tools/backtest_risk.py` | Backtest of the risk index: builds it for earlier quarters with only the figures known then, and checks the verdicts against the next year (final figures only) |
 
 ## What ends up in `lakehouse/`
@@ -512,7 +514,7 @@ A misspelled setting name stops the script with an error instead of being ignore
 ## Tests
 
 ```bash
-.venv/bin/pytest              # 397 tests, ~85 s, no internet needed
+.venv/bin/pytest              # 402 tests, ~85 s, no internet needed
 .venv/bin/pytest -m live      # one extra test against the real CBS API
 ```
 
@@ -535,6 +537,7 @@ when the pins or the Dockerfile change, and weekly.
 | `test_gold.py` | Gold comparisons and tables, end to end from bronze to gold |
 | `test_config.py`, `test_maintenance.py` | Configuration overrides, quarantine cleanup, KVK retention, personal data in the KVK upload log, Delta vacuum |
 | `test_backup.py` | Backup and restore: contents, Delta logs archived first, verification finds a missing file, rotation, restore only into an empty folder |
+| `test_demo.py` | The demo launcher: every start-page button leads to a page, asset, table or lineage column that exists; the dashboard and viewer open what a link asks for |
 | `test_backtest.py` | The risk index backtest: each anchor sees only its past, provisional quarters left out, a continuing rise counts as a hit, and pure noise falls back to the mean |
 | `test_lineage.py` | The column lineage is complete (every silver and gold column), its bronze fields and silver columns exist, and `docs/lineage.md` is up to date |
 | `test_dashboard.py` | Dashboard helpers, and every page run headless (both switch states) on gold built from sample data |

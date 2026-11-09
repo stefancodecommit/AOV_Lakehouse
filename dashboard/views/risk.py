@@ -74,7 +74,10 @@ if not too_few.empty:
 # --- one group in detail
 st.subheader("One group in detail")
 choices = list(view.sort_values("relative_risk", ascending=False, na_position="last")["label"])
-pick = st.selectbox("Sector" if group == "Sectors" else "Size class", choices)
+# a link can open one sector directly, e.g. /risk?group=Q (the demo start page does)
+wanted = st.query_params.get("group")
+first = next((i for i, c in enumerate(choices) if wanted and c.split(" ")[0] == wanted), 0)
+pick = st.selectbox("Sector" if group == "Sectors" else "Size class", choices, index=first)
 row = view[view["label"] == pick].iloc[0]
 st.markdown(row["explanation"])
 series = history[history["group_key"] == row["group_key"]]

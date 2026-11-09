@@ -163,6 +163,18 @@ def main() -> None:
     root = cbs_silver.LAKEHOUSE
     tables = lakehouse_tables(root)
 
+    # a link can open a table and view directly (the demo start page does), e.g.
+    # ?layer=bronze&table=bronze/kvk/basis_bedrijfsgegevens&view=Data%20quality;
+    # only on the first run, so the sidebar choices win afterwards
+    if "layer" not in st.session_state:
+        q = st.query_params
+        if tables.get(q.get("layer")):
+            st.session_state["layer"] = q["layer"]
+            if q.get("table") in tables[q["layer"]]:
+                st.session_state["table"] = q["table"]
+        if q.get("view") in ("Rows", "Data quality", "History"):
+            st.session_state["view"] = q["view"]
+
     with st.sidebar:
         st.title("Lakehouse viewer")
         layer = st.radio("Layer", [lay for lay in LAYERS if tables[lay]], horizontal=True,

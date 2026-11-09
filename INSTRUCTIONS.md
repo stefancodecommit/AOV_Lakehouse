@@ -184,6 +184,15 @@ The same lineage as tables and static diagrams: [docs/lineage.md](docs/lineage.m
 [docs/lineage.html](docs/lineage.html). All three are generated from `tools/lineage.py`:
 after changing the lineage there, run `.venv/bin/python -m tools.lineage`.
 
+### The demo, with one command
+
+```bash
+.venv/bin/python -m tools.demo                   # dashboard, viewer and Dagster; opens a start page
+```
+
+Starts the three, waits until they answer, and opens a start page with a button per step
+of the live demo ([docs/demo.md](docs/demo.md)). Ctrl+C stops all three.
+
 ## 5. Run it automatically: Dagster
 
 ```bash

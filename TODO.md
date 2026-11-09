@@ -13,7 +13,7 @@ silver (CBS, KVK), gold (7 tables, with the risk index), the Streamlit dashboard
 Docker Compose (including the KVK chat agent), column lineage, config, run log, the
 lakehouse viewer with data quality statistics (`python -m tools.lakehouse_viewer`),
 incremental silver KVK (2026-10-10), backup, log retention and vulnerability scanning
-(2026-10-17), 397 tests. Code is organised in `pipeline/` (per
+(2026-10-17), 402 tests. Code is organised in `pipeline/` (per
 layer) and `tools/` (2026-10-08), with a README per phase. Requirements in
 docs/requirements.md (every Must met; open: FR-19 alerts, NFR-15 default password, left
 open on purpose), Azure design in docs/cloud_design.md (not built). All committed; no containers or servers left running. See the README for how to start
@@ -54,8 +54,8 @@ Later or optional, not needed for the assignment:
 2. **Title page** of the report: name, student number, date; then export again
    (`python -m tools.export_report`) and tick the Report item in section "Assignment"
 3. **Presentation:** practise the Q&A (docs/qa_practice.md), rehearse the demo
-   (docs/demo.md), make the fallback screenshots the day before, check the Dagster menu
-   labels
+   (docs/demo.md; start everything with `python -m tools.demo`), make the fallback
+   screenshots the day before
 
 Run order (from the project folder, with the virtualenv):
 
@@ -246,7 +246,15 @@ documentation, AI-driven automation (KVK agent).
       slides, ~15 min, slides 5 and 8 can be dropped for a 10-minute slot; speaker notes
       with timing; native chart of the relative risk per section) and docs/demo.md (five
       steps with Dutch talking points, preparation, fallbacks). Still for the author:
-      rehearse, make the fallback screenshots the day before, check the Dagster menu labels.
+      rehearse, make the fallback screenshots the day before. (The Dagster menu labels were
+      checked 2026-11-09: the asset graph is under "Lineage", the schedules under
+      "Automation".)
+- [x] **Demo with one command** (2026-11-09): `python -m tools.demo` starts the dashboard,
+      the lakehouse viewer and Dagster, waits until they answer, and opens a start page
+      (build/demo_start.html) with five numbered cards and a button per place to show;
+      a dot per service. The dashboard's risk page takes `?group=Q`, the viewer
+      `?layer=&table=&view=`. Ctrl+C (or a stop signal) stops all three. Checked: real
+      run and clean stop, the Dagster links by screenshot; tests/test_demo.py.
       Original item: dashboard, Dagster, lineage explorer,
       lakehouse viewer
 
@@ -759,7 +767,7 @@ crosswalk; `tests/test_checks.py` the CBS and KVK checks and quarantine;
 `tests/test_maintenance.py` the maintenance tasks; `tests/test_backup.py` backup and restore; `tests/test_config.py` the
 configuration; `tests/test_kvk_silver.py` silver KVK; `tests/test_gold.py` gold;
 `tests/test_dashboard.py` the dashboard (every page headless); `tests/test_orchestration.py`
-Dagster; `tests/test_delta.py` writes real Delta tables in `tmp_path` (397 tests, ~85 s). `conftest.py` fails a test when any module still points at the real
+Dagster; `tests/test_delta.py` writes real Delta tables in `tmp_path` (402 tests, ~85 s). `conftest.py` fails a test when any module still points at the real
 lakehouse or inbox. Checked by breaking the code on purpose:
 removing the delete-before-write, an empty `done_keys()` and non-UTC silver timestamps
 each make the right tests fail.

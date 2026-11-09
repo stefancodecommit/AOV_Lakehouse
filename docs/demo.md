@@ -16,31 +16,33 @@ language of the presentation.
    on the laptop, outside the repository.
 4. Export the report (`.venv/bin/python -m tools.export_report`) and keep the PDF at hand.
 
-**10 minutes before**, in three terminals from the project folder:
+**10 minutes before**, one command from the project folder:
 
 ```bash
-.venv/bin/streamlit run dashboard/app.py                    # dashboard  http://localhost:8501
-.venv/bin/python -m tools.lakehouse_viewer                   # viewer     http://localhost:8502
-DAGSTER_HOME=$PWD/orchestration .venv/bin/dagster dev -f orchestration/definitions.py
-                                                             # Dagster    http://localhost:3000
+.venv/bin/python -m tools.demo
 ```
 
-Open in the browser, each in its own tab, in this order:
+It starts the dashboard (8501), the lakehouse viewer (8502) and Dagster (3000), waits
+until all three answer (Dagster takes longest, about half a minute), and opens the
+**start page** (`build/demo_start.html`): a numbered card per step below, with buttons
+that each open the right place in a new tab, and a dot per service (green: it answers).
+Present from that page; it stays open. Then:
 
-1. <http://localhost:8501> (dashboard), go to **Risk index**
-2. `docs/lineage_explorer.html#gold:gold_risk_index.relative_risk` (open the file, then
-   add the part after `#`)
-3. <http://localhost:3000> (Dagster), the **Assets** page, switched to the graph (lineage)
-   view of all assets (the exact menu label differs per Dagster version: check it the day
-   before)
-4. <http://localhost:8502> (viewer)
+- click **KVK in bronze** (step 5) once, so its data-quality statistics (~13 s) are
+  cached before the audience sees them;
+- leave the terminal open: Ctrl+C there stops everything after the session.
+
+Without the start page, the same places by hand: the dashboard's *Risk index* page;
+`docs/lineage_explorer.html#gold:gold_risk_index.relative_risk` in a browser; Dagster's
+menu **Lineage** (the asset graph); the viewer, layer bronze, table
+`kvk/basis_bedrijfsgegevens`, view *Data quality*.
 
 Browser zoom about 125%, other applications closed, notifications off. Everything runs
 locally: no internet needed during the demo.
 
 ## The five steps
 
-### 1. The risk index (1½ min)
+### 1. The risk index (1½ min) · button *Risk index*
 
 **Show:** the dashboard page *Risk index*, sector level *Sections*.
 - Point at the counts: 5 of 19 sections above national; 1 rising.
@@ -55,7 +57,7 @@ stijgt. En een terugtoets op de historie laat zien dat het oordeel hoger of lage
 later standhoudt, maar dat een trend niet voorspelt. Een trend is dus een reden om te
 kijken, geen voorspelling."
 
-### 2. One sector explained (1 min)
+### 2. One sector explained (1 min) · button *Sector Q*
 
 **Show:** under *One group in detail*, choose **Q Gezondheids- en welzijnszorg**.
 - Read the explanation sentence aloud (40% more absence, stable, 88% run by natural
@@ -68,7 +70,7 @@ kijken, geen voorspelling."
 de manager kan doorgeven. De lijn laat zien dat de zorg al twee jaar ongeveer 40% boven
 landelijk ligt."
 
-### 3. Where a number comes from (1 min)
+### 3. Where a number comes from (1 min) · button *Lineage explorer*
 
 **Show:** the lineage explorer tab, opened on `gold_risk_index.relative_risk`.
 - Follow the chain to the left: gold `relative_risk` ← silver `fct_absence_rate.absence_pct`
@@ -79,19 +81,19 @@ landelijk ligt."
 uit één CBS-veld; omgekeerd zie ik meteen wat er allemaal verandert als het CBS dat veld
 aanpast. Een test faalt zodra een nieuwe kolom geen herkomst heeft."
 
-### 4. The workflow (1 min)
+### 4. The workflow (1 min) · buttons *Asset graph*, *Checks silver_cbs*, *Schedules*
 
-**Show:** Dagster, the asset lineage graph.
+**Show:** Dagster, the asset lineage graph (Dagster's menu: **Lineage**).
 - The flow: `cbs_bronze` and `sbi_crosswalk` → `silver_cbs` → `gold`; `kvk_bronze` loaded by
   a person.
-- Click `silver_cbs`: the checks (unique keys, keys in dimensions, one run).
-- *Automation*: the monthly schedule; silver and gold only after new data and passed checks.
+- `silver_cbs`, tab **Checks**: the checks (unique keys, keys in dimensions, one run).
+- **Automation** (Dagster's menu): the monthly schedule; silver and gold only after new data and passed checks.
 
 **Zeggen:** "Dagster haalt maandelijks nieuwe cijfers op. Is er niets nieuws, dan gebeurt
 er niets. Een laag wordt pas gebouwd als de controles van de laag eronder zijn geslaagd, zo
 bereiken foute gegevens het dashboard niet."
 
-### 5. Data quality (½ min)
+### 5. Data quality (½ min) · buttons *KVK in bronze*, *Silver kvk_company*
 
 **Show:** the lakehouse viewer: layer *bronze*, table `kvk/basis_bedrijfsgegevens`, view
 **Data quality** (takes ~13 s the first time; open it once before the session so it is
@@ -109,6 +111,8 @@ niet of dat dubbelingen zijn, dus ik heb ze gemarkeerd en niet verwijderd."
 |---|---|
 | A page doesn't load or is slow | switch to the screenshot of that step; continue talking |
 | Dagster doesn't start | skip step 4, or show its screenshot; the workflow is also on slide 4 |
+| A dot on the start page stays red | that service didn't start: its log is in `build/demo_logs/`; the other steps still work |
+| The start page doesn't open, or shows HTML code | it was opened in an editor: open it in a browser, `xdg-open build/demo_start.html` (macOS: `open`) |
 | The viewer's statistics take too long | show the screenshot; mention the 381,513 rows |
 | The laptop or projector fails | present from the PDF of the slides and the report |
 
@@ -119,4 +123,5 @@ view of the KVK table.
 
 ## After the session
 
-Stop the three terminals with Ctrl+C.
+Ctrl+C in the terminal running `tools.demo`: it stops the dashboard, the viewer and
+Dagster.
