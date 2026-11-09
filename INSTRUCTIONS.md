@@ -303,11 +303,15 @@ docker compose build
 trivy image --scanners vuln --ignore-unfixed --severity CRITICAL,HIGH cbs-kvk-lakehouse:latest
 ```
 
-A fixable finding in a Debian package usually disappears by rebuilding on the newest
-`python:3.12-slim` (`docker compose build --pull`); one in a Python package by raising its
-pin as above. Done once so far
-(2026-10-26): pillow 12.3 → 13.0, filelock 4.0 → 4.2.1, certifi; streamlit 1.65 → 1.66.1
-because 1.65 doesn't allow pillow 13.
+A fixable finding in a Debian package disappears by rebuilding the image: the Dockerfile
+applies Debian's security updates at build time (`apt-get upgrade`), so a fix Debian has
+released is in the next build even before the official `python:3.12-slim` has it
+(`docker compose build --pull`; GitHub rebuilds on every run). A finding in a Python
+package needs its pin raised, as above.
+
+So far: 2026-10-26, pillow 12.3 → 13.0, filelock 4.0 → 4.2.1 and certifi (streamlit
+1.65 → 1.66.1, because 1.65 doesn't allow pillow 13); 2026-11-09, zlib in the Debian base
+(CVE-2026-85091, fixed by the build-time updates).
 
 ### Remove data outside the configuration
 

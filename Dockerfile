@@ -3,6 +3,12 @@
 # mounted from the project folder (see docker-compose.yml).
 FROM python:3.12-slim
 
+# Debian's security updates, applied at build time: the official base image is rebuilt
+# only now and then, and the image scan (.github/workflows/audit.yml) fails on a fixed
+# vulnerability that the base image doesn't have yet (2026-11-09: zlib, CVE-2026-85091).
+RUN apt-get update && apt-get upgrade -y --no-install-recommends \
+    && rm -rf /var/lib/apt/lists/*
+
 # The code version recorded in lakehouse/_run_log (there is no git inside the image):
 #   docker compose build --build-arg CODE_VERSION=$(git rev-parse --short HEAD)
 ARG CODE_VERSION=unknown

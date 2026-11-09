@@ -641,6 +641,12 @@ Run: `DAGSTER_HOME=$PWD/orchestration .venv/bin/dagster dev -f orchestration/def
       and `actions/setup-python@v5` → both on `@v7` (Node.js 24; the breaking changes in
       v7 don't affect these workflows). "ubuntu-latest will migrate to Ubuntu 26" → the
       runner is pinned to `ubuntu-24.04`, like the package versions
+- [x] **Image scan failed** (weekly run 2026-11-09): zlib1g in the Debian 13.7 base image
+      had two new HIGH advisories (CVE-2026-85091, heap overflow; CVE-2026-76844) with a
+      fix in Debian (`+deb13u1`) that the official `python:3.12-slim` didn't have yet.
+      The Dockerfile now applies Debian's security updates at build time (`apt-get
+      upgrade`, 1 package upgraded); rebuilt locally: zlib fixed, imports and Dagster
+      validation pass, the scan rule passes (no fixable critical/high findings left)
 - [ ] Later, on purpose: move CI to `ubuntu-26.04` (one change in both workflows; push
       and check the runs), well before GitHub retires the 24.04 runner
 - Real runs (2026-10-06): monthly CBS ingest skipped (nothing new), silver + gold built
