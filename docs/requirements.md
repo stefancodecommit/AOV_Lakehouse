@@ -91,7 +91,7 @@ What the system must do.
 |---|---|---|---|---|---|
 | FR-7 | Build typed dimensions and facts from bronze: give every CBS key its meaning (sector, size class, total), strip CBS's padding, keep unknown keys and flag them | Must | ✅ | `pipeline/silver/cbs.py` | `test_unknown_keys_are_kept_and_flagged`, `test_no_padded_keys_anywhere` |
 | FR-8 | Translate each KVK company's main activity to SBI 2008 via the crosswalk; mark ambiguous cases with flags instead of guessing | Must | ✅ | `pipeline/silver/kvk.py` | `test_kvk_company_types_and_flags`, `test_merge_into_one_2025_code` |
-| FR-9 | Keep KVK snapshots up to date incrementally: add new uploads, remove retired ones | Should | ✅ | `pipeline/silver/kvk.py` | `test_a_new_upload_only_builds_the_new_snapshot`, `test_a_retired_batch_is_removed` |
+| FR-9 | Silver KVK holds the newest successful upload; older uploads stay in bronze (KVK can't serve them again) | Should | ✅ | `pipeline/silver/kvk.py`, `tools/maintenance.py` (bronze retention) | `test_a_run_builds_only_the_newest_upload`, `test_batches_that_did_not_succeed_are_not_used` |
 
 ### Serving
 
@@ -124,8 +124,8 @@ How well the system must work, per quality attribute.
 | ID | Requirement | Prio | Status | How | Verified by |
 |---|---|---|---|---|---|
 | NFR-1 | Every step can be repeated safely: a rerun never duplicates data or requests | Must | ✅ | request keys, ingestion logs, file hashes | `test_writing_the_same_request_twice_gives_no_duplicates`, `test_loading_the_same_file_twice_adds_nothing` |
-| NFR-2 | A failed silver CBS or gold run leaves the published tables untouched | Must | ✅ | staging, then publish (`pipeline/common/publish.py`) | `test_failed_build_leaves_live_tables_untouched`, `test_staging_failure_leaves_live_tables_untouched` |
-| NFR-3 | A run that stops halfway is detected, and finished or reported by the next one | Must | ✅ | run log; silver KVK redoes snapshots of failed runs | `test_publish_stopping_halfway_is_logged_and_detected`, `test_a_crash_halfway_is_finished_by_the_next_run` |
+| NFR-2 | A failed silver or gold run leaves the published tables untouched | Must | ✅ | staging, then publish (`pipeline/common/publish.py`) | `test_failed_build_leaves_live_tables_untouched`, `test_staging_failure_leaves_live_tables_untouched`, `test_a_failed_publish_leaves_the_live_table_untouched` |
+| NFR-3 | A run that stops halfway is detected, and finished or reported by the next one | Must | ✅ | run log; a rerun publishes all tables again | `test_publish_stopping_halfway_is_logged_and_detected`, `test_a_failed_publish_leaves_the_live_table_untouched` |
 | NFR-4 | Wrong data never reaches the dashboard: unique keys, keys present in their dimension, one run per layer, checked before the next layer is built | Must | ✅ | `checks/layers.py`, Dagster blocking checks | `test_silver_and_gold_wait_for_blocking_checks`, `test_failed_blocking_check_stops_automation` |
 | NFR-5 | At most one run writes to the lakehouse at a time | Must | ✅ | Dagster tag concurrency limit | `test_dagster_yaml_limits_writing_runs_to_one` |
 
@@ -134,7 +134,7 @@ How well the system must work, per quality attribute.
 | ID | Requirement | Prio | Status | How | Verified by |
 |---|---|---|---|---|---|
 | NFR-6 | The whole pipeline runs on one ordinary machine | Must | ✅ | Delta Lake with delta-rs, no Spark or database server | measured: silver CBS ~3 s, gold ~17 s, silver KVK ~9–12 s (2026-10) |
-| NFR-7 | Silver KVK's memory does not grow with the number of KVK snapshots kept (latest + 1 per month) | Must | ✅ | incremental, one snapshot per write, partitioned by snapshot | measured on simulated uploads: full rebuild of 4 snapshots 1.65 GB, adding one 1.8 GB, nothing new 0.18 GB; `test_present_snapshots_are_read_from_the_delta_log_not_the_data` |
+| NFR-7 | Silver KVK's memory does not grow with the number of KVK uploads kept in bronze (latest + 1 per month) | Must | ✅ | silver reads only the newest upload; the staged table is streamed into the live one | measured on the real data (2026-11-11): 1.74 GB peak; `test_a_run_builds_only_the_newest_upload` (only one upload is read) |
 | NFR-8 | Docker needs at most ~3 GB of memory for the pipeline | Should | ✅ | one writing run at a time | measured (README, *Minimum machine*) |
 | NFR-9 | Storage stays small: old file versions removed after 7 days, small files compacted monthly | Should | ✅ | `tools/maintenance.py` (optimize, vacuum) | `test_optimize_and_vacuum_removes_files_old_versions_no_longer_need` |
 
@@ -162,7 +162,7 @@ How well the system must work, per quality attribute.
 | ID | Requirement | Prio | Status | How | Verified by |
 |---|---|---|---|---|---|
 | NFR-19 | All settings in one file; a typo is an error, not a silent default | Must | ✅ | `config.yaml`, `pipeline/common/config.py` | `test_typos_are_errors` |
-| NFR-20 | Automated tests on every change | Must | ✅ | 400 tests; GitHub Actions on every push (Python 3.12 and the Docker image) | GitHub Actions runs |
+| NFR-20 | Automated tests on every change | Must | ✅ | 394 tests; GitHub Actions on every push (Python 3.12 and the Docker image) | GitHub Actions runs |
 | NFR-21 | The same package versions everywhere (locally, CI, Docker) | Must | ✅ | exact versions in `requirements.txt` and `constraints.txt` | CI install; found and fixed a pandas 3 mismatch (2026-10-08) |
 | NFR-22 | Runs the same on any machine with one command | Should | ✅ | Docker Compose | `docker compose config`; image built in CI |
 | NFR-23 | Documentation a reviewer can follow: what, why and how to run, per phase | Must | ✅ | README, INSTRUCTIONS, PROJECT, bronze_to_silver, lineage, and a README per phase (course slide 22) with a proof of working | README → *The six phases* |

@@ -79,10 +79,11 @@ is de sector eenduidig.
 
 **11. Schaalt dit?**
 *Antwoord:* Het deel dat groeit is KVK: elke maand een momentopname van 1,9 miljoen rijen.
-Silver KVK verwerkt alleen nieuwe momentopnamen, één tegelijk, zodat het geheugen niet
-meegroeit (gemeten op 4 gesimuleerde momentopnamen: 1,65 GB voor een volledige herbouw). Bij veel meer data
-zijn Polars of de cloud de volgende stap.
-*Evidence:* README, section "Silver"; TODO.md, "KVK: incremental updates" (measurements).
+Bronze bewaart oudere uploads; silver verwerkt alleen de nieuwste, want alleen die wordt
+gebruikt. Het geheugen groeit dus niet mee met het aantal uploads (gemeten: 1,74 GB piek).
+Een eerdere versie hield alle momentopnamen in silver bij; die bleek ongebruikt en is
+vereenvoudigd. Bij veel meer data zijn Polars of de cloud de volgende stap.
+*Evidence:* README, section "Silver"; docs/PROJECT.md, "Silver KVK"; docs/requirements.md, NFR-7.
 
 **12. Een reviewer vond een mogelijke fout in de koppeling met de bedrijfsaantallen. Wat was het?**
 *Antwoord:* De aantallen werden op SBI-code gekoppeld; een samengestelde sector heeft geen
@@ -120,7 +121,7 @@ risicomanagement, en de vraag of pandas zou schalen, die tot de incrementele opz
 *Evidence:* `docs/genai_use.md`, section 3 (the author's decisions).
 
 **17. Hoe weet je dat de code van de AI klopt?**
-*Antwoord:* Niet op vertrouwen: 400 tests, ook op een schone machine in GitHub Actions; code
+*Antwoord:* Niet op vertrouwen: 394 tests, ook op een schone machine in GitHub Actions; code
 expres kapotgemaakt om te zien of de tests dat merken; resultaten vergeleken op de echte
 data na elke grote wijziging; en vragen als "hoe heb je dat getest?", die een onterecht
 afgevinkt item aan het licht brachten.

@@ -256,7 +256,7 @@ Rebuilt from bronze on every run.
 
 ### Silver KVK — `pipeline/silver/kvk.py` (built)
 
-One table, `kvk_company`: typed columns, snapshot date and latest-snapshot flag, and the
+One table, `kvk_company`: typed columns, the snapshot date of the newest upload, and the
 company's sector. The sector is the main activity ("Hoofdactiviteiten"), not the full list
 of activities. Main codes are mapped to SBI 2008 with `map_sbi2008_sbi2025` and to section
 and division, so KVK joins with `dim_sector`. Edge cases (several or no main activities,
@@ -264,17 +264,16 @@ KVK sub-codes, codes in both SBI lists, codes that came from several SBI 2008 co
 marked with flag columns; derived sector columns are filled only when unambiguous (90% of
 active companies). Built by `pipeline/silver/kvk.py`; see its docstring for every column.
 
-Updated incrementally (decided 2026-10-10), because KVK is the part that grows: with the
-latest snapshot plus one per month kept, a full rebuild every run would need ~1.2 GB more
-memory per month kept. A run compares the successful batches in bronze's batch log with
-the batches in kvk_company and only builds the new ones and deletes the retired ones, one
-snapshot per commit; `is_latest` moves in a single commit. A full rebuild (still one
-snapshot at a time, newest first) happens when a rule for all snapshots changed: the SBI
-crosswalk's content (a fingerprint in the run log) or `LOGIC_VERSION`, or on `--full`.
-The table is partitioned by `batch_id`, so the batches present are read from the Delta
-log without reading data, and a retired snapshot is removed by dropping its folder.
-Consequence: rows of different snapshots carry different run_ids (the run that built that
-snapshot); the layer check is "one run per snapshot" instead of "one run".
+Holds the newest upload only (decided 2026-11-11). From 2026-10-10 silver kept every
+snapshot bronze keeps (the latest plus one per month) and updated them incrementally, one
+snapshot per commit, so memory wouldn't grow with the months kept. A review showed that
+nothing used that history: the open dataset has no company number, so snapshots can't be
+linked company by company, and gold read only the latest one. So silver was simplified:
+each run builds kvk_company from the newest successful batch and publishes it like silver
+CBS (staging, one run_id, the run log), with the same layer checks plus "exactly one
+snapshot". Memory: one snapshot (~1.7 GB peak), however many uploads bronze keeps. Bronze
+still keeps the older uploads, because KVK serves only its current file: an old upload
+can't be downloaded again, so the history stays available for a later analysis.
 
 ### Gold — `pipeline/gold/build.py` (built)
 
@@ -543,7 +542,7 @@ TODO.md                  open work
 | Data checks before ingestion (CBS) | Built (`checks/cbs.py`) |
 | Quarantine | Built for CBS, KVK and reference files; monthly cleanup in `tools/maintenance.py` |
 | Alerting, freshness checks | To do |
-| pytest | 400 tests incl. real Delta tables, the dashboard pages and Dagster; one opt-in live CBS test |
+| pytest | 394 tests incl. real Delta tables, the dashboard pages and Dagster; one opt-in live CBS test |
 | Configuration file | Built (`config.yaml` + `pipeline/common/config.py`) |
 | Gold | Built: 7 tables, including the risk index for the insurer; provisional figures marked |
 | Streamlit dashboard | Built: 6 pages incl. data dictionary; provisional marked, "final only" switch |

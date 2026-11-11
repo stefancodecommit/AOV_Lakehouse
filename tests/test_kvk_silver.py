@@ -108,13 +108,6 @@ def test_kvk_company_types_and_flags():
     assert list(df.source_row_number) == [1, 2, 3]
 
 
-def test_is_latest_marks_the_newest_batch_only():
-    df = k.build_kvk_company(bronze((("kvk_old", "2026-09-01"), ("kvk_new", "2026-10-01"))),
-                             CROSSWALK)
-    assert df.groupby("batch_id").is_latest.all().to_dict() == {"kvk_new": True, "kvk_old": False}
-    assert str(df.loc[df.is_latest, "snapshot_date"].iloc[0]) == "2026-10-01"
-
-
 # =========================================================================== end to end on Delta
 @pytest.fixture
 def kvk_lakehouse():
@@ -136,13 +129,11 @@ def test_run_publishes_kvk_company_with_run_id_and_log(kvk_lakehouse):
     assert set(df.run_id) == {run_id}
     row = runlog.read_runs(k.RUN_LOG).iloc[-1]
     assert row.pipeline == "silver_kvk" and row.status == "success"
-    assert json.loads(row.tables) == {"kvk_company": {
-        "rows": 3, "status": "published", "mode": "full", "reason": "no kvk_company table yet",
-        "added": ["kvk_b1"], "removed": []}}
-    assert set(json.loads(row.inputs)) == {"bronze/kvk/_batch_log",
-                                          "bronze/kvk/basis_bedrijfsgegevens",
-                                          "silver/map_sbi2008_sbi2025",
-                                          "crosswalk_fingerprint", "logic_version"}
+    assert json.loads(row.tables) == {"kvk_company": {"rows": 3, "status": "published"}}
+    inputs = json.loads(row.inputs)
+    assert set(inputs) == {"bronze/kvk/_batch_log", "bronze/kvk/_batch_log#batch_id",
+                           "bronze/kvk/basis_bedrijfsgegevens", "silver/map_sbi2008_sbi2025"}
+    assert inputs["bronze/kvk/_batch_log#batch_id"] == "kvk_b1"
     assert inspect_lakehouse.silver_run_problems(k.LAKEHOUSE, "silver_kvk")[1] == []
 
 
@@ -151,7 +142,7 @@ def test_types_after_reading_back(kvk_lakehouse):
     schema = {f.name: f.type for f in pa.schema(
         DeltaTable(str(k.SILVER_ROOT / "kvk_company")).schema().to_arrow())}
     assert schema["start_date"] == pa.date32() and schema["snapshot_date"] == pa.date32()
-    assert schema["is_active"] == pa.bool_() and schema["is_latest"] == pa.bool_()
+    assert schema["is_active"] == pa.bool_() and "is_latest" not in schema
     assert schema["main_activity_count"] == pa.int64()
     assert schema["sbi2008_section"] == pa.string()
 
@@ -174,36 +165,7 @@ def test_categories_are_written_as_plain_text():
     assert table.schema.field("batch").type == pa.string()
 
 
-# =========================================================================== incremental runs
-def plan(wanted, present, ok=("r1",), fingerprint="fp", last=None, full=False):
-    last = {"crosswalk_fingerprint": "fp", "logic_version": k.LOGIC_VERSION} if last is None else last
-    return k.plan_sync(list(wanted), present, set(ok), fingerprint, last, full)
-
-
-def test_plan_full_rebuild_when_a_rule_for_all_snapshots_changed():
-    present = {"b1": {"r1"}}
-    assert plan(["b1"], {}).reason == "no kvk_company table yet"
-    assert plan(["b1"], present, last={}).reason == "the last run is from before incremental updates"
-    assert plan(["b1"], present, fingerprint="new").reason == "the SBI crosswalk changed"
-    assert plan(["b1"], present, last={"crosswalk_fingerprint": "fp", "logic_version": 0}).full
-    assert plan(["b1"], present, full=True).reason == "requested (--full)"
-    assert k.plan_sync(["b1"], present, {"r1"}, "fp", None).reason == "no successful run to continue from"
-    p = plan(["b1", "b2"], {}, )
-    assert p.full and p.add == ["b1", "b2"] and p.latest == "b2"
-
-
-def test_plan_incremental_adds_new_removes_retired_and_redoes_failed():
-    assert plan(["b1"], {"b1": {"r1"}}).reason == "nothing new"
-    p = plan(["b1", "b2"], {"b1": {"r1"}})
-    assert (p.full, p.add, p.remove, p.latest) == (False, ["b2"], [], "b2")
-    p = plan(["b2"], {"b1": {"r1"}, "b2": {"r1"}})                 # b1 retired by maintenance
-    assert (p.add, p.remove, p.latest) == ([], ["b1"], "b2")
-    p = plan(["b1", "b2"], {"b1": {"r1"}, "b2": {"r_failed"}})      # crashed after writing b2
-    assert (p.add, p.remove) == (["b2"], ["b2"])
-    p = plan(["b1"], {"b1": {"r1", "r2"}})                          # half old, half new
-    assert (p.add, p.remove) == (["b1"], ["b1"])
-
-
+# =========================================================================== only the newest upload
 def upload(batch_id, day, rows=ROWS):
     """A KVK upload as the bronze agent writes it: rows plus a success entry in the log."""
     df = bronze(((batch_id, day),), rows)
@@ -220,154 +182,84 @@ def silver_kvk():
             .sort_values(["batch_id", "source_row_number"], ignore_index=True))
 
 
-def same_as_full_rebuild():
-    """The incremental table equals a full rebuild (apart from which run made the rows)."""
-    incremental = silver_kvk().drop(columns="run_id")
-    k.run(full=True)
-    pd.testing.assert_frame_equal(incremental, silver_kvk().drop(columns="run_id"))
-
-
-def last_run():
-    row = runlog.read_runs(k.RUN_LOG).iloc[-1]
-    return row.status, json.loads(row.tables)["kvk_company"]
-
-
 @pytest.fixture
 def crosswalk():
     publish.write_table(k.SILVER_ROOT / "map_sbi2008_sbi2025", CROSSWALK)
 
 
-def test_a_new_upload_only_builds_the_new_snapshot(crosswalk, monkeypatch):
-    upload("kvk_2026_09", "2026-09-01")
-    first = k.run()
+def test_a_run_builds_only_the_newest_upload(crosswalk, monkeypatch):
+    for month in ("08", "09"):
+        upload(f"kvk_2026_{month}", f"2026-{month}-01")
     upload("kvk_2026_10", "2026-10-01", rows=ROWS[:2])
     reads = []
     real = k.read_kvk_bronze
     monkeypatch.setattr(k, "read_kvk_bronze", lambda versions=None, batches=None:
                         reads.append(batches) or real(versions, batches))
-    second = k.run()
-    assert reads == [["kvk_2026_10"]]                        # memory: one snapshot read
-    _, info = last_run()
-    assert (info["mode"], info["added"], info["rows"]) == ("incremental", ["kvk_2026_10"], 5)
-    df = silver_kvk()
-    assert df.groupby("batch_id").is_latest.all().to_dict() == {"kvk_2026_09": False,
-                                                                "kvk_2026_10": True}
-    assert df.groupby("batch_id").run_id.unique().map(list).to_dict() == {
-        "kvk_2026_09": [first], "kvk_2026_10": [second]}     # old rows keep their run
-    assert inspect_lakehouse.silver_run_problems(k.LAKEHOUSE, "silver_kvk")[1] == []
-    assert [r.passed for r in layers.check_silver_kvk(df)] == [True] * 4
-    same_as_full_rebuild()
-
-
-def test_nothing_new_changes_nothing(crosswalk):
-    upload("kvk_2026_09", "2026-09-01")
-    k.run()
-    version = DeltaTable(str(k.SILVER_ROOT / "kvk_company")).version()
-    k.run()
-    assert last_run()[1]["status"] == "unchanged"
-    assert DeltaTable(str(k.SILVER_ROOT / "kvk_company")).version() == version
-
-
-def test_a_retired_batch_is_removed(crosswalk):
-    upload("kvk_2026_08", "2026-08-01")
-    upload("kvk_2026_09", "2026-09-01")
-    k.run()
-    DeltaTable(str(k.KVK_BRONZE / "_batch_log")).update(
-        new_values={"status": "retired"}, predicate="batch_id = 'kvk_2026_08'")
-    k.run()
-    assert last_run()[1]["removed"] == ["kvk_2026_08"]
-    assert set(silver_kvk().batch_id) == {"kvk_2026_09"}
-    same_as_full_rebuild()
-
-
-def test_a_crash_halfway_is_finished_by_the_next_run(crosswalk, monkeypatch):
-    upload("kvk_2026_09", "2026-09-01")
-    k.run()
-    upload("kvk_2026_10", "2026-10-01")
-    def crash(*a, **kw):
-        raise RuntimeError("crash after the new snapshot was appended")
-    # its own context: monkeypatch.undo() would also undo conftest's isolated lakehouse
-    with monkeypatch.context() as m, pytest.raises(RuntimeError):
-        m.setattr(DeltaTable, "update", crash)
-        k.run()
-    # the new rows are there, but from a failed run, and the flag hasn't moved yet
-    assert last_run()[0] == "failed"
-    assert silver_kvk().groupby("batch_id").is_latest.all().to_dict() == {
-        "kvk_2026_09": True, "kvk_2026_10": False}
-    assert inspect_lakehouse.silver_run_problems(k.LAKEHOUSE, "silver_kvk")[1]
-    k.run()
-    _, info = last_run()
-    assert (info["added"], info["removed"]) == (["kvk_2026_10"], ["kvk_2026_10"])
-    assert inspect_lakehouse.silver_run_problems(k.LAKEHOUSE, "silver_kvk")[1] == []
-    same_as_full_rebuild()
-
-
-def test_a_changed_crosswalk_rebuilds_every_snapshot(crosswalk):
-    upload("kvk_2026_09", "2026-09-01")
-    upload("kvk_2026_10", "2026-10-01")
-    k.run()
-    publish.write_table(k.SILVER_ROOT / "map_sbi2008_sbi2025", CROSSWALK)   # same content
-    k.run()
-    assert last_run()[1]["status"] == "unchanged"
-    publish.write_table(k.SILVER_ROOT / "map_sbi2008_sbi2025", CROSSWALK.iloc[1:])
-    k.run()
-    _, info = last_run()
-    assert (info["mode"], info["reason"]) == ("full", "the SBI crosswalk changed")
-    assert info["added"] == ["kvk_2026_09", "kvk_2026_10"]
-    assert not (k.SILVER_ROOT / "_staging").exists()
-
-
-def test_check_one_run_per_snapshot():
-    df = pd.DataFrame({"batch_id": ["a", "a", "b"], "run_id": ["r1", "r2", "r1"]})
-    r = layers.one_run_per_snapshot(df)
-    assert not r.passed and r.examples == ["a"]
-    assert layers.one_run_per_snapshot(df.iloc[1:]).passed
-
-
-def test_present_snapshots_are_read_from_the_delta_log_not_the_data(crosswalk, monkeypatch):
-    upload("kvk_2026_09", "2026-09-01")
-    upload("kvk_2026_10", "2026-10-01")
     run_id = k.run()
-    import pyarrow.parquet as pq
-    def no_data(*a, **kw):
-        raise AssertionError("table_batches read data files")
-    with monkeypatch.context() as m:
-        m.setattr(pq, "read_table", no_data)
-        found = k.table_batches(k.SILVER_ROOT / "kvk_company")
-    assert found == {"kvk_2026_09": {run_id}, "kvk_2026_10": {run_id}}
-    assert (k.SILVER_ROOT / "kvk_company" / "batch_id=kvk_2026_10").is_dir()   # one folder each
-
-
-def test_present_snapshots_of_a_file_with_several_batches_are_read_from_the_file():
-    """An older, unpartitioned table with two snapshots in one file."""
-    write_deltalake(str(k.SILVER_ROOT / "kvk_company"), pa.table({
-        "batch_id": ["b1", "b1", "b2"], "run_id": ["r1", "r1", "r2"]}))
-    assert k.table_batches(k.SILVER_ROOT / "kvk_company") == {"b1": {"r1"}, "b2": {"r2"}}
-
-
-def test_a_full_rebuild_writes_the_newest_snapshot_first_and_is_finished_after_a_crash(
-        crosswalk, monkeypatch):
-    for month in ("08", "09", "10"):
-        upload(f"kvk_2026_{month}", f"2026-{month}-01")
-    k.run()
-    written = []
-    real = k._write_snapshot
-    def crash_after_first(path, batch_id, *a, **kw):
-        if written:
-            raise RuntimeError("stopped after the first snapshot")
-        written.append(batch_id)
-        return real(path, batch_id, *a, **kw)
-    with monkeypatch.context() as m, pytest.raises(RuntimeError):
-        m.setattr(k, "_write_snapshot", crash_after_first)
-        k.run(full=True)
-    # stopped halfway: only the newest snapshot, flagged latest (gold reads only that one)
-    assert written == ["kvk_2026_10"]
+    assert reads == [["kvk_2026_10"]]                     # memory: one snapshot read
     df = silver_kvk()
-    assert set(df.batch_id) == {"kvk_2026_10"} and df.is_latest.all()
-    k.run()                                     # finishes: rebuilds what is missing or failed
-    assert set(silver_kvk().batch_id) == {"kvk_2026_08", "kvk_2026_09", "kvk_2026_10"}
+    assert set(df.batch_id) == {"kvk_2026_10"} and len(df) == 2 and set(df.run_id) == {run_id}
+    assert all(r.passed for r in layers.check_silver_kvk(df))
     assert inspect_lakehouse.silver_run_problems(k.LAKEHOUSE, "silver_kvk")[1] == []
-    same_as_full_rebuild()
+
+
+def test_a_new_upload_replaces_the_snapshot(crosswalk):
+    upload("kvk_2026_09", "2026-09-01")
+    k.run()
+    upload("kvk_2026_10", "2026-10-01", rows=ROWS[:2])
+    second = k.run()
+    df = silver_kvk()
+    assert set(df.batch_id) == {"kvk_2026_10"} and set(df.run_id) == {second}
+
+
+def test_batches_that_did_not_succeed_are_not_used(crosswalk):
+    upload("kvk_2026_09", "2026-09-01")
+    upload("kvk_2026_10", "2026-10-01")
+    DeltaTable(str(k.KVK_BRONZE / "_batch_log")).update(
+        new_values={"status": "retired"}, predicate="batch_id = 'kvk_2026_10'")
+    k.run()
+    assert set(silver_kvk().batch_id) == {"kvk_2026_09"}
+
+
+def test_a_failed_publish_leaves_the_live_table_untouched(crosswalk, monkeypatch):
+    upload("kvk_2026_09", "2026-09-01")
+    first = k.run()
+    upload("kvk_2026_10", "2026-10-01")
+    real = publish._overwrite
+
+    def power_cut(path, data):
+        if "_staging" not in str(path):           # fail only the write to the live table
+            raise OSError("power cut")
+        real(path, data)
+
+    with monkeypatch.context() as m, pytest.raises(OSError):
+        m.setattr(publish, "_overwrite", power_cut)
+        k.run()
+    assert runlog.read_runs(k.RUN_LOG).iloc[-1].status == "failed"
+    df = silver_kvk()
+    assert set(df.batch_id) == {"kvk_2026_09"} and set(df.run_id) == {first}
+    assert not (k.SILVER_ROOT / "_staging").exists()
+    k.run()                                        # a clean rerun publishes the new upload
+    assert set(silver_kvk().batch_id) == {"kvk_2026_10"}
+
+
+def test_an_older_partitioned_table_is_replaced_by_an_unpartitioned_one(crosswalk):
+    """Until 2026-11 kvk_company kept every snapshot, partitioned by batch_id."""
+    write_deltalake(str(k.SILVER_ROOT / "kvk_company"), pa.table({
+        "batch_id": ["old1", "old2"], "is_latest": [False, True], "run_id": ["r1", "r2"]}),
+        partition_by=["batch_id"])
+    upload("kvk_2026_10", "2026-10-01")
+    k.run()
+    dt = DeltaTable(str(k.SILVER_ROOT / "kvk_company"))
+    assert dt.metadata().partition_columns == []
+    assert set(silver_kvk().batch_id) == {"kvk_2026_10"} and "is_latest" not in silver_kvk()
+
+
+def test_check_one_snapshot():
+    df = pd.DataFrame({"batch_id": ["a", "a", "b"], "run_id": ["r1", "r1", "r1"]})
+    r = layers.one_snapshot(df)
+    assert not r.passed and r.examples == ["a", "b"]
+    assert layers.one_snapshot(df.iloc[:2]).passed
 
 
 def test_snapshot_date_is_kvks_file_date_with_its_source():

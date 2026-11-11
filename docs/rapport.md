@@ -341,7 +341,7 @@ datakwaliteitsstatistieken toont.
 
 ### 4.3 Testen en validatie
 
-Er zijn **400 geautomatiseerde tests**, van vier soorten:
+Er zijn **394 geautomatiseerde tests**, van vier soorten:
 
 - **eenheidstests** op de logica (codes ontleden, controles, de berekening van de
   risico-index) met kleine, zelfgemaakte gegevens waarvan het juiste antwoord vooraf
@@ -385,15 +385,16 @@ waarschuwen als een bron te oud is of door het CBS is gestopt. Elke silver- en g
 staat in een runlog met tijdstip, codeversie, invoerversies en uitkomst.
 
 **Prestaties en schaalbaarheid.** Silver CBS duurt ongeveer 3 seconden, gold ongeveer 17,
-silver KVK ongeveer 10. Het onderdeel dat groeit is KVK: elke bewaarde momentopname telt
-1,9 miljoen rijen. De eerste opzet bouwde alles elke keer opnieuw en had steeds meer
-geheugen nodig. De huidige opzet voegt alleen nieuwe momentopnamen toe en verwerkt ze één
-voor één. Gemeten met vier gesimuleerde momentopnamen: 1,65 GB voor een volledige
-herbouw (eerst 3,2 GB) en 0,18 GB als er niets nieuws is.
+silver KVK ongeveer 10. Het onderdeel dat groeit is KVK: elke upload telt 1,9 miljoen
+rijen. Bronze bewaart oudere uploads, omdat KVK alleen het actuele bestand aanbiedt;
+silver verwerkt alleen de nieuwste, want alleen die wordt gebruikt. Het geheugen groeit
+daardoor niet mee met het aantal bewaarde uploads (gemeten: 1,74 GB piek). Een eerdere
+versie hield alle momentopnamen in silver bij; die geschiedenis bleek ongebruikt en is
+geschrapt.
 
 ### 4.5 Data provenance en uitlegbaarheid
 
-**Herkomst.** Voor elk van de 283 kolommen in silver en gold is vastgelegd uit welke
+**Herkomst.** Voor elk van de 282 kolommen in silver en gold is vastgelegd uit welke
 kolommen in de laag eronder ze komen en wat ermee gebeurt. Een test faalt zodra een nieuwe
 kolom geen herkomst heeft. De herkomst is te volgen in een interactieve verkenner (van een
 goldkolom terug naar de bronvelden, of andersom), in gegenereerde documentatie en in
@@ -560,7 +561,7 @@ De antwoorden op de deelvragen:
 
 Als dataproduct voldoet de oplossing aan alle *must*-eisen: zij haalt de gegevens
 automatisch en zonder dubbelingen op, controleert ze op elke laag, maakt elk getal
-herleidbaar en uitlegbaar, en is aangetoond met 400 tests. Daarmee verschuift het werken
+herleidbaar en uitlegbaar, en is aangetoond met 394 tests. Daarmee verschuift het werken
 met deze cijfers van incidenteel handwerk naar een herhaalbaar en gecontroleerd proces.
 
 ### 6.2 Aanbevelingen

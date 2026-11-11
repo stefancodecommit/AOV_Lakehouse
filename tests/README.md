@@ -7,22 +7,22 @@ phase 4 (model design and testing) and the proof of working for every phase.
 .venv/bin/pytest            # all tests, ~85 s, no internet needed
 ```
 
-Expected: all pass (400 at the time of writing, 1 deselected: the live test below). The
+Expected: all pass (394 at the time of writing, 1 deselected: the live test below). The
 same suite runs on every push in GitHub Actions, on a clean Python 3.12.
 
 ## What is tested, per phase
 
 | Phase | Test files | Tests* | What they prove |
 |---|---|---|---|
-| 1. Ingestion | `test_bronze_logic.py`, `test_checks.py`, `test_reference.py`, `test_kvk_logic.py` | 93 | only new data is requested; a failing batch is quarantined and retried; every CBS and KVK check; a file is never loaded twice |
-| 2. Transformation | `test_silver_logic.py`, `test_kvk_silver.py` | 117 | every silver table and its keys; no padded keys; unknown keys flagged; SBI translation per case; incremental KVK equals a full rebuild |
+| 1. Ingestion | `test_bronze_logic.py`, `test_checks.py`, `test_reference.py`, `test_kvk_logic.py` | 91 | only new data is requested; a failing batch is quarantined and retried; every CBS and KVK check; a file is never loaded twice |
+| 2. Transformation | `test_silver_logic.py`, `test_kvk_silver.py` | 111 | every silver table and its keys; no padded keys; unknown keys flagged; SBI translation per case; silver KVK holds only the newest upload |
 | 3. Serving | `test_gold.py`, `test_dashboard.py` | 49 | every gold table; every dashboard page, with and without *Final figures only* |
-| 4. Model | `test_gold.py` (risk index), `test_backtest.py` | (in 47) + 4 | the risk index on data with known answers, and its backtest (each verdict judged on the year after it) (see [gold's README](../pipeline/gold/README.md#phase-4--model-design-and-testing-the-risk-index)) |
+| 4. Model | `test_gold.py` (risk index), `test_backtest.py` | (in 49) + 4 | the risk index on data with known answers, and its backtest (each verdict judged on the year after it) (see [gold's README](../pipeline/gold/README.md#phase-4--model-design-and-testing-the-risk-index)) |
 | 6. Deployment & monitoring | `test_orchestration.py`, `test_maintenance.py`, `test_backup.py` | 37 | the Dagster graph, blocking checks, automation, the one-writer limit, maintenance (in order), log retention, backup and restore |
-| All layers on real Delta tables | `test_delta.py` | 30 | bronze writes (revisions replace, repeats add nothing), silver end to end with types read back, publishing all-or-nothing, the run log |
+| All layers on real Delta tables | `test_delta.py` | 28 | bronze writes (revisions replace, repeats add nothing), silver end to end with types read back, publishing all-or-nothing, the run log |
 | Documentation and tools | `test_lineage.py`, `test_config.py`, `test_lakehouse_viewer.py`, `test_demo.py` | 74 | every silver and gold column has a documented origin; the generated docs are up to date; config errors are caught; the viewer's statistics |
 
-\* At the time of writing (2026-10-26).
+\* At the time of writing (2026-11-11).
 
 ## Kinds of tests
 
@@ -43,8 +43,9 @@ same suite runs on every push in GitHub Actions, on a clean Python 3.12.
   test, and refuses every Delta write to the real `lakehouse/` or `inbox/` for the whole
   session.
 - **The tests are tested.** Several were checked by breaking the code on purpose (e.g. the
-  delete-before-write in bronze, the `is_latest` flag in silver KVK, redoing failed KVK
-  runs): each time the right tests failed.
+  delete-before-write in bronze; also, before silver KVK was simplified to the newest
+  upload, its `is_latest` flag and the redo of failed KVK runs): each time the right
+  tests failed.
 - **Documentation can't drift.** A new silver or gold column fails `test_lineage.py` until
   its origin is written down in `tools/lineage.py`, and the generated lineage documents
   must be up to date.

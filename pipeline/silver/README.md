@@ -31,14 +31,15 @@ and [docs/lineage.md](../../docs/lineage.md) (generated, complete).
   that exists in both SBI versions: the original value is kept and a flag column says
   what is special, instead of picking one. Gold and the dashboard can filter on flags.
 - **Strip CBS's padding once** (`'301000 '` → `'301000'`), so every join just works.
-- **Publish all or nothing.** Silver CBS writes all its tables to a staging folder first
+- **Publish all or nothing.** Silver CBS and KVK write their tables to a staging folder first
   and replaces the live tables only when all succeeded
   ([`pipeline/common/publish.py`](../common/publish.py)). Every row carries the `run_id`
   of its run, which joins to the run log.
-- **KVK incrementally.** Each kept KVK upload is a snapshot of ~1.9M rows. A run adds only
-  new snapshots and removes the ones maintenance retired, one at a time, so memory stays
-  at about one snapshot however many months are kept (measured: 1.65 GB for a full
-  rebuild of 4 snapshots, 0.18 GB when nothing is new).
+- **KVK: the newest upload only.** Each KVK upload is a snapshot of ~1.9M rows without a
+  company number, so snapshots can't be linked; gold uses the newest. Silver therefore
+  holds only that one (memory ~1.7 GB, however many uploads bronze keeps); bronze keeps
+  the older uploads, because KVK can't serve them again. (Until 2026-11 silver kept every
+  snapshot and updated them incrementally; nothing used that history.)
 - **A snapshot is dated by KVK, not by us.** `snapshot_date` is KVK's export date, read
   from the zip when the file is verified (bronze's batch log, `file_date`); the newest
   start date in the file must not be later. A file without a usable date (a loose CSV)
@@ -78,9 +79,9 @@ project:
 .venv/bin/pytest tests/test_silver_logic.py tests/test_kvk_silver.py
 ```
 
-Expected: all tests pass (116 at the time of writing). They cover the parsers (periods,
+Expected: all tests pass (111 at the time of writing). They cover the parsers (periods,
 size classes, sectors), every silver table and its keys, "no padded keys anywhere",
-unknown keys kept and flagged, the SBI translation per case, and the incremental KVK
-runs (a new upload, nothing new, a retired upload, a crash halfway, a changed crosswalk;
-each compared with a full rebuild). Silver built from real Delta bronze tables and read
+unknown keys kept and flagged, the SBI translation per case, and silver KVK runs (only
+the newest upload is read and published; a retired upload is skipped; a failed publish
+leaves the live table untouched; an older partitioned table is replaced). Silver built from real Delta bronze tables and read
 back with the right types: `tests/test_delta.py`.

@@ -26,7 +26,7 @@ Transparency in the history: **every commit except one** carries the line
 ## 2. Why
 
 - **Scope within the time available.** A complete pipeline (three sources, three layers,
-  orchestration, deployment, a dashboard, 400 tests, CI) in about two weeks. Without an
+  orchestration, deployment, a dashboard, 394 tests, CI) in about two weeks. Without an
   assistant the project would have stopped at a smaller scope.
 - **Learning.** Many questions were "how does this work?" rather than "build this": what
   `python -m` does, how Delta Lake decides which Parquet files are current, what GitHub
@@ -66,7 +66,7 @@ assistant:
 | Architecture | No SCD type 2 in silver (after weighing it) |
 | Architecture | Bronze should hold structured columns instead of only JSON ("a Raw to Bronze layer"); chosen: structured bronze while keeping `raw_json` |
 | Architecture | The folder reorganisation ("better now than later") |
-| Scalability | The question whether pandas would scale, or PySpark/Polars would be better; then the question *how* the latest KVK snapshot is determined, which led to the incremental design |
+| Scalability | The question whether pandas would scale, or PySpark/Polars would be better; then the question *how* the latest KVK snapshot is determined, which led to the incremental design (later simplified to the newest upload only, after a review found that nothing used the history) |
 | Transparency | Column lineage from bronze to silver, a visual version, then an interactive explorer, then extended to gold |
 | Tools | A viewer for the Delta tables, then data-quality statistics in it |
 | Documentation | Comment the code more; a README for the teacher; an instructions file with the commands to run |
@@ -88,7 +88,7 @@ GenAI output was not accepted on trust. The checks used:
 
 | Check | Example |
 |---|---|
-| **Automated tests** (400), on every change and in GitHub Actions on a clean machine | the tests run before every commit; CI found that a fresh install got pandas 3, which the code didn't support (fixed by pinning versions) |
+| **Automated tests** (394), on every change and in GitHub Actions on a clean machine | the tests run before every commit; CI found that a fresh install got pandas 3, which the code didn't support (fixed by pinning versions) |
 | **Tests on purpose-broken code** (mutation checks): does a test actually catch the error? | breaking the `is_latest` flag, the delete-before-write, the dashboard's network setting: each time the right test failed |
 | **Comparison with the real data** before and after a change | silver identical after restructuring bronze (11 tables); KVK identical after the incremental redesign (1,921,911 rows) |
 | **Measurements instead of assumptions** | memory of silver KVK measured for 1 to 4 snapshots; the first design turned out to grow with each snapshot, and was improved until it didn't |

@@ -135,17 +135,17 @@ def test_business_context_bands_and_missing_classes(silver_tables):
 
 def test_kvk_context(silver_tables):
     kvk = pd.DataFrame({
-        "is_latest": [True] * 13 + [False], "is_active": [True] * 12 + [False, True],
-        "snapshot_date": [pd.Timestamp("2026-10-01").date()] * 14, "batch_id": "b",
-        "start_date": [pd.Timestamp("2016-10-01").date()] * 11 + [None, None, None],
-        "legal_form": ["BV"] * 11 + ["NV"] * 3,
-        "sbi2008_section": ["A"] * 11 + [None] * 3})
+        "is_active": [True] * 12 + [False],
+        "snapshot_date": [pd.Timestamp("2026-10-01").date()] * 13, "batch_id": "b",
+        "start_date": [pd.Timestamp("2016-10-01").date()] * 11 + [None, None],
+        "legal_form": ["BV"] * 11 + ["NV"] * 2,
+        "sbi2008_section": ["A"] * 11 + [None] * 2})
     t = {**silver_tables, "kvk_company": kvk}
     df = g.build_kvk_context(t).set_index(["legal_form", "sbi2008_section"])
     assert df.loc[("all", "A"), "active_companies"] == 11
     assert df.loc[("all", "A"), "median_age_years"] == 10.0
     assert not df.loc[("all", "A"), "is_small_group"]
-    assert df.loc[("all", "unknown"), "active_companies"] == 1      # inactive/old rows excluded
+    assert df.loc[("all", "unknown"), "active_companies"] == 1      # inactive rows excluded
     assert df.loc[("all", "unknown"), "is_small_group"]
     assert df.loc[("all", "A"), "sector_name"] == "Landbouw, bosbouw en visserij"
 
@@ -185,17 +185,16 @@ def test_gold_fails_when_silver_is_missing():
         g.run()
 
 
-def test_gold_reads_only_the_latest_kvk_snapshot_and_the_columns_it_needs():
-    """kvk_company is large: gold reads seven columns of the latest snapshot only."""
-    rows = pd.DataFrame({"snapshot_date": [pd.Timestamp("2026-10-01").date()] * 3,
-                         "batch_id": ["old", "new", "new"], "is_latest": [False, True, True],
-                         "is_active": [True, True, False], "start_date": [None] * 3,
-                         "legal_form": ["BV"] * 3, "sbi2008_section": ["A"] * 3,
-                         "sbi_mapping": ["1:1"] * 3, "run_id": "silver_kvk_1"})
+def test_gold_reads_only_the_kvk_columns_it_needs():
+    """kvk_company is large (1.9M rows): gold reads only the seven columns it uses."""
+    rows = pd.DataFrame({"snapshot_date": [pd.Timestamp("2026-10-01").date()] * 2,
+                         "batch_id": ["new", "new"],
+                         "is_active": [True, False], "start_date": [None] * 2,
+                         "legal_form": ["BV"] * 2, "sbi2008_section": ["A"] * 2,
+                         "sbi_mapping": ["1:1"] * 2, "run_id": "silver_kvk_1"})
     publish.write_table(g.SILVER_ROOT / "kvk_company", rows)
     df = g.read_silver(["kvk_company"])["kvk_company"]
-    assert list(df["batch_id"]) == ["new", "new"]
-    assert "sbi_mapping" not in df and set(g.PARTIAL_READS["kvk_company"]["columns"]) == set(df)
+    assert len(df) == 2 and "sbi_mapping" not in df and set(g.PARTIAL_READS["kvk_company"]["columns"]) == set(df)
 
 
 # =========================================================================== risk index

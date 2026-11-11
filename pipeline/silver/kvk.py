@@ -1,7 +1,7 @@
 """
 Silver layer for the KVK open dataset: lakehouse/silver/kvk_company.
 
-One row per company per snapshot (every ingested KVK batch), typed, with the company's
+One row per company in the newest KVK upload, typed, with the company's
 sector taken from its main activity ("Hoofdactiviteiten"). Edge cases are marked with
 flag columns instead of being resolved by assumptions: original values stay as they
 are, derived columns are filled only where the answer is unambiguous, and the flags say
@@ -9,8 +9,7 @@ why one is empty. Gold and the dashboard can filter on the flags.
 
 Columns
 -------
-snapshot_date, batch_id, is_latest   which upload the row comes from; count companies
-                                     with is_latest, never across snapshots
+snapshot_date, batch_id              which upload the rows come from (one per table)
 snapshot_date_source                 where snapshot_date comes from: kvk_file (KVK's
                                      export date, read from the zip; the normal case)
                                      or upload (the day the batch was loaded, when the
@@ -39,33 +38,29 @@ sbi2008_division, sbi2008_section    filled only when all candidates share it; j
 
 Uses silver map_sbi2008_sbi2025 (run pipeline/silver/cbs.py first).
 
-Incremental runs
-----------------
-KVK grows: every kept upload is a snapshot of ~1.9 million rows. So kvk_company is not
-rebuilt every run (memory would grow with every month kept) but brought in line with
-bronze: a run compares the successful batches in bronze/kvk/_batch_log with the batches
-in kvk_company, builds only the new ones and deletes the ones maintenance retired, one
-snapshot at a time (memory: about one snapshot). is_latest then moves in one commit.
-Everything is rebuilt, still one snapshot at a time and newest first, when a rule that
-applies to all snapshots changed: the SBI crosswalk's content (its fingerprint is kept
-in the run log) or LOGIC_VERSION below, or with --full. A run that stops halfway is
-finished by the next one: a snapshot written by a run that didn't succeed is rebuilt.
+Only the newest upload
+----------------------
+Every KVK upload is a full snapshot of ~1.9 million companies. Bronze keeps the uploads
+(the newest plus the first of each month, tools/maintenance.py), because KVK serves only
+its current file: an old one can't be downloaded again. Silver holds only the newest:
+the open dataset has no company number, so snapshots can't be linked company by
+company, and gold uses the newest one only. (Until 2026-11 silver kept every bronze
+snapshot and updated them one by one; nothing used that history, so it was simplified.)
 
-run_id: each snapshot carries the run_id of the run that built it, so the table holds
-several run_ids (checked: one per snapshot). The run log records what each run did
-(mode, reason, batches added and removed). The table is partitioned by batch_id.
+Each run rebuilds kvk_company from the newest successful batch in bronze/kvk/_batch_log
+and publishes it like silver CBS (pipeline/common/publish.py): staged first, then
+replaced in one commit, with a run_id and a row in lakehouse/_run_log. Memory: one
+snapshot, however many uploads bronze keeps.
 
 Usage
 -----
-    python -m pipeline.silver.kvk            # add new uploads, remove retired ones
-    python -m pipeline.silver.kvk --full     # rebuild every kept upload
-    python -m pipeline.silver.kvk --preview  # what the next run would do, write nothing
+    python -m pipeline.silver.kvk            # rebuild from the newest upload
+    python -m pipeline.silver.kvk --preview  # build and summarise, write nothing
 """
 from __future__ import annotations
 
 import argparse
 import logging
-from dataclasses import dataclass, field
 
 import pandas as pd
 
@@ -97,7 +92,7 @@ MAPPING_ORDER = ["none", "unknown_code", "ambiguous_version", "merge", "1:1", "s
 # =========================================================================== reading
 def read_kvk_bronze(versions: dict | None = None, batches: list[str] | None = None) -> pd.DataFrame:
     """Rows of every successfully logged KVK batch, with batch_id and ingested_at.
-    `batches`: only these batch_ids (the incremental run reads one snapshot at a time)."""
+    `batches`: only these batch_ids (a run reads only the newest)."""
     from deltalake import DeltaTable
     data, batch_log = KVK_BRONZE / "basis_bedrijfsgegevens", KVK_BRONZE / "_batch_log"
     if not (data / "_delta_log").exists() or not (batch_log / "_delta_log").exists():
@@ -204,10 +199,9 @@ def _blank_to_null(s: pd.Series) -> pd.Series:
     return s.mask(s == "")
 
 
-def build_kvk_company(bronze: pd.DataFrame, crosswalk: pd.DataFrame,
-                      latest: str | None = None) -> pd.DataFrame:
-    """kvk_company from the bronze rows: typed columns plus the SBI columns and flags.
-    `latest`: the batch_id that gets is_latest (default: the newest batch in `bronze`).
+def build_kvk_company(bronze: pd.DataFrame, crosswalk: pd.DataFrame) -> pd.DataFrame:
+    """kvk_company from the bronze rows of one upload: typed columns plus the SBI columns
+    and flags.
 
     Columns are found by name through the same accepted spellings as the KVK file
     checks (config.yaml), so a renamed header in a future KVK file only needs a config
@@ -220,7 +214,6 @@ def build_kvk_company(bronze: pd.DataFrame, crosswalk: pd.DataFrame,
         raise ValueError(f"KVK bronze columns not recognised: {missing}")
     col = {k: bronze.columns[i] for k, i in found.items()}
 
-    batches = (bronze.groupby("_batch_id", observed=True)["_ingested_at"].min().sort_values())
     raw_start = _blank_to_null(bronze[col["start_date"]])
     start = pd.to_datetime(raw_start, format="%Y%m%d", errors="coerce")
     active = bronze[col["active"]].str.strip().str.upper().map({"J": True, "N": False})
@@ -236,7 +229,6 @@ def build_kvk_company(bronze: pd.DataFrame, crosswalk: pd.DataFrame,
         "snapshot_date_source": pd.Series("upload", index=bronze.index).where(~has_file_day,
                                                                               "kvk_file"),
         "batch_id": bronze["_batch_id"],
-        "is_latest": bronze["_batch_id"] == (latest if latest is not None else batches.index[-1]),
         "source_row_number": bronze["_row_number"],
         "start_date": start.dt.date.astype(object).where(start.notna(), None),
         "has_invalid_start_date": raw_start.notna() & start.isna(),
@@ -271,296 +263,62 @@ def build_kvk_company(bronze: pd.DataFrame, crosswalk: pd.DataFrame,
     return out
 
 
-# =========================================================================== incremental run
-# kvk_company keeps one snapshot per kept KVK upload. Instead of rebuilding all of them
-# every run (memory grows with every month kept), a run compares two lists:
-#   wanted  = the successful batches in bronze/kvk/_batch_log (the register of uploads)
-#   present = the batches already in silver kvk_company
-# and only builds what is new and deletes what was retired, one snapshot at a time.
-# Everything is rebuilt (still one snapshot at a time) when a rule that applies to all
-# snapshots changed: the SBI crosswalk's content or this module's LOGIC_VERSION.
+# =========================================================================== run
 TABLE = "kvk_company"
-# Raise this when build_kvk_company changes what it produces (a column, a rule) or how
-# the table is stored: the next run then rebuilds every snapshot instead of only adding
-# new ones. 2: partitioned by batch_id (one folder per snapshot). 3: snapshot_date is
-# KVK's file date, with snapshot_date_source.
-LOGIC_VERSION = 3
-PARTITION = ["batch_id"]       # one folder per snapshot: removing one drops its folder
 
 
-@dataclass
-class Plan:
-    full: bool                  # rebuild every snapshot
-    reason: str                 # why (shown in the log and the run log)
-    add: list[str] = field(default_factory=list)      # batches to build, oldest first
-    remove: list[str] = field(default_factory=list)   # batches to delete from silver
-    latest: str | None = None   # the batch that gets is_latest
-
-
-def plan_sync(wanted: list[str], present: dict[str, set[str]], ok_runs: set[str],
-              fingerprint: str, last_inputs: dict | None, full: bool = False) -> Plan:
-    """What a run has to do. `wanted`: successful bronze batches, oldest first;
-    `present`: batch -> run_ids of its rows in silver; `ok_runs`: run_ids of successful
-    silver KVK runs; `last_inputs`: the inputs of the last successful run (None: none).
-
-    A snapshot whose rows come from a run that didn't succeed (it crashed after
-    writing them) or from several runs counts as not done: it is deleted and rebuilt."""
-    latest = wanted[-1] if wanted else None
-    reasons = [(full, "requested (--full)"),
-               (not present, "no kvk_company table yet"),
-               (last_inputs is None, "no successful run to continue from"),
-               (last_inputs is not None and "crosswalk_fingerprint" not in last_inputs,
-                "the last run is from before incremental updates"),
-               (last_inputs is not None and last_inputs.get("crosswalk_fingerprint") != fingerprint,
-                "the SBI crosswalk changed"),
-               (last_inputs is not None and last_inputs.get("logic_version") != LOGIC_VERSION,
-                f"LOGIC_VERSION changed to {LOGIC_VERSION}")]
-    for needed, reason in reasons:
-        if needed:
-            return Plan(True, reason, add=list(wanted), latest=latest)
-    redo = {b for b, runs in present.items() if len(runs) != 1 or not runs <= ok_runs}
-    add = [b for b in wanted if b not in present or b in redo]
-    remove = sorted((set(present) - set(wanted)) | (redo & set(present)))
-    if add or remove:
-        return Plan(False, "incremental", add, remove, latest)
-    return Plan(False, "nothing new", latest=latest)
-
-
-def read_batches(versions: dict | None = None) -> list[str]:
-    """The successful KVK batches in bronze, oldest first (the register of uploads)."""
+def newest_batch(versions: dict | None = None) -> str | None:
+    """The newest successful KVK batch in bronze (by load time), or None."""
     from deltalake import DeltaTable
     batch_log = KVK_BRONZE / "_batch_log"
     if not (batch_log / "_delta_log").exists():
-        return []
-    dt = DeltaTable(str(batch_log))
-    if versions is not None:
-        versions["bronze/kvk/_batch_log"] = dt.version()
-    data = KVK_BRONZE / "basis_bedrijfsgegevens"
-    if versions is not None and (data / "_delta_log").exists():
-        versions["bronze/kvk/basis_bedrijfsgegevens"] = DeltaTable(str(data)).version()
-    log_df = dt.to_pandas(columns=["batch_id", "ingested_at", "status"])
+        return None
+    log_df = DeltaTable(str(batch_log)).to_pandas(columns=["batch_id", "ingested_at", "status"])
     ok = log_df[log_df["status"] == "success"].sort_values("ingested_at")
-    return list(ok["batch_id"])
+    newest = ok["batch_id"].iloc[-1] if not ok.empty else None
+    if versions is not None and newest is not None:
+        versions["bronze/kvk/_batch_log#batch_id"] = newest
+    return newest
 
 
-def crosswalk_fingerprint(crosswalk: pd.DataFrame) -> str:
-    """A hash of the crosswalk's content: the same code pairs give the same fingerprint,
-    however often silver CBS rewrites the table."""
-    import hashlib
-    pairs = sorted(map(tuple, crosswalk[["sbi2008_code", "sbi2025_code"]].astype(str).to_numpy()))
-    return hashlib.sha256(repr(pairs).encode()).hexdigest()[:16]
-
-
-def table_batches(path) -> dict[str, set[str]]:
-    """batch_id -> the run_ids of its rows in silver kvk_company (empty: no table).
-
-    Read from the Delta log, not from the data: kvk_company is partitioned by batch_id
-    (one folder per snapshot), and the log keeps each file's min and max run_id. Only a
-    file with several run_ids (or without statistics) is read, two columns of it.
-    Reading both columns of every row instead would cost ~300 MB per kept snapshot."""
-    import pyarrow as pa
-    import pyarrow.parquet as pq
-    from deltalake import DeltaTable
-    if not (path / "_delta_log").exists():
-        return {}
-    a = pa.table(DeltaTable(str(path)).get_add_actions(flatten=True)).to_pydict()
-
-    def single(column: str, i: int):
-        low, high = a.get(f"min.{column}"), a.get(f"max.{column}")
-        return low[i] if low and high and low[i] is not None and low[i] == high[i] else None
-
-    out: dict[str, set[str]] = {}
-    for i, file in enumerate(a["path"]):
-        batch = a["partition.batch_id"][i] if "partition.batch_id" in a else single("batch_id", i)
-        run = single("run_id", i)
-        if batch is not None and run is not None:
-            out.setdefault(batch, set()).add(run)
-            continue
-        unknown = [c for c, v in (("batch_id", batch), ("run_id", run)) if v is None]
-        pairs = pq.read_table(str(path / file), columns=unknown).group_by(unknown).aggregate([])
-        for p in pairs.to_pylist():
-            out.setdefault(p.get("batch_id", batch), set()).add(p.get("run_id", run))
-    return out
-
-
-def _snapshot(batch_id: str, latest: str, crosswalk: pd.DataFrame, run_id: str, schema=None):
-    """One snapshot of kvk_company as an Arrow table with run_id, read from bronze on its
-    own (memory: one snapshot). `schema`: cast to the table's existing column types."""
-    from pipeline.common.publish import to_arrow
-    df = build_kvk_company(read_kvk_bronze(batches=[batch_id]), crosswalk, latest=latest)
-    df["run_id"] = run_id            # in place: assign() would copy the whole snapshot first
-    table = to_arrow(df)
-    del df
-    return table.cast(schema) if schema is not None else table
-
-
-def lean_memory() -> None:
-    """Make the process hand memory back between snapshots. Without this, each snapshot
-    read and written leaves ~100-300 MB behind (memory the libraries keep for reuse), so
-    a run's peak still grew with the number of snapshots; with it, it stays flat. Arrow
-    uses the system allocator, and glibc keeps at most 2 memory arenas (no-op elsewhere)."""
-    import ctypes
-
-    import pyarrow as pa
-    pa.set_memory_pool(pa.system_memory_pool())
-    try:
-        ctypes.CDLL("libc.so.6").mallopt(-8, 2)       # -8 = M_ARENA_MAX
-    except (OSError, AttributeError):                  # not Linux/glibc (e.g. macOS)
-        pass
-
-
-def _write_snapshot(path, batch_id: str, latest: str, crosswalk: pd.DataFrame, run_id: str,
-                    schema=None, replace: bool = False):
-    """Build one snapshot and write it to the live table (append, or replace the table),
-    in its own commit. Returns its schema, for the next snapshot.
-
-    Memory: one snapshot. It goes through a small staging table first: writing a whole
-    snapshot at once into a partitioned table costs ~400 MB more than streaming it in
-    from files, and one write call per snapshot keeps the libraries from holding on to
-    memory in proportion to everything written."""
-    import shutil
-
-    from deltalake import DeltaTable, write_deltalake
-    staging = SILVER_ROOT / "_staging" / run_id
-    snap = _snapshot(batch_id, latest, crosswalk, run_id, schema)
-    schema, rows = snap.schema, snap.num_rows
-    write_deltalake(str(staging), snap, mode="overwrite")
-    del snap
-    try:
-        reader = (DeltaTable(str(staging)).to_pyarrow_dataset()
-                  .scanner(batch_size=65_536, batch_readahead=1, fragment_readahead=1).to_reader())
-        write_deltalake(str(path), reader, mode="overwrite" if replace else "append",
-                        schema_mode="overwrite" if replace else None, partition_by=PARTITION)
-    finally:
-        shutil.rmtree(staging, ignore_errors=True)
-        if (SILVER_ROOT / "_staging").exists() and not any((SILVER_ROOT / "_staging").iterdir()):
-            (SILVER_ROOT / "_staging").rmdir()
-    log.info("kvk_company: wrote snapshot %s (%d rows)", batch_id, rows)
-    return schema
-
-
-def _write_full(path, plan: Plan, crosswalk: pd.DataFrame, run_id: str) -> None:
-    """Rebuild every snapshot, one per commit: the newest first, replacing the table, so
-    the right latest snapshot is there from the first commit on; then the older ones.
-    Until the run ends the table holds only part of the history; if it stops halfway,
-    the next run sees the missing (or failed-run) snapshots and builds them."""
-    newest_first = [plan.latest, *[b for b in plan.add if b != plan.latest]]
-    schema = None
-    for i, b in enumerate(newest_first):
-        schema = _write_snapshot(path, b, plan.latest, crosswalk, run_id, schema, replace=i == 0)
-
-
-def _write_incremental(path, plan: Plan, crosswalk: pd.DataFrame, run_id: str) -> None:
-    """Delete removed batches, append new ones (one commit each), then move is_latest in
-    one commit. After a crash, the next run's plan finishes the work: a snapshot is
-    added in one commit, so never half."""
-    import pyarrow as pa
-    from deltalake import DeltaTable
-    dt = DeltaTable(str(path))
-    if plan.remove:
-        dt.delete("batch_id IN (" + ", ".join(f"'{b}'" for b in plan.remove) + ")")
-        log.info("kvk_company: removed %s", ", ".join(plan.remove))
-    schema = pa.schema(dt.schema().to_arrow())
-    for b in plan.add:
-        # added with is_latest false; the flag moves below, so readers never see two
-        schema = _write_snapshot(path, b, "", crosswalk, run_id, schema)
-    # one commit: the old latest false, the new latest true. Rewrites the files of those
-    # two snapshots only (~650 MB), however many snapshots are kept.
-    latest = plan.latest.replace("'", "''")
-    DeltaTable(str(path)).update(
-        updates={"is_latest": f"batch_id = '{latest}'"},
-        predicate=f"(is_latest AND batch_id <> '{latest}') OR (NOT is_latest AND batch_id = '{latest}')")
-
-
-def _last_success_inputs() -> tuple[dict | None, set[str]]:
-    """Inputs of the last successful silver KVK run, and the run_ids of all successful ones."""
-    import json
-
-    from pipeline.common import runlog
-    runs = runlog.read_runs(RUN_LOG)
-    ok = runs[(runs["pipeline"] == PIPELINE) & (runs["status"] == "success")]
-    if ok.empty:
-        return None, set()
-    return json.loads(ok.iloc[-1]["inputs"]), set(ok["run_id"])
-
-
-def run(full: bool = False) -> str:
-    """Bring silver kvk_company in line with bronze KVK and log the run (lakehouse/_run_log).
-    Incremental unless a full rebuild is needed or asked for (`full`). Returns the run_id."""
-    from datetime import datetime, timezone
-
-    from deltalake import DeltaTable
-
-    from pipeline.common import runlog
+def build_all(inputs: dict | None = None) -> dict[str, pd.DataFrame]:
+    """{kvk_company: DataFrame} from the newest upload; `inputs` collects what was read
+    (Delta versions and the batch_id) for the run log."""
     from pipeline.common.publish import RunFailed
-    lean_memory()
-    started = datetime.now(timezone.utc)
-    run_id = runlog.new_run_id(PIPELINE, started)
-    inputs: dict = {}
-    tables: dict = {}
-    path = SILVER_ROOT / TABLE
-    try:
-        wanted = read_batches(inputs)
-        if not wanted:
-            raise RunFailed("no KVK batches in bronze (load a KVK file first)")
-        crosswalk = read_crosswalk(inputs)
-        fingerprint = crosswalk_fingerprint(crosswalk)
-        inputs.update(crosswalk_fingerprint=fingerprint, logic_version=LOGIC_VERSION)
-        last_inputs, ok_runs = _last_success_inputs()
-        plan = plan_sync(wanted, table_batches(path), ok_runs, fingerprint, last_inputs, full)
-        log.info("kvk_company: %s (%s); add %s, remove %s", "full rebuild" if plan.full
-                 else "incremental", plan.reason, plan.add or "nothing", plan.remove or "nothing")
-        tables = {TABLE: {"mode": "full" if plan.full else "incremental", "reason": plan.reason,
-                          "added": plan.add, "removed": plan.remove}}
-        if plan.full:
-            _write_full(path, plan, crosswalk, run_id)
-        elif plan.add or plan.remove:
-            _write_incremental(path, plan, crosswalk, run_id)
-        rows = DeltaTable(str(path)).to_pyarrow_dataset().count_rows()
-        tables[TABLE].update(rows=rows, status="published" if plan.full
-                             else ("updated" if plan.add or plan.remove else "unchanged"))
-    except Exception as e:
-        runlog.write_run(run_id, PIPELINE, started, "failed", tables, inputs,
-                         error=f"{type(e).__name__}: {e}", path=RUN_LOG)
-        log.error("Run %s failed: %s", run_id, e)
-        raise
-    runlog.write_run(run_id, PIPELINE, started, "success", tables, inputs, path=RUN_LOG)
-    return run_id
+    batch = newest_batch(inputs)
+    if batch is None:
+        raise RunFailed("no KVK batches in bronze (load a KVK file first)")
+    crosswalk = read_crosswalk(inputs)
+    return {TABLE: build_kvk_company(read_kvk_bronze(inputs, batches=[batch]), crosswalk)}
+
+
+def run() -> str:
+    """Build, stage, publish and log one silver KVK run (pipeline/common/publish.py).
+    Returns the run_id; raises (after logging the failed run) when something went wrong."""
+    from pipeline.common.publish import run_pipeline
+    return run_pipeline(PIPELINE, build_all, SILVER_ROOT, RUN_LOG)
 
 
 def preview() -> None:
-    """What the next run would do, and a summary of the newest snapshot (writes nothing)."""
-    lean_memory()
-    wanted = read_batches()
-    if not wanted:
-        log.info("No KVK batches in bronze")
-        return
-    crosswalk = read_crosswalk()
-    last_inputs, ok_runs = _last_success_inputs()
-    plan = plan_sync(wanted, table_batches(SILVER_ROOT / TABLE), ok_runs,
-                     crosswalk_fingerprint(crosswalk), last_inputs)
-    log.info("Next run: %s (%s); add %s, remove %s", "full rebuild" if plan.full else "incremental",
-             plan.reason, plan.add or "nothing", plan.remove or "nothing")
-    df = build_kvk_company(read_kvk_bronze(batches=[plan.latest]), crosswalk, latest=plan.latest)
-    log.info("Newest snapshot %s: %d rows; columns: %s", plan.latest, len(df), ", ".join(df.columns))
+    """Build kvk_company from the newest upload and summarise it (writes nothing)."""
+    df = build_all()[TABLE]
+    log.info("Newest upload %s: %d rows; columns: %s", df["batch_id"].iloc[0], len(df),
+             ", ".join(df.columns))
     for c in ("sbi_version", "sbi_mapping"):
         log.info("%s: %s", c, df[c].value_counts(dropna=False).to_dict())
 
 
 def main() -> None:
-    """Command line: update kvk_company (incremental), --full to rebuild it, --preview."""
+    """Command line: rebuild kvk_company from the newest upload, or only summarise it."""
     ap = argparse.ArgumentParser(description="Build silver kvk_company from bronze KVK.")
-    ap.add_argument("--preview", action="store_true",
-                    help="show what the next run would do, write nothing")
-    ap.add_argument("--full", action="store_true",
-                    help="rebuild every snapshot instead of only adding new ones")
+    ap.add_argument("--preview", action="store_true", help="build and summarise, write nothing")
     args = ap.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     if args.preview:
         preview()
         return
     try:
-        run(full=args.full)
+        run()
     except Exception:
         raise SystemExit(1) from None      # already logged by the run; exit code 1 only
 

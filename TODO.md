@@ -12,8 +12,8 @@ Built and run on real data: bronze (CBS, KVK, SBI crosswalk) with checks and qua
 silver (CBS, KVK), gold (7 tables, with the risk index), the Streamlit dashboard, Dagster orchestration,
 Docker Compose (including the KVK chat agent), column lineage, config, run log, the
 lakehouse viewer with data quality statistics (`python -m tools.lakehouse_viewer`),
-incremental silver KVK (2026-10-10), backup, log retention and vulnerability scanning
-(2026-10-17), 400 tests. Code is organised in `pipeline/` (per
+silver KVK (newest upload only, 2026-11-11), backup, log retention and vulnerability scanning
+(2026-10-17), 394 tests. Code is organised in `pipeline/` (per
 layer) and `tools/` (2026-10-08), with a README per phase. Requirements in
 docs/requirements.md (every Must met; open: FR-19 alerts, NFR-15 default password, left
 open on purpose), Azure design in docs/cloud_design.md (not built). All committed; no containers or servers left running. See the README for how to start
@@ -457,7 +457,7 @@ Planned columns:
 - [x] Decision (2026-10-05): 4-digit KVK codes such as 7111 (SBI 2008 class codes without
       a subclass, not in the crosswalk) stay `unknown_code`; no extra mapping rule
 
-### KVK: incremental updates (done 2026-10-10)
+### KVK: incremental updates (done 2026-10-10; replaced 2026-11-11, see below)
 Why: KVK is the part that grows. With the latest snapshot plus one per month kept, a full
 rebuild every run would need ~1.2 GB more memory per month kept (~23M rows after a year).
 - [x] A run compares the successful batches in bronze's `_batch_log` with the batches in
@@ -505,10 +505,27 @@ rebuild every run would need ~1.2 GB more memory per month kept (~23M rows after
       now measures the data's age (file date). Side find: KVK refreshes the file every
       working day; the server had a newer one (2026-10-23)
 
+### KVK: silver holds only the newest upload (done 2026-11-11)
+Why: a code review found that nothing used the snapshot history in silver. Gold read only
+the latest snapshot, the open dataset has no company number to link snapshots, and the
+real lakehouse had only ever held one snapshot, so the incremental machinery above had
+never run on real data.
+- [x] Silver builds `kvk_company` from the newest successful batch and publishes it
+      through `pipeline/common/publish.py`, like silver CBS. Removed: the sync plan,
+      `LOGIC_VERSION`, the crosswalk fingerprint, partitioning, `lean_memory`, `--full`,
+      `is_latest`. Bronze still keeps the uploads (newest + first of each month): KVK
+      serves only its current file, so the history stays recoverable
+- [x] `publish.py` adds `run_id` in place and streams the staged table into the live
+      one (silver KVK's 1.9M rows); live tables are written unpartitioned
+- [x] Layer checks: "one run_id" and "exactly one snapshot" instead of "one run per
+      snapshot" and "latest snapshot present" (Dagster too)
+- [x] Real data, on a copy of the lakehouse: kvk_company identical (1,921,911 rows, every
+      column except `is_latest`); gold identical; peak memory 1.74 GB (old code 1.62 GB
+      for one snapshot)
+
 Notes:
 - There is no KVK number or company ID in the open dataset, so individual companies
   can't be tracked across snapshots; compare snapshots only in aggregate.
-- Gold counts companies with `is_latest`; never sum across snapshots.
 
 ## 3. Gold (built 2026-10-05: `pipeline/gold/build.py`)
 Main question: which company characteristics (sector, size class) go together with
@@ -776,7 +793,7 @@ crosswalk; `tests/test_checks.py` the CBS and KVK checks and quarantine;
 `tests/test_maintenance.py` the maintenance tasks; `tests/test_backup.py` backup and restore; `tests/test_config.py` the
 configuration; `tests/test_kvk_silver.py` silver KVK; `tests/test_gold.py` gold;
 `tests/test_dashboard.py` the dashboard (every page headless); `tests/test_orchestration.py`
-Dagster; `tests/test_delta.py` writes real Delta tables in `tmp_path` (400 tests, ~85 s). `conftest.py` fails a test when any module still points at the real
+Dagster; `tests/test_delta.py` writes real Delta tables in `tmp_path` (394 tests, ~85 s). `conftest.py` fails a test when any module still points at the real
 lakehouse or inbox. Checked by breaking the code on purpose:
 removing the delete-before-write, an empty `done_keys()` and non-UTC silver timestamps
 each make the right tests fail.

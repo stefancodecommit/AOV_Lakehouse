@@ -774,7 +774,6 @@ flowchart LR
     n_col_snapshot_date["snapshot_date"]:::silver
     n_col_snapshot_date_source["snapshot_date_source"]:::silver
     n_col_batch_id["batch_id"]:::silver
-    n_col_is_latest["is_latest"]:::silver
     n_col_source_row_number["source_row_number"]:::silver
     n_col_start_date["start_date"]:::silver
     n_col_has_invalid_start_date["has_invalid_start_date"]:::silver
@@ -802,8 +801,7 @@ flowchart LR
   n_src_kvk__batch_log_file_date --> n_col_snapshot_date_source
   n_src_kvk_basis_bedrijfsgegevens__batch_id --> n_col_snapshot_date_source
   n_src_kvk_basis_bedrijfsgegevens__batch_id --> n_col_batch_id
-  n_src_kvk_basis_bedrijfsgegevens__batch_id --> n_col_is_latest
-  n_src_kvk_basis_bedrijfsgegevens__ingested_at --> n_col_is_latest
+  n_src_kvk_basis_bedrijfsgegevens__ingested_at --> n_col_batch_id
   n_src_kvk_basis_bedrijfsgegevens__row_number --> n_col_source_row_number
   n_src_kvk_basis_bedrijfsgegevens_Datum_aanvang --> n_col_start_date
   n_src_kvk_basis_bedrijfsgegevens_Datum_aanvang --> n_col_has_invalid_start_date
@@ -849,8 +847,7 @@ flowchart LR
 |---|---|---|
 | `snapshot_date` | `kvk/_batch_log.file_date`<br>`kvk/basis_bedrijfsgegevens._batch_id`<br>`kvk/basis_bedrijfsgegevens._ingested_at` | KVK's export date of the file (batch log, from the zip); the day the upload was loaded when the file had no date |
 | `snapshot_date_source` | `kvk/_batch_log.file_date`<br>`kvk/basis_bedrijfsgegevens._batch_id` | kvk_file when the batch log has the file date, else upload |
-| `batch_id` | `kvk/basis_bedrijfsgegevens._batch_id` | the upload (one batch per file) |
-| `is_latest` | `kvk/basis_bedrijfsgegevens._batch_id`<br>`kvk/basis_bedrijfsgegevens._ingested_at` | true for the newest successfully loaded upload |
+| `batch_id` | `kvk/basis_bedrijfsgegevens._batch_id`<br>`kvk/basis_bedrijfsgegevens._ingested_at` | the newest successfully loaded upload (one batch per file) |
 | `source_row_number` | `kvk/basis_bedrijfsgegevens._row_number` | the row's line in the CSV file |
 | `start_date` | `kvk/basis_bedrijfsgegevens.Datum_aanvang` | as a date (YYYYMMDD); empty when it doesn't parse |
 | `has_invalid_start_date` | `kvk/basis_bedrijfsgegevens.Datum_aanvang` | true when a non-empty value doesn't parse as a date |
@@ -1351,7 +1348,6 @@ flowchart LR
   n_src_silver_dim_sector_sector_name["dim_sector<br/>sector_name"]:::silverref
   n_src_silver_kvk_company_batch_id["kvk_company<br/>batch_id"]:::silverref
   n_src_silver_kvk_company_is_active["kvk_company<br/>is_active"]:::silverref
-  n_src_silver_kvk_company_is_latest["kvk_company<br/>is_latest"]:::silverref
   n_src_silver_kvk_company_legal_form["kvk_company<br/>legal_form"]:::silverref
   n_src_silver_kvk_company_sbi2008_section["kvk_company<br/>sbi2008_section"]:::silverref
   n_src_silver_kvk_company_snapshot_date["kvk_company<br/>snapshot_date"]:::silverref
@@ -1375,12 +1371,10 @@ flowchart LR
   n_src_silver_dim_sector_sector_name --> n_col_sector_name
   n_src_silver_kvk_company_legal_form --> n_col_legal_form
   n_src_silver_kvk_company_is_active --> n_col_active_companies
-  n_src_silver_kvk_company_is_latest --> n_col_active_companies
   n_src_silver_kvk_company_start_date --> n_col_companies_with_age
   n_src_silver_kvk_company_start_date --> n_col_median_age_years
   n_src_silver_kvk_company_snapshot_date --> n_col_median_age_years
   n_src_silver_kvk_company_is_active --> n_col_is_small_group
-  n_src_silver_kvk_company_is_latest --> n_col_is_small_group
   run --> n_col_run_id
   classDef bronze fill:#f3e3c9,stroke:#a8743a,color:#1d1d1d
   classDef silver fill:#e4e7ec,stroke:#6b7480,color:#1d1d1d
@@ -1391,15 +1385,15 @@ flowchart LR
 
 | Column | Comes from | How |
 |---|---|---|
-| `snapshot_date` | `silver:kvk_company.snapshot_date` | of the latest snapshot (is_latest) |
-| `batch_id` | `silver:kvk_company.batch_id` | of the latest snapshot |
+| `snapshot_date` | `silver:kvk_company.snapshot_date` | of the snapshot in silver (the newest upload) |
+| `batch_id` | `silver:kvk_company.batch_id` | of the snapshot in silver |
 | `sbi2008_section` | `silver:kvk_company.sbi2008_section` | as in silver; 'unknown' when not determined |
 | `sector_name` | `silver:dim_sector.sector_name` | the section's name, looked up in dim_sector |
 | `legal_form` | `silver:kvk_company.legal_form` | as in silver; 'all' for every legal form together |
-| `active_companies` | `silver:kvk_company.is_active`<br>`silver:kvk_company.is_latest` | number of active companies in the latest snapshot |
+| `active_companies` | `silver:kvk_company.is_active` | number of active companies in the newest upload |
 | `companies_with_age` | `silver:kvk_company.start_date` | how many of them have a valid start date |
 | `median_age_years` | `silver:kvk_company.start_date`<br>`silver:kvk_company.snapshot_date` | median of (snapshot date - start date), in years |
-| `is_small_group` | `silver:kvk_company.is_active`<br>`silver:kvk_company.is_latest` | true under 10 companies (KVK re-identification rule) |
+| `is_small_group` | `silver:kvk_company.is_active` | true under 10 companies (KVK re-identification rule) |
 | `run_id` | *(the run)* | added when the run publishes the table: the gold run that made the row; joins to lakehouse/_run_log (which silver run_ids were read) |
 
 ## gold_risk_index

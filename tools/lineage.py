@@ -286,9 +286,8 @@ SILVER_LINEAGE: dict[str, dict[str, Column]] = {
         "snapshot_date_source": Column(src(KVK_LOG, "file_date") + src(KVK, "_batch_id"),
                                        "kvk_file when the batch log has the file date, "
                                        "else upload"),
-        "batch_id": Column(src(KVK, "_batch_id"), "the upload (one batch per file)"),
-        "is_latest": Column(src(KVK, "_batch_id", "_ingested_at"),
-                            "true for the newest successfully loaded upload"),
+        "batch_id": Column(src(KVK, "_batch_id", "_ingested_at"),
+                           "the newest successfully loaded upload (one batch per file)"),
         "source_row_number": Column(src(KVK, "_row_number"), "the row's line in the CSV file"),
         "start_date": Column(src(KVK, "Datum_aanvang"), "as a date (YYYYMMDD); empty when it "
                              "doesn't parse"),
@@ -497,22 +496,22 @@ GOLD_LINEAGE: dict[str, dict[str, Column]] = {
         "run_id": GOLD_RUN_ID,
     },
     "gold_kvk_context": {
-        "snapshot_date": Column(sv("kvk_company", "snapshot_date"), "of the latest snapshot "
-                                "(is_latest)"),
-        "batch_id": Column(sv("kvk_company", "batch_id"), "of the latest snapshot"),
+        "snapshot_date": Column(sv("kvk_company", "snapshot_date"), "of the snapshot in silver "
+                                "(the newest upload)"),
+        "batch_id": Column(sv("kvk_company", "batch_id"), "of the snapshot in silver"),
         "sbi2008_section": Column(sv("kvk_company", "sbi2008_section"),
                                   "as in silver; 'unknown' when not determined"),
         "sector_name": Column(sv("dim_sector", "sector_name"), "the section's name, looked "
                               "up in dim_sector"),
         "legal_form": Column(sv("kvk_company", "legal_form"), "as in silver; 'all' for "
                              "every legal form together"),
-        "active_companies": Column(sv("kvk_company", "is_active", "is_latest"),
-                                   "number of active companies in the latest snapshot"),
+        "active_companies": Column(sv("kvk_company", "is_active"),
+                                   "number of active companies in the newest upload"),
         "companies_with_age": Column(sv("kvk_company", "start_date"),
                                      "how many of them have a valid start date"),
         "median_age_years": Column(sv("kvk_company", "start_date", "snapshot_date"),
                                    "median of (snapshot date - start date), in years"),
-        "is_small_group": Column(sv("kvk_company", "is_active", "is_latest"),
+        "is_small_group": Column(sv("kvk_company", "is_active"),
                                  "true under 10 companies (KVK re-identification rule)"),
         "run_id": GOLD_RUN_ID,
     },

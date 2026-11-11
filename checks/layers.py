@@ -101,26 +101,21 @@ def check_silver_cbs(t: dict[str, pd.DataFrame]) -> list[CheckResult]:
     return results
 
 
-def one_run_per_snapshot(df: pd.DataFrame) -> CheckResult:
-    """kvk_company is updated one snapshot at a time, so its rows may come from several
-    runs, but each snapshot must come from exactly one (not half old, half new)."""
-    runs = df.groupby("batch_id", observed=True)["run_id"].nunique()
-    mixed = sorted(runs[runs > 1].index)
-    return CheckResult("one_run_per_snapshot", not mixed,
-                       f"snapshots with rows of several runs: {mixed}" if mixed
-                       else f"{len(runs)} snapshot(s), each from one run", mixed[:5])
+def one_snapshot(df: pd.DataFrame) -> CheckResult:
+    """kvk_company holds the newest KVK upload only: counting companies over several
+    uploads would count each company once per upload."""
+    batches = sorted(df["batch_id"].dropna().unique())
+    return CheckResult("one_snapshot", len(batches) == 1,
+                       f"{len(batches)} snapshots: {batches[:5]}" if len(batches) != 1
+                       else f"snapshot {batches[0]}", batches[:5] if len(batches) != 1 else [])
 
 
 def check_silver_kvk(df: pd.DataFrame) -> list[CheckResult]:
     t = {"kvk_company": df}
     results = [not_empty(t, ["kvk_company"])]
-    if not df.empty:
-        results.append(one_run_per_snapshot(df))
     if df.empty:
         return results
-    latest = int(df["is_latest"].astype(bool).sum())
-    results.append(CheckResult("latest_snapshot_present", latest > 0,
-                               f"{latest:,} rows in the latest snapshot"))
+    results += [one_run(t), one_snapshot(df)]
     bad = sorted(set(df["sbi2008_section"].dropna()) - SBI_SECTIONS)
     results.append(CheckResult("valid_sbi_sections", not bad,
                                f"unknown section codes: {bad}" if bad

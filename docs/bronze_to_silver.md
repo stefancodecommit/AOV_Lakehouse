@@ -419,9 +419,8 @@ link, how many codes are on the other side; name the kind of link.
 ## 12. KVK companies → `kvk_company`
 
 Built by `pipeline/silver/kvk.py`, after silver CBS (it needs the crosswalk). One row per company
-per upload; the dashboard uses the latest upload (`is_latest`). Unlike the CBS tables it is
-not rebuilt every run: a run adds the uploads that are new and removes the retired ones
-(see the docstring of `pipeline/silver/kvk.py`).
+in the newest upload; older uploads stay in bronze (see the docstring of
+`pipeline/silver/kvk.py`).
 
 ### Typing and cleaning
 

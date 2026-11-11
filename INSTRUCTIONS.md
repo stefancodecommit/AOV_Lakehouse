@@ -84,8 +84,8 @@ down. Bronze steps only fetch what is new; silver and gold are rebuilt as a whol
 |---|---|
 | CBS published new figures (about monthly) | `pipeline.bronze.cbs`, `pipeline.silver.cbs`, `pipeline.gold.build` |
 | A new KVK file in `inbox/kvk/` | `pipeline.bronze.kvk_agent --inbox`, `pipeline.silver.kvk`, `pipeline.gold.build` |
-| A new SBI crosswalk version from CBS | `pipeline.bronze.reference --url <url>`, `pipeline.silver.cbs`, `pipeline.silver.kvk` (rebuilds every upload by itself), `pipeline.gold.build` |
-| Code in `pipeline/silver/` | `pipeline.silver.cbs`, and/or `pipeline.silver.kvk --full` (or raise `LOGIC_VERSION` in it), then `pipeline.gold.build` |
+| A new SBI crosswalk version from CBS | `pipeline.bronze.reference --url <url>`, `pipeline.silver.cbs`, `pipeline.silver.kvk`, `pipeline.gold.build` |
+| Code in `pipeline/silver/` | `pipeline.silver.cbs` and/or `pipeline.silver.kvk`, then `pipeline.gold.build` |
 | Code in `pipeline/gold/` | `pipeline.gold.build` |
 | Code in `dashboard/` | nothing; reload the page (restart Streamlit for a new Python module) |
 | `config.yaml`: a table, start year or period type removed | [section 7](#remove-data-outside-the-configuration), then silver and gold |
@@ -117,9 +117,8 @@ Each `pipeline.…` above is run as `.venv/bin/python -m pipeline.…`.
 ```bash
 .venv/bin/python -m pipeline.silver.cbs --preview           # build and summarise, write nothing
 .venv/bin/python -m pipeline.silver.cbs
-.venv/bin/python -m pipeline.silver.kvk --preview           # what the next run would add or remove
-.venv/bin/python -m pipeline.silver.kvk                     # only new uploads (~1.5-1.8 GB when it adds one)
-.venv/bin/python -m pipeline.silver.kvk --full              # rebuild every kept upload, one at a time
+.venv/bin/python -m pipeline.silver.kvk --preview           # build from the newest upload and summarise, write nothing
+.venv/bin/python -m pipeline.silver.kvk                     # rebuild from the newest upload (~1.7 GB memory)
 .venv/bin/python -m pipeline.gold.build --preview
 .venv/bin/python -m pipeline.gold.build
 ```

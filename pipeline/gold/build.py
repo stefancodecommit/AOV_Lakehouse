@@ -70,14 +70,13 @@ FINAL = "Definitief"
 SILVER_CBS_TABLES = ["dim_period", "dim_sector", "dim_company_size", "dim_survey_measure",
                      "fct_absence_rate", "fct_absence_survey", "fct_business_count"]
 
-# Tables gold reads only partly. kvk_company has 1.9M rows per snapshot; gold needs
-# seven columns of the latest snapshot only. Reading all of it doubled gold's memory
-# use, which made it run out of memory in Docker.
+# Tables gold reads only partly. kvk_company has 1.9M rows; gold needs seven of its
+# columns. Reading all of it doubled gold's memory use, which made it run out of memory
+# in Docker.
 PARTIAL_READS = {
     "kvk_company": {
-        "columns": ["snapshot_date", "batch_id", "is_latest", "is_active", "start_date",
+        "columns": ["snapshot_date", "batch_id", "is_active", "start_date",
                     "legal_form", "sbi2008_section", "run_id"],
-        "filters": [("is_latest", "=", True)],
     },
 }
 
@@ -105,7 +104,7 @@ def read_silver(names: list[str], inputs: dict | None = None,
                 continue
             raise RunFailed(f"silver table missing: {name} (run the silver pipelines first)")
         dt = DeltaTable(str(path))
-        if name in PARTIAL_READS:      # only the columns and rows gold uses (memory)
+        if name in PARTIAL_READS:      # only the columns gold uses (memory)
             df = dt.to_pyarrow_table(**PARTIAL_READS[name]).to_pandas()
         else:
             df = dt.to_pandas()
@@ -357,7 +356,7 @@ def build_business_context(t: dict) -> pd.DataFrame:
 
 
 def build_kvk_context(t: dict) -> pd.DataFrame:
-    """gold_kvk_context: from the latest KVK snapshot, active companies per SBI 2008
+    """gold_kvk_context: from the KVK snapshot in silver (the newest upload), active companies per SBI 2008
     section and legal form ('all' = BV and NV together), with median company age.
 
     Companies whose section couldn't be determined are kept as section 'unknown', so the
@@ -366,8 +365,7 @@ def build_kvk_context(t: dict) -> pd.DataFrame:
     k = t.get("kvk_company", pd.DataFrame())
     if k.empty:
         return pd.DataFrame()
-    # latest snapshot only: summing snapshots would count each company once per upload
-    k = k[k["is_latest"] & (k["is_active"] == True)].copy()  # noqa: E712
+    k = k[k["is_active"] == True].copy()  # noqa: E712
     snap = pd.to_datetime(k["snapshot_date"])
     start = pd.to_datetime(k["start_date"])
     # age on the snapshot day; companies without a valid start date get no age

@@ -31,7 +31,7 @@ Four things, about 20 minutes, in this order:
    *lower* verdict held a year later in all 440 cases; the trend describes, it doesn't
    predict).
 3. **Proof that it works**: [the six phases, each with its README](#the-six-phases-each-with-its-readme),
-   [`tests/README.md`](tests/README.md) (400 tests, run by GitHub Actions on every push,
+   [`tests/README.md`](tests/README.md) (394 tests, run by GitHub Actions on every push,
    plus a weekly vulnerability scan) and [`docs/requirements.md`](docs/requirements.md)
    (every requirement with its status and the test that verifies it).
 4. **How GenAI was used**: [`docs/genai_use.md`](docs/genai_use.md): which decisions were
@@ -226,8 +226,7 @@ Useful options:
 | `python -m pipeline.bronze.cbs --cleanup-scope --dry-run` | Show bronze data outside the configuration (e.g. after raising the start year); without `--dry-run` it removes it |
 | `python -m pipeline.bronze.kvk_agent` | Chat with the KVK intake agent (needs Ollama) |
 | `python -m pipeline.bronze.kvk_agent --file <zip>` | Load one specific file without the agent |
-| `python -m pipeline.silver.cbs --preview`, `python -m pipeline.silver.kvk --preview`, `python -m pipeline.gold.build --preview` | Build and summarise, write nothing (silver KVK: what the next run would add or remove) |
-| `python -m pipeline.silver.kvk --full` | Rebuild every KVK snapshot instead of only the new ones |
+| `python -m pipeline.silver.cbs --preview`, `python -m pipeline.silver.kvk --preview`, `python -m pipeline.gold.build --preview` | Build and summarise, write nothing |
 | `python -m tools.inspect_lakehouse --layer silver` | Overview of one layer |
 | `python -m tools.lakehouse_viewer` | Browse every bronze, silver and gold table at http://localhost:8502: rows (with a text filter over the whole table), data quality statistics, history, older versions |
 | `python -m tools.maintenance quarantine --dry-run` | Show which quarantine entries the monthly cleanup would remove |
@@ -404,16 +403,16 @@ paid Dagster+).
 `fct_establishment_count`), and mapping tables (`map_characteristic`,
 `map_sbi2008_sbi2025`). Rebuilt completely on every run (the data is small).
 
-**`pipeline/silver/kvk.py`** — builds `kvk_company`: one typed row per company per snapshot, with
+**`pipeline/silver/kvk.py`** — builds `kvk_company`: one typed row per company in the newest KVK upload, with
 the company's sector taken from its main activity and translated to SBI 2008 via the
 crosswalk. Unclear cases (several main activities, unknown codes, codes that exist in
 both classifications) are *marked with flag columns* instead of being guessed; the
 sector is only filled in when there is exactly one answer (90% of active companies).
-It is updated **incrementally**: a run only builds the snapshots that are new in bronze
-and deletes the ones maintenance retired, one snapshot at a time, so its memory stays at
-about one snapshot however many months are kept. Everything is rebuilt (still one
-snapshot at a time) when the SBI crosswalk's content changed, `LOGIC_VERSION` in the
-script was raised, or with `--full`. The table is partitioned by `batch_id`.
+Silver holds **only the newest upload**: KVK has no company number, so uploads can't be
+linked company by company, and gold uses the newest one only. Bronze keeps the older
+uploads (the newest plus the first of each month), because KVK serves only its current
+file. Each run rebuilds `kvk_company` and publishes it like silver CBS (staging, run_id,
+run log).
 
 ### Gold
 
@@ -514,7 +513,7 @@ A misspelled setting name stops the script with an error instead of being ignore
 ## Tests
 
 ```bash
-.venv/bin/pytest              # 400 tests, ~85 s, no internet needed
+.venv/bin/pytest              # 394 tests, ~85 s, no internet needed
 .venv/bin/pytest -m live      # one extra test against the real CBS API
 .venv/bin/ruff check .        # the linter (settings in pyproject.toml); CI runs it too
 ```

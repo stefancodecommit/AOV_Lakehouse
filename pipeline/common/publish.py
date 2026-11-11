@@ -1,6 +1,5 @@
 """
-Publishing a silver CBS or gold run: staging, swap and the run log. (Silver KVK is
-updated per snapshot instead and writes its own run log rows: pipeline/silver/kvk.py.)
+Publishing a silver (CBS, KVK) or gold run: staging, swap and the run log.
 
 A run builds all its tables, writes them to <layer>/_staging/<run_id>/, and only when
 every table was staged replaces the live tables, each with a `run_id` column. A run that
@@ -46,11 +45,14 @@ def to_arrow(df: pd.DataFrame):
     return table.cast(pa.schema(fields), safe=False)
 
 
-def _overwrite(path: Path, table) -> None:
-    """Replace a Delta table with `table` in one commit (the old version stays in the
-    Delta history until vacuum). schema_mode='overwrite' allows columns to change."""
+def _overwrite(path: Path, data) -> None:
+    """Replace a Delta table with `data` (an Arrow table or a stream of record batches) in
+    one commit; the old version stays in the Delta history until vacuum.
+    schema_mode='overwrite' allows columns to change; partition_by=[]: silver and gold
+    tables are not partitioned (also removes the partitioning of an older version)."""
     from deltalake import write_deltalake
-    write_deltalake(str(path), table, mode="overwrite", schema_mode="overwrite")
+    write_deltalake(str(path), data, mode="overwrite", schema_mode="overwrite",
+                    partition_by=[])
 
 
 def write_table(path: Path, df: pd.DataFrame) -> None:
@@ -61,7 +63,11 @@ def write_table(path: Path, df: pd.DataFrame) -> None:
 def stage_and_publish(root: Path, run_id: str, tables: dict[str, pd.DataFrame],
                       optional: set[str] = frozenset()) -> dict:
     """Write every table to root/_staging/<run_id>/, then replace the live tables under
-    root. Nothing live changes unless all tables were staged. Returns per-table results."""
+    root. Nothing live changes unless all tables were staged. Returns per-table results.
+
+    Memory (silver KVK has ~1.9 million rows): the run_id column is added to each
+    DataFrame in place, because assign() would copy the whole table, and a staged table
+    is streamed into the live one in batches instead of being read into memory whole."""
     from deltalake import DeltaTable
     results: dict[str, dict] = {}
     empty_required = [n for n, df in tables.items() if df.empty and n not in optional]
@@ -76,7 +82,8 @@ def stage_and_publish(root: Path, run_id: str, tables: dict[str, pd.DataFrame],
                 results[name] = {"rows": 0, "status": "skipped"}
                 log.warning("%-26s empty, skipped (optional table)", name)
                 continue
-            write_table(staging / name, df.assign(run_id=run_id))
+            df["run_id"] = run_id
+            write_table(staging / name, df)
             results[name] = {"rows": len(df), "status": "staged"}
 
         # 2. all staged: replace the live tables one by one
@@ -84,7 +91,8 @@ def stage_and_publish(root: Path, run_id: str, tables: dict[str, pd.DataFrame],
             if r["status"] != "staged":
                 continue
             # copy the staged table as written, so live gets exactly what was staged
-            _overwrite(root / name, DeltaTable(str(staging / name)).to_pyarrow_table())
+            staged = DeltaTable(str(staging / name)).to_pyarrow_dataset()
+            _overwrite(root / name, staged.scanner(batch_size=65_536).to_reader())
             r["status"] = "published"
             log.info("%-26s %8d rows -> %s", name, r["rows"], root / name)
     except Exception as e:
