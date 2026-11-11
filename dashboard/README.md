@@ -33,6 +33,12 @@ and turns them into pages that answer the main question: which company character
 - **Charts with a purpose** ([`charts.py`](charts.py)): red above national, blue below,
   grey for context; colours validated for colour-blind readers, with dark-mode variants;
   every chart also as a table, so no number is reachable only by hovering.
+- **Context on hover** (2026-11-11): every tooltip says what a value *means*, with a
+  "How to read" line per chart; the risk index's tooltip adds the stability band, the
+  trend with "no forecast", absence vs national, provisional quarters and businesses; survey charts say whether a
+  difference lies outside the margin of error. Every table column has a readable title
+  and, on hover, its description from the column lineage (`tools/lineage.py`): one
+  source, kept complete by a test.
 - **Warnings instead of wrong pictures:** a page says so when gold is missing or its
   tables come from different gold runs.
 

@@ -54,8 +54,12 @@ m1, m2, m3 = st.columns(3)
 m1.metric(f"Above national, {period}", f"{(assessed['assessment'] == 'higher').sum()} "
           f"of {len(assessed)}", help="Above national in every quarter of the band.")
 m2.metric("Rising", int((assessed["trend"] == "rising").sum()),
-          help="Relative risk rising by more than 0.05 per year over the last 8 quarters.")
-m3.metric("Falling", int((assessed["trend"] == "falling").sum()))
+          help="Relative risk rising by more than 0.05 per year over the last 8 quarters. "
+               "It describes the past two years; a backtest showed it doesn't predict the "
+               "next year.")
+m3.metric("Falling", int((assessed["trend"] == "falling").sum()),
+          help="Relative risk falling by more than 0.05 per year over the last 8 quarters. "
+               "Like *Rising*, a description of the past two years, not a forecast.")
 
 st.subheader("Relative risk with its stability band")
 if assessed.empty:
@@ -86,7 +90,9 @@ if not series.empty:
     national = series.assign(series="National (= 1.00)", relative_risk=1.0)
     st.altair_chart(charts.trend(pd.concat([national, series]), "relative_risk", "series",
                                  "Series", highlight=pick, value_title="Relative risk",
-                                 fmt=".2f"),
+                                 fmt=".2f",
+                                 note="The quarter's absence ÷ the national absence of the "
+                                      "same quarter; 1.00 = national. The season cancels out."),
                     width="stretch", theme=None)
     st.caption("Each point is one quarter's absence ÷ the national absence of that quarter; "
                "the season cancels out, so quarters can be compared directly.")
@@ -97,4 +103,6 @@ common.table_view(view[["label", "relative_risk", "band_low", "band_high", "asse
                         "trend_per_year", "trend", "absence_4q_pct", "national_4q_pct",
                         "quarters_in_band", "provisional_quarters", "businesses",
                         "businesses_natural_persons", "businesses_one_person",
-                        "businesses_period", "period_label"]])
+                        "businesses_period", "period_label"]],
+                  "gold_risk_index",
+                  extra={"label": "The sector (SBI code and name) or the size class"})

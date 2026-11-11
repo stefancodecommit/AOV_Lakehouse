@@ -103,4 +103,5 @@ else:
 
 common.table_view(rows[["topic_group", "measure_title", "unit", "value", "lower_95",
                         "upper_95", "national_value", "differs_from_national", "direction",
-                        "rank_in_topic"]].sort_values(["topic_group", "rank_in_topic"]))
+                        "rank_in_topic"]].sort_values(["topic_group", "rank_in_topic"]),
+                  "gold_absence_profile")

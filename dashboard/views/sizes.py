@@ -22,7 +22,9 @@ st.subheader("Absence % by number of persons employed")
 q = q.assign(series=q["size_range"].fillna("All companies")
              .where(q["member_type"] == "total", q["size_range"] + " persons employed"))
 lines = q[q["member_type"] == "size"].sort_values("lower_bound")
-st.altair_chart(charts.trend(lines, "value", "series", "Size class", end_label="size_range"),
+st.altair_chart(charts.trend(lines, "value", "series", "Size class", end_label="size_range",
+                             note="Absence % per size class (persons employed). Small "
+                                  "companies report less absence; why is not in the data."),
                 width="stretch", theme=None)
 latest = q[q["period_key"] == data.latest_period(q)].sort_values("lower_bound")
 nat = latest[latest["member_type"] == "total"]
@@ -56,4 +58,5 @@ if df["is_provisional"].astype(bool).any():
 common.mix_note(df, ["yoy_mixes_status", "rolling_4q_has_provisional"])
 common.table_view(df[["source_table", "measure", "period_label", "size_range", "size_unit",
                       "value", "lower_95", "upper_95", "national_value",
-                      "diff_from_national_pp", "change_vs_last_year_pp", "period_status"]])
+                      "diff_from_national_pp", "change_vs_last_year_pp", "period_status"]],
+                  "gold_absence_by_size")

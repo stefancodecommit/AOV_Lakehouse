@@ -13,7 +13,7 @@ silver (CBS, KVK), gold (7 tables, with the risk index), the Streamlit dashboard
 Docker Compose (including the KVK chat agent), column lineage, config, run log, the
 lakehouse viewer with data quality statistics (`python -m tools.lakehouse_viewer`),
 incremental silver KVK (2026-10-10), backup, log retention and vulnerability scanning
-(2026-10-17), 402 tests. Code is organised in `pipeline/` (per
+(2026-10-17), 404 tests. Code is organised in `pipeline/` (per
 layer) and `tools/` (2026-10-08), with a README per phase. Requirements in
 docs/requirements.md (every Must met; open: FR-19 alerts, NFR-15 default password, left
 open on purpose), Azure design in docs/cloud_design.md (not built). All committed; no containers or servers left running. See the README for how to start
@@ -774,7 +774,7 @@ crosswalk; `tests/test_checks.py` the CBS and KVK checks and quarantine;
 `tests/test_maintenance.py` the maintenance tasks; `tests/test_backup.py` backup and restore; `tests/test_config.py` the
 configuration; `tests/test_kvk_silver.py` silver KVK; `tests/test_gold.py` gold;
 `tests/test_dashboard.py` the dashboard (every page headless); `tests/test_orchestration.py`
-Dagster; `tests/test_delta.py` writes real Delta tables in `tmp_path` (402 tests, ~85 s). `conftest.py` fails a test when any module still points at the real
+Dagster; `tests/test_delta.py` writes real Delta tables in `tmp_path` (404 tests, ~85 s). `conftest.py` fails a test when any module still points at the real
 lakehouse or inbox. Checked by breaking the code on purpose:
 removing the delete-before-write, an empty `done_keys()` and non-UTC silver timestamps
 each make the right tests fail.
@@ -824,6 +824,15 @@ Later, as each part is built:
       docs unchanged, every module imports
 - [ ] Later: `ruff format` (would rewrite 53 of 66 files: after the deadline), the
       line-length rule (133 long lines), and a type checker (mypy)
+
+- [x] **Context on hover** (2026-11-11, dashboard layout unchanged): tooltips say what a
+      value means ("How to read" per chart; risk index: stability band, trend "no
+      forecast", absence vs national, provisional quarters, businesses; survey charts: inside or outside the margin
+      of error; bars: the national value next to the difference). Table columns: readable
+      titles and, on hover, the column lineage's description (one source). Help added on
+      *Falling* and sharpened on *Rising*, *Highest/Lowest sector*. The lineage text of
+      `trend` now says "no forecast". Tests: every table column on every page has an
+      explanation (fails when one is missing), and the tooltips carry the meaning
 
 ### pandas 3 (to do)
 - [ ] Make the code work with pandas 3 (text columns are Arrow strings by default), then

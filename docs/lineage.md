@@ -1524,7 +1524,7 @@ flowchart LR
 | `provisional_quarters` | `silver:fct_absence_rate.period_status` | how many of those quarters are provisional |
 | `assessment` | `silver:fct_absence_rate.absence_pct`<br>`silver:fct_absence_rate.member_type` | higher (band wholly above 1), lower (wholly below), around national, or too few quarters |
 | `trend_per_year` | `silver:fct_absence_rate.absence_pct`<br>`silver:fct_absence_rate.member_type` | slope of a straight line through the window's quarterly relative risks, per year |
-| `trend` | `silver:fct_absence_rate.absence_pct`<br>`silver:fct_absence_rate.member_type` | rising / falling beyond ±0.05 per year (config.yaml), else stable |
+| `trend` | `silver:fct_absence_rate.absence_pct`<br>`silver:fct_absence_rate.member_type` | rising / falling beyond ±0.05 per year (config.yaml), else stable; it describes the last 8 quarters, it is no forecast |
 | `businesses` | `silver:fct_business_count.count`<br>`silver:fct_business_count.breakdown`<br>`silver:fct_business_count.sector_key` | all businesses in the sector, CBS's latest quarter (sectors only; joined on sector_key) |
 | `businesses_natural_persons` | `silver:fct_business_count.count`<br>`silver:fct_business_count.breakdown`<br>`silver:fct_business_count.legal_form`<br>`silver:fct_business_count.sector_key` | businesses run by natural persons (self-employed) |
 | `businesses_one_person` | `silver:fct_business_count.count`<br>`silver:fct_business_count.breakdown`<br>`silver:fct_business_count.size_key`<br>`silver:fct_business_count.sector_key` | businesses with one person employed |

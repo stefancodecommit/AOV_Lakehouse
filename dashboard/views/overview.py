@@ -37,10 +37,16 @@ cols[0].metric(f"National absence, {label}", f"{national['absence_pct']:.1f}%",
                help="Compared with the same quarter one year earlier, because absence is "
                     "seasonal (higher in winter).")
 top, low = sections.iloc[0], sections.iloc[-1]
-cols[1].metric("Highest sector", f"{top['absence_pct']:.1f}%", help=top["sector_name"],
+cols[1].metric("Highest sector", f"{top['absence_pct']:.1f}%",
+               help=f"{top['sbi_code']} {top['sector_name']}: the SBI section with the highest "
+                    "absence in this quarter; the difference is in percentage points from the "
+                    "national figure.",
                delta=f"{top['diff_from_national_pp']:+.1f} pp vs national", delta_color="inverse")
 cols[1].caption(f"{top['sbi_code']} {top['sector_name']}")
-cols[2].metric("Lowest sector", f"{low['absence_pct']:.1f}%", help=low["sector_name"],
+cols[2].metric("Lowest sector", f"{low['absence_pct']:.1f}%",
+               help=f"{low['sbi_code']} {low['sector_name']}: the SBI section with the lowest "
+                    "absence in this quarter; the difference is in percentage points from the "
+                    "national figure.",
                delta=f"{low['diff_from_national_pp']:+.1f} pp vs national", delta_color="inverse")
 cols[2].caption(f"{low['sbi_code']} {low['sector_name']}")
 if not q_size.empty:
@@ -56,7 +62,10 @@ with left:
     st.subheader("National absence over time")
     nat = sector[sector["sbi_level"] == "total"]
     st.altair_chart(charts.trend(nat, "absence_pct", "sector_name", "Series",
-                                 highlight=nat["sector_name"].iloc[0]),
+                                 highlight=nat["sector_name"].iloc[0],
+                                 note="Absence % = the share of working hours lost to sickness "
+                                      "absence (CBS 80072NED, employees). It peaks in winter: "
+                                      "compare a quarter with the same quarter a year earlier."),
                     width="stretch", theme=None)
     st.caption("Absence peaks in winter. Compare a quarter with the same quarter a year "
                "earlier (see *Sectors*), not with the quarter before.")
@@ -73,4 +82,5 @@ common.mix_note(now, ["yoy_mixes_status"])
 if (sector["is_provisional"].astype(bool)).any():
     st.caption(common.PROVISIONAL_NOTE)
 common.table_view(sections[["sbi_code", "sector_name", "absence_pct", "diff_from_national_pp",
-                            "rank_in_level", "change_vs_last_year_pp", "period_status"]])
+                            "rank_in_level", "change_vs_last_year_pp", "period_status"]],
+                  "gold_absence_by_sector")

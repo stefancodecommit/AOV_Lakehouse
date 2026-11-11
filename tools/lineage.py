@@ -546,7 +546,8 @@ GOLD_LINEAGE: dict[str, dict[str, Column]] = {
                                  "slope of a straight line through the window's quarterly "
                                  "relative risks, per year"),
         "trend": Column(sv(RATE, "absence_pct", "member_type"),
-                        "rising / falling beyond ±0.05 per year (config.yaml), else stable"),
+                        "rising / falling beyond ±0.05 per year (config.yaml), else stable; it "
+                        "describes the last 8 quarters, it is no forecast"),
         "businesses": Column(sv(COUNT_FCT, "count", "breakdown", "sector_key"),
                              "all businesses in the sector, CBS's latest quarter (sectors only; "
                              "joined on sector_key)"),

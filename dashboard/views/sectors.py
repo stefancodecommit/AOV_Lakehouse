@@ -62,7 +62,9 @@ show = "rolling_4q_pct" if measure == "4-quarter average" else "absence_pct"
 st.altair_chart(charts.trend(series.dropna(subset=[show]), show, "series", "Series",
                              highlight=pick,
                              value_title="Absence % (4-quarter average)"
-                             if show == "rolling_4q_pct" else "Absence %"),
+                             if show == "rolling_4q_pct" else "Absence %",
+                             note="Absence % = the share of working hours lost to sickness "
+                                  "absence. The 4-quarter average evens out the winter peak."),
                 width="stretch", theme=None)
 row = df[(df["sector_label"] == pick) & (df["period_key"] == period)]
 if not row.empty and row["change_vs_last_year_pp"].notna().iloc[0]:
@@ -76,4 +78,5 @@ if df["is_provisional"].astype(bool).any():
     st.caption(common.PROVISIONAL_NOTE)
 common.table_view(now[["sbi_code", "sector_name", "absence_pct", "national_pct",
                        "diff_from_national_pp", "rank_in_level", "last_year_pct",
-                       "change_vs_last_year_pp", "rolling_4q_pct", "period_status"]])
+                       "change_vs_last_year_pp", "rolling_4q_pct", "period_status"]],
+                  "gold_absence_by_sector")

@@ -28,14 +28,16 @@ if not biz.empty:
     bands = b[b["size_band"].isin(BANDS)].assign(
         band_order=lambda x: x["size_band"].map({k: i for i, k in enumerate(BANDS)}))
     st.altair_chart(charts.stacked_bands(bands, "sector", "businesses", "size_band", BANDS,
-                                         "Number of businesses"),
+                                         "Number of businesses",
+                                         note="All businesses, also sole traders (CBS "
+                                              "81589NED); CBS rounds to multiples of 5."),
                     width="stretch", theme=None)
     st.caption("Size bands by persons employed. Most businesses have fewer than 10 persons "
                "(often one-person businesses). CBS rounds counts to multiples of 5, so the "
                "bands can differ from the total by a few.")
     common.table_view(b[b["size_band"] == "all"][["sbi_code", "sector_name", "businesses",
                                                     "period_status"]]
-                      .sort_values("businesses", ascending=False))
+                      .sort_values("businesses", ascending=False), "gold_business_context")
 
 # --- KVK: active BVs and NVs per section
 kvk = t["gold_kvk_context"]
@@ -56,15 +58,19 @@ else:
     total = kvk[kvk["legal_form"] == "all"]["active_companies"].sum()
     c1, c2 = st.columns(2)
     with c1:
-        st.altair_chart(charts.bars(known, "sector", "active_companies", "Active companies"),
+        st.altair_chart(charts.bars(known, "sector", "active_companies", "Active companies",
+                                    note="Active BVs and NVs in the latest KVK file (KVK's "
+                                         "open data has no sole traders)."),
                         width="stretch", theme=None)
     with c2:
         st.altair_chart(charts.bars(known, "sector", "median_age_years",
-                                    "Median company age (years)", fmt=".1f"),
+                                    "Median company age (years)", fmt=".1f",
+                                    note="Half the companies are younger, half older; from "
+                                         "the start date, at KVK's file date."),
                         width="stretch", theme=None)
     st.caption(f"{unknown:,} of {total:,} active companies ({unknown / total:.0%}) have no "
                "single SBI 2008 sector (several main activities, or codes that can't be "
                "translated unambiguously); they are not in the charts. Many companies in "
                "K (financial services) are holding companies.")
     common.table_view(kvk.sort_values(["legal_form", "active_companies"],
-                                      ascending=[True, False]))
+                                      ascending=[True, False]), "gold_kvk_context")

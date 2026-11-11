@@ -13,6 +13,8 @@ Design rules (from the data-visualisation guidance used for this project):
   text stays in ink colours, never in a series colour.
 - Provisional points are hollow; final points are filled. Every chart has tooltips, and
   every page offers the numbers as a table too, so no value is reachable only by hover.
+  A tooltip says what a value means, not only what it is: a "How to read" line per chart;
+  on the risk index also absence vs national, provisional quarters and businesses.
 - Light and dark mode each have their own validated colour steps (not an inverted copy).
 """
 from __future__ import annotations
@@ -76,9 +78,20 @@ def _status(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
+def _note(d: pd.DataFrame, tooltip: list, note: str | None) -> list:
+    """Add a "How to read" line to a tooltip: one sentence on what the values mean."""
+    if note:
+        d["_note"] = note
+        tooltip = [*tooltip, alt.Tooltip("_note:N", title="How to read")]
+    return tooltip
+
+
+PROVISIONAL = "provisional: CBS can still revise it"
+
+
 def trend(df: pd.DataFrame, value: str, series: str, title: str, *, highlight: str | None = None,
           value_title: str = "Absence %", fmt: str = ".1f", height: int = 320,
-          end_label: str | None = None) -> alt.Chart:
+          end_label: str | None = None, note: str | None = None) -> alt.Chart:
     """Lines over time, one per value of `series`. With `highlight`, that series is blue
     and the others grey context (emphasis); without it, up to three series get the
     categorical colours. Provisional points are hollow. `end_label`: column with a short
@@ -93,9 +106,11 @@ def trend(df: pd.DataFrame, value: str, series: str, title: str, *, highlight: s
     # one series: no legend box (the title names it); two or more: always a legend
     color = alt.Color(f"{series}:N", title=None, scale=alt.Scale(domain=names, range=rng),
                       legend=None if len(names) == 1 else alt.Legend())
-    tooltip = [alt.Tooltip(f"{series}:N", title=title), alt.Tooltip("period_label:N", title="Period"),
-               alt.Tooltip(f"{value}:Q", title=value_title, format=fmt),
-               alt.Tooltip("status:N", title="Status")]
+    d["status_text"] = d["status"].map({"provisional": PROVISIONAL, "final": "final"})
+    tooltip = _note(d, [alt.Tooltip(f"{series}:N", title=title),
+                        alt.Tooltip("period_label:N", title="Period"),
+                        alt.Tooltip(f"{value}:Q", title=value_title, format=fmt),
+                        alt.Tooltip("status_text:N", title="Status")], note)
     x = alt.X("period_date:T", title=None, axis=alt.Axis(format="%Y", tickCount="year"))
     y = alt.Y(f"{value}:Q", title=value_title, scale=alt.Scale(zero=False))
     base = alt.Chart(d).encode(x=x, y=y, color=color, detail=f"{series}:N")
@@ -118,13 +133,23 @@ def trend(df: pd.DataFrame, value: str, series: str, title: str, *, highlight: s
 
 
 def diverging_bars(df: pd.DataFrame, label: str, diff: str, value: str, title: str,
-                   height: int | None = None) -> alt.Chart:
+                   height: int | None = None, note: str | None = None) -> alt.Chart:
     """Horizontal bars of the difference from the national figure, sorted; blue below,
     red above, grey when equal (to one decimal). The tooltip also shows the value."""
     c = colors()
     d = _status(df)
     d["side"] = pd.cut(d[diff].round(1), [-float("inf"), -0.05, 0.05, float("inf")],
                        labels=["below national", "equal", "above national"]).astype(str)
+    d["national"] = d[value] - d[diff]
+    d["status_text"] = d["status"].map({"provisional": PROVISIONAL, "final": "final"})
+    tooltip = _note(d, [alt.Tooltip(f"{label}:N", title=title),
+                        alt.Tooltip(f"{value}:Q", title="Absence %", format=".1f"),
+                        alt.Tooltip("national:Q", title="National %", format=".1f"),
+                        alt.Tooltip(f"{diff}:Q", title="Difference (pp)", format="+.1f"),
+                        alt.Tooltip("status_text:N", title="Status")],
+                    note or "The difference from the national figure of the same period, in "
+                            "percentage points: +1.0 means one point more absence than "
+                            "nationally (e.g. 6.5% against 5.5%).")
     bar = alt.Chart(d).mark_bar(size=min(BAR, 18), cornerRadiusEnd=4).encode(
         y=alt.Y(f"{label}:N", sort=alt.EncodingSortField(field=diff, order="descending"),
                 title=None, axis=alt.Axis(labelLimit=260)),
@@ -133,10 +158,7 @@ def diverging_bars(df: pd.DataFrame, label: str, diff: str, value: str, title: s
         color=alt.Color("side:N", legend=None, scale=alt.Scale(
             domain=["below national", "equal", "above national"],
             range=[c["below"], c["muted"], c["above"]])),
-        tooltip=[alt.Tooltip(f"{label}:N", title=title),
-                 alt.Tooltip(f"{value}:Q", title="Absence %", format=".1f"),
-                 alt.Tooltip(f"{diff}:Q", title="vs national (pp)", format="+.1f"),
-                 alt.Tooltip("status:N", title="Status")])
+        tooltip=tooltip)
     zero = alt.Chart(pd.DataFrame({"x": [0]})).mark_rule(color=c["axis"]).encode(x="x:Q")
     return style(alt.layer(bar, zero), height or max(160, 26 * d[label].nunique()))
 
@@ -151,13 +173,33 @@ def risk_bands(df: pd.DataFrame, label: str, title: str) -> alt.Chart:
     color = alt.Color("assessment:N", title=None, scale=alt.Scale(
         domain=["higher", "around national", "lower"], range=[c["above"], c["muted"], c["below"]]))
     y = alt.Y(f"{label}:N", title=None, sort=order, axis=alt.Axis(labelLimit=320))
+    d["band_text"] = [f"{lo:.2f}–{hi:.2f}" for lo, hi in zip(d["band_low"], d["band_high"])]
+    d["trend_text"] = [f"{t} ({v:+.2f} per year)" if pd.notna(v) else str(t)
+                       for t, v in zip(d["trend"], d["trend_per_year"])]
     tooltip = [alt.Tooltip(f"{label}:N", title=title),
                alt.Tooltip("relative_risk:Q", title="Relative risk", format=".2f"),
-               alt.Tooltip("band_low:Q", title="Band low", format=".2f"),
-               alt.Tooltip("band_high:Q", title="Band high", format=".2f"),
+               alt.Tooltip("band_text:N", title="Stability band"),
                alt.Tooltip("assessment:N", title="Assessment"),
-               alt.Tooltip("trend:N", title="Trend"),
-               alt.Tooltip("trend_per_year:Q", title="Trend per year", format="+.2f")]
+               alt.Tooltip("trend_text:N", title="Trend")]
+    # what the dot and band don't show, in short lines (a whole sentence gets cut off in a
+    # tooltip; gold's explanation sentence is on the page below the chart)
+    if {"absence_4q_pct", "national_4q_pct"} <= set(d):
+        d["absence_text"] = [f"{a:.1f}% vs {n:.1f}% nationally" if pd.notna(a) else "–"
+                             for a, n in zip(d["absence_4q_pct"], d["national_4q_pct"])]
+        tooltip.append(alt.Tooltip("absence_text:N", title="Absence, last 4 quarters"))
+    if {"provisional_quarters", "quarters_in_band"} <= set(d):
+        d["provisional_text"] = [f"{p} of {q} quarters" for p, q in
+                                 zip(d["provisional_quarters"], d["quarters_in_band"])]
+        tooltip.append(alt.Tooltip("provisional_text:N", title="Provisional"))
+    if {"businesses", "businesses_natural_persons"} <= set(d):
+        d["business_text"] = [f"{b:,} ({n / b:.0%} run by natural persons)"
+                              if pd.notna(b) and b and pd.notna(n) else "–"
+                              for b, n in zip(d["businesses"], d["businesses_natural_persons"])]
+        tooltip.append(alt.Tooltip("business_text:N", title="Businesses"))
+    tooltip = _note(d, tooltip, "1.00 = national; 1.20 = 20% more absence. The band is the "
+                                "lowest and highest quarter of the last 8: how stable the "
+                                "figure is, not a margin of error. The trend describes the "
+                                "last two years; it is no forecast.")
     base = alt.Chart(d).encode(y=y)
     band = base.mark_rule(strokeWidth=2).encode(
         x=alt.X("band_low:Q", title="Relative risk (1.00 = national)", scale=alt.Scale(zero=False)),
@@ -168,7 +210,8 @@ def risk_bands(df: pd.DataFrame, label: str, title: str) -> alt.Chart:
     return style(alt.layer(one, band, dot), max(140, 24 * d[label].nunique()))
 
 
-def intervals(df: pd.DataFrame, label: str, title: str, unit: str) -> alt.Chart:
+def intervals(df: pd.DataFrame, label: str, title: str, unit: str,
+              note: str | None = None) -> alt.Chart:
     """Estimate with its 95% interval per row, and the national value as a grey tick.
     Blue: the interval lies wholly above or below the national value (a real difference);
     grey: it includes the national value (could be sampling noise)."""
@@ -179,10 +222,17 @@ def intervals(df: pd.DataFrame, label: str, title: str, unit: str) -> alt.Chart:
     color = alt.Color("difference:N", title=None, scale=alt.Scale(
         domain=["differs from national", "within margin"], range=[c["series"][0], c["context"]]))
     y = alt.Y(f"{label}:N", title=None, sort=None, axis=alt.Axis(labelLimit=320))
-    tooltip = [alt.Tooltip(f"{label}:N", title=title), alt.Tooltip("value:Q", format=".1f"),
-               alt.Tooltip("lower_95:Q", title="95% low", format=".1f"),
-               alt.Tooltip("upper_95:Q", title="95% high", format=".1f"),
-               alt.Tooltip("national_value:Q", title="National", format=".1f")]
+    d["difference_text"] = d["differs_from_national"].astype(bool).map(
+        {True: "differs: the interval lies wholly above or below national",
+         False: "within the margin: the difference could be chance"})
+    tooltip = _note(d, [alt.Tooltip(f"{label}:N", title=title),
+                        alt.Tooltip("value:Q", title="Value", format=".1f"),
+                        alt.Tooltip("lower_95:Q", title="95% low", format=".1f"),
+                        alt.Tooltip("upper_95:Q", title="95% high", format=".1f"),
+                        alt.Tooltip("national_value:Q", title="National", format=".1f"),
+                        alt.Tooltip("difference_text:N", title="Compared with national")],
+                    note or "Survey figures: CBS asked a sample, so each value has a 95% "
+                            "interval, the range that very likely contains the true value.")
     base = alt.Chart(d).encode(y=y)
     rule = base.mark_rule(strokeWidth=2).encode(x=alt.X("lower_95:Q", title=unit),
                                                 x2="upper_95:Q", color=color)
@@ -194,10 +244,14 @@ def intervals(df: pd.DataFrame, label: str, title: str, unit: str) -> alt.Chart:
 
 
 def stacked_bands(df: pd.DataFrame, label: str, value: str, band: str, order: list[str],
-                  title: str) -> alt.Chart:
+                  title: str, note: str | None = None) -> alt.Chart:
     """Horizontal stacked bars (part-to-whole) with up to three bands in the
     categorical colours, in a fixed band order; a 2px surface gap between segments."""
     c = colors()
+    df = df.copy()
+    tooltip = _note(df, [alt.Tooltip(f"{label}:N", title="Sector"),
+                         alt.Tooltip(f"{band}:N", title="Band"),
+                         alt.Tooltip(f"{value}:Q", title=title, format=",")], note)
     return style(alt.Chart(df).mark_bar(size=min(BAR, 18), stroke=c["surface"],
                                         strokeWidth=2).encode(
         y=alt.Y(f"{label}:N", sort="-x", title=None, axis=alt.Axis(labelLimit=260)),
@@ -205,18 +259,20 @@ def stacked_bands(df: pd.DataFrame, label: str, value: str, band: str, order: li
         color=alt.Color(f"{band}:N", title="Size band", sort=order,
                         scale=alt.Scale(domain=order, range=c["series"][:len(order)])),
         order=alt.Order("band_order:Q"),
-        tooltip=[alt.Tooltip(f"{label}:N", title="Sector"), alt.Tooltip(f"{band}:N", title="Band"),
-                 alt.Tooltip(f"{value}:Q", title=title, format=",")]),
+        tooltip=tooltip),
         max(160, 26 * df[label].nunique()))
 
 
-def bars(df: pd.DataFrame, label: str, value: str, title: str, fmt: str = ",") -> alt.Chart:
+def bars(df: pd.DataFrame, label: str, value: str, title: str, fmt: str = ",",
+         note: str | None = None) -> alt.Chart:
     """Single-series horizontal bars, sorted, in one colour (no colour by rank)."""
     c = colors()
+    df = df.copy()
+    tooltip = _note(df, [alt.Tooltip(f"{label}:N", title="Sector"),
+                         alt.Tooltip(f"{value}:Q", title=title, format=fmt)], note)
     return style(alt.Chart(df).mark_bar(size=min(BAR, 18), cornerRadiusEnd=4,
                                         color=c["series"][0]).encode(
         y=alt.Y(f"{label}:N", sort="-x", title=None, axis=alt.Axis(labelLimit=260)),
         x=alt.X(f"{value}:Q", title=title),
-        tooltip=[alt.Tooltip(f"{label}:N", title="Sector"),
-                 alt.Tooltip(f"{value}:Q", title=title, format=fmt)]),
+        tooltip=tooltip),
         max(160, 26 * df[label].nunique()))

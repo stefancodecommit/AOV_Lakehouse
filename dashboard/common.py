@@ -8,6 +8,7 @@ import pandas as pd
 import streamlit as st
 
 import data
+from tools import lineage  # what every gold column means: the hover help in tables
 
 PROVISIONAL_NOTE = ("Hollow points and periods marked *(provisional)* are provisional CBS "
                     "figures (voorlopig): they can still be revised. Switch on *Final figures "
@@ -55,10 +56,34 @@ def mix_note(df: pd.DataFrame, columns: list[str]) -> None:
                    "(e.g. this year provisional vs last year final); read them with care.")
 
 
-def table_view(df: pd.DataFrame, label: str = "Show the numbers as a table") -> None:
-    """The same numbers as a table, so nothing is only readable by hovering."""
+# Words in column names shown differently in a table header
+_WORDS = {"pct": "%", "pp": "(pp)", "sbi": "SBI", "sbi2008": "SBI 2008", "4q": "4 quarters",
+          "95": "95%", "kvk": "KVK", "id": "ID"}
+
+
+def column_title(name: str) -> str:
+    """A column name as a header: 'diff_from_national_pp' -> 'Diff from national (pp)'."""
+    words = [_WORDS.get(w, w) for w in name.split("_")]
+    title = " ".join(words)
+    return title[0].upper() + title[1:]
+
+
+def column_help(table: str, extra: dict[str, str] | None = None) -> dict[str, str]:
+    """Column -> what it means, for a gold table: the descriptions of the column lineage
+    (tools/lineage.py, kept complete by a test), plus `extra` for columns a page derives."""
+    out = {c: col.how[0].upper() + col.how[1:]
+           for c, col in lineage.GOLD_LINEAGE.get(table, {}).items() if col.how}
+    return {**out, **(extra or {})}
+
+
+def table_view(df: pd.DataFrame, table: str | None = None, label: str = "Show the numbers as a table",
+               extra: dict[str, str] | None = None) -> None:
+    """The same numbers as a table, so nothing is only readable by hovering. With the gold
+    `table` it comes from, each column gets a readable title and, on hover, what it means."""
+    helps = column_help(table, extra) if table else {}
+    config = {c: st.column_config.Column(column_title(c), help=helps.get(c)) for c in df.columns}
     with st.expander(label):
-        st.dataframe(df, hide_index=True, width="stretch")
+        st.dataframe(df, hide_index=True, width="stretch", column_config=config)
 
 
 def stop_if_empty(df: pd.DataFrame) -> None:
