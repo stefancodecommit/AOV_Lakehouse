@@ -15,6 +15,12 @@ language of the presentation.
 3. **Make the fallback screenshots** (see the bottom of this page) and put them in a folder
    on the laptop, outside the repository.
 4. Export the report (`.venv/bin/python -m tools.export_report`) and keep the PDF at hand.
+5. **Let Dagster catch up, with internet:** start `.venv/bin/python -m tools.demo` and
+   leave it running until Dagster's *Runs* page shows nothing running. Schedule moments
+   missed since Dagster last ran (the CBS fetch on the 1st, maintenance on the 15th) are
+   made up as soon as it starts (INSTRUCTIONS.md, section 5). Done now, they don't start
+   during the presentation: the CBS fetch needs internet, maintenance makes the lakehouse
+   busy, and new CBS data would change the figures mid-demo. Then Ctrl+C.
 
 **10 minutes before**, one command from the project folder:
 
@@ -30,6 +36,8 @@ Present from that page; it stays open. Then:
 
 - click **KVK in bronze** (step 5) once, so its data-quality statistics (~13 s) are
   cached before the audience sees them;
+- check Dagster's **Runs** page: nothing running, nothing failed. A run that is busy is a
+  catch-up (see the day before): let it finish;
 - leave the terminal open: Ctrl+C there stops everything after the session.
 
 Without the start page, the same places by hand: the dashboard's *Risk index* page;
@@ -88,10 +96,15 @@ aanpast. Een test faalt zodra een nieuwe kolom geen herkomst heeft."
   a person.
 - `silver_cbs`, tab **Checks**: the checks (unique keys, keys in dimensions, one run).
 - **Automation** (Dagster's menu): the monthly schedule; silver and gold only after new data and passed checks.
+- Optional (20 s): **Runs** (Dagster's menu): a scheduled run made up later, e.g.
+  `cbs_monthly` for 1 November, started on 9 November at 19:43.
 
 **Zeggen:** "Dagster haalt maandelijks nieuwe cijfers op. Is er niets nieuws, dan gebeurt
 er niets. Een laag wordt pas gebouwd als de controles van de laag eronder zijn geslaagd, zo
 bereiken foute gegevens het dashboard niet."
+
+*Optioneel:* "En staat mijn laptop op de eerste uit? Dan haalt Dagster het in zodra hij weer
+draait: deze run was gepland op 1 november en is op 9 november gestart."
 
 ### 5. Data quality (½ min) · buttons *KVK in bronze*, *Silver kvk_company*
 
@@ -111,6 +124,7 @@ niet of dat dubbelingen zijn, dus ik heb ze gemarkeerd en niet verwijderd."
 |---|---|
 | A page doesn't load or is slow | switch to the screenshot of that step; continue talking |
 | Dagster doesn't start | skip step 4, or show its screenshot; the workflow is also on slide 4 |
+| A run starts or fails in Dagster during the demo | a missed schedule moment being made up (the day before was skipped); leave it, say that this is the catch-up, continue with step 5; a failed CBS fetch only means no internet |
 | A dot on the start page stays red | that service didn't start: its log is in `build/demo_logs/`; the other steps still work |
 | The start page doesn't open, or shows HTML code | it was opened in an editor: open it in a browser, `xdg-open build/demo_start.html` (macOS: `open`) |
 | The viewer's statistics take too long | show the screenshot; mention the 381,513 rows |

@@ -129,3 +129,15 @@ afgevinkt item aan het licht brachten.
 **18. Wat zou je anders doen?**
 *Antwoord (in je eigen woorden):* bijvoorbeeld eerder een terugtoets van het model doen, of
 eerder iemand anders laten meekijken (de review vond een echte, latente fout).
+
+## Operations
+
+**19. Wat gebeurt er als je laptop op de eerste van de maand uit staat?**
+*Antwoord:* Dan draait de maandelijkse CBS-run niet op dat moment, maar hij gaat niet
+verloren. Dagster kijkt bij het starten welke geplande momenten voorbij zijn gegaan en
+start de laatste daarvan meteen. Voorbeeld: Dagster werd op 9 november gestart en haalde
+direct de run van 1 november in, daarna silver en gold met de nieuwe CBS-cijfers. Voor
+een verzekeraar hoort dit niet van een laptop af te hangen: in het clouddesign draait het
+altijd.
+*Evidence:* INSTRUCTIONS.md, section 5 ("When the computer was off"); Dagster's *Runs*
+page; `docs/cloud_design.md`.

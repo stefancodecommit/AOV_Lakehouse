@@ -218,6 +218,29 @@ Dagster acts only while this command runs (Ctrl+C stops it). Then:
 - Freshness warnings: 1st of the month 09:00; maintenance: 15th 03:00. Results and
   failures are shown in the UI.
 
+### When the computer was off: Dagster catches up
+
+The schedules only run while Dagster runs (this command, `python -m tools.demo`, or
+Docker, section 6). A moment that passed while it didn't run is not lost: when Dagster
+starts again, it starts the run of the **most recent missed moment** of each schedule
+right away (once, not once per missed month). Example from this project: Dagster was
+started on 9 November at 19:43 and immediately ran `cbs_monthly` (missed on 1 November
+06:00), `freshness_monthly` (1 November 09:00) and `maintenance_monthly` (15 October
+03:00); silver and gold followed at 19:44 and 19:45 because CBS had new data.
+
+So it's enough to start Dagster now and then, for example once a month or whenever you
+work on the project. Then:
+
+- **let it run a few minutes**, until the *Runs* page in the UI shows nothing running. A
+  run stopped halfway does no harm (silver and gold publish all or nothing), but its
+  work is redone the next time;
+- **local and Docker each keep their own history** (local in `orchestration/`, Docker in
+  Postgres), so switching between them can make each catch up once. That is harmless:
+  both use the same lakehouse, and bronze only fetches what is new.
+
+For runs that don't depend on a laptop being switched on, see the cloud design
+([docs/cloud_design.md](docs/cloud_design.md)).
+
 ## 6. Run everything in Docker
 
 Needs only Docker (about 3 GB memory for the pipeline, 8 GB with the chat agent).
