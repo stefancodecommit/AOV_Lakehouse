@@ -16,7 +16,7 @@ concurrency:                  # a newer push cancels the older run on the same b
 
 jobs:
   pytest:
-    runs-on: ubuntu-24.04         # pinned, like the packages: move to a newer Ubuntu on purpose
+    runs-on: ubuntu-26.04         # pinned, like the packages: the Ubuntu of the dev machine
     timeout-minutes: 15
     steps:
       - name: Check out the code
@@ -43,7 +43,7 @@ jobs:
 
   docker-build:
     needs: pytest                 # only when the tests passed
-    runs-on: ubuntu-24.04         # pinned, like the packages: move to a newer Ubuntu on purpose
+    runs-on: ubuntu-26.04         # pinned, like the packages: the Ubuntu of the dev machine
     timeout-minutes: 20
     steps:
       - name: Check out the code

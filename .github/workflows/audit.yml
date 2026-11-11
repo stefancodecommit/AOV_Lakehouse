@@ -29,7 +29,7 @@ permissions:
 
 jobs:
   pip-audit:
-    runs-on: ubuntu-24.04         # pinned, like the packages: move to a newer Ubuntu on purpose
+    runs-on: ubuntu-26.04         # pinned, like the packages: the Ubuntu of the dev machine
     timeout-minutes: 15
     steps:
       - name: Check out the code
@@ -49,7 +49,7 @@ jobs:
         run: pip-audit --strict --progress-spinner off -r requirements-dev.txt -r requirements-docker.txt
 
   image-scan:
-    runs-on: ubuntu-24.04         # pinned, like the packages: move to a newer Ubuntu on purpose
+    runs-on: ubuntu-26.04         # pinned, like the packages: the Ubuntu of the dev machine
     timeout-minutes: 20
     env:
       # Trivy is fetched as a fixed release with its checksum, not through a GitHub Action

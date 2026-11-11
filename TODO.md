@@ -31,7 +31,9 @@ data & AI engineering 20%, documentation 15%. See section "Assignment" below.
 Done: framing for the insurer, gold with the risk index (2026-10-15); requirements, README
 per phase, Azure design, GDPR and risks, GenAI section, report and presentation
 (2026-10-17); backup, log retention, vulnerability scanning incl. the Docker image,
-Python 3.12 (2026-10-17 to 10-26); the review follow-up with the backtest (2026-10-26).
+Python 3.12 (2026-10-17 to 10-26); the review follow-up with the backtest, KVK's own file
+date (2026-10-26); the author's reflection (2026-11-05); the demo launcher, the linter
+(2026-11-09); the move to Ubuntu 26.04, locally and in CI (2026-11-11).
 
 Still open, technical: nothing for the assignment.
 
@@ -40,7 +42,6 @@ Later or optional, not needed for the assignment:
   now (no second disk); when there is one: `backup.path` and `require_other_disk: true`
   in config.local.yaml
 - **pandas 3** (section 7): make the code work with it, then raise the pin
-- **Ubuntu 26** for CI, on purpose (section 5)
 - **When CBS publishes a new SBI crosswalk version:** update
   `reference.sbi_crosswalk_url` in config.yaml (section 1, Reference)
 - Polars for silver KVK (Silver KVK); email/Slack alerts (section 5); re-run the palette
@@ -51,8 +52,10 @@ Later or optional, not needed for the assignment:
 1. ~~**GenAI reflection**~~ in report section 5.4 (done 2026-11-05, 237 words; the whole
    Word document is now 4,945 words). Not in docs/genai_use.md (the author's choice);
    its placeholder section 6 was removed
-2. **Title page** of the report: name, student number, date; then export again
-   (`python -m tools.export_report`) and tick the Report item in section "Assignment"
+2. **Title page** of the report: name and student number filled in (2026-11-11; the whole
+   Word document is now 4,942 words). Still open: the **date** of submission; then
+   export again (`python -m tools.export_report`) and tick the Report item in section
+   "Assignment"
 3. **Presentation:** practise the Q&A (docs/qa_practice.md), rehearse the demo
    (docs/demo.md; start everything with `python -m tools.demo`), make the fallback
    screenshots the day before
@@ -655,8 +658,12 @@ Run: `DAGSTER_HOME=$PWD/orchestration .venv/bin/dagster dev -f orchestration/def
       The Dockerfile now applies Debian's security updates at build time (`apt-get
       upgrade`, 1 package upgraded); rebuilt locally: zlib fixed, imports and Dagster
       validation pass, the scan rule passes (no fixable critical/high findings left)
-- [ ] Later, on purpose: move CI to `ubuntu-26.04` (one change in both workflows; push
-      and check the runs), well before GitHub retires the 24.04 runner
+- [x] Moved CI to `ubuntu-26.04` (2026-11-11), after the dev machine went to Ubuntu
+      26.04.1: the runner exists, Python 3.12.16 is built for it, Docker 29.4 is on it.
+      Checked on the dev machine first (Ubuntu 26.04, a fresh venv as in CI): install
+      without conflicts, `ruff check` clean, 402 tests, pip-audit clean. The whole
+      project was also checked after the OS upgrade (tests, pipeline previews, live CBS
+      test, report export, Docker build and Compose stack, demo, Ollama): all working
 - Real runs (2026-10-06): monthly CBS ingest skipped (nothing new), silver + gold built
   with all 12 checks passing, freshness and maintenance jobs succeeded
 - Found while testing: Dagster runs steps in their own process and drops the project

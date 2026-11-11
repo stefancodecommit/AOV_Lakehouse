@@ -4,7 +4,8 @@
 
 **Vak:** Data and AI Engineering, Erasmus Universiteit Rotterdam\
 **Docent:** prof.dr.ir. M. Janssen\
-**Auteur:** Stefan *(volledige naam en studentnummer invullen)*\
+**Auteur:** Stefan Schurgers\
+**Studentnummer:** 832770\
 **Code:** <https://github.com/stefancodecommit/AOV_Lakehouse>\
 **Datum:** *(datum van inleveren)*
 
