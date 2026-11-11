@@ -6,15 +6,14 @@ and extras where they apply (KVK batches, unknown keys in silver facts).
 
 Problems reported:
   - configured CBS bronze endpoints without a table (not ingested yet, or failed)
-  - expected silver tables that are missing
+  - expected silver and gold tables that are missing
   - empty tables
   - silver fact rows whose company characteristic is unknown in the code list
   - batches or files in quarantine (failed their checks; see report.json in each folder)
-
-  - silver/gold tables whose run_id isn't the latest successful run of their pipeline
-    (silver kvk_company, updated per snapshot: rows of a run that didn't succeed)
-    (silver_cbs, silver_kvk, gold; a publish that stopped halfway), or a latest run
-    that failed
+  - silver CBS and gold tables whose run_id isn't the latest successful run of their
+    pipeline (a publish that stopped halfway); for silver kvk_company, which is updated
+    per snapshot: rows of a run that didn't succeed
+  - a pipeline (silver_cbs, silver_kvk, gold) whose latest run failed
 
 Warnings (shown, but not counted as problems): CBS tables that CBS has stopped or hasn't
 modified for longer than their frequency allows, from the newest TableInfos in bronze.
@@ -33,15 +32,13 @@ import json
 import sys
 from pathlib import Path
 
+from checks.layers import GOLD_KEYS, SILVER_CBS_KEYS
+
 PERIOD_COLUMNS = ("period_key", "_period", "Perioden")
 INGEST_COLUMNS = ("ingested_at", "_ingested_at", "data_as_of")
-EXPECTED_GOLD = ["gold_absence_by_sector", "gold_absence_by_size", "gold_absence_profile",
-                 "gold_business_context", "gold_kvk_context"]
-EXPECTED_SILVER = [
-    "dim_period", "dim_sector", "dim_company_size", "dim_region", "dim_survey_measure",
-    "map_characteristic", "map_sbi2008_sbi2025", "fct_absence_rate", "fct_absence_survey",
-    "fct_business_count", "fct_establishment_count", "kvk_company",
-]
+# the table lists live in checks/layers.py, so a new table can't be forgotten here
+EXPECTED_GOLD = list(GOLD_KEYS)
+EXPECTED_SILVER = [*SILVER_CBS_KEYS, "map_sbi2008_sbi2025", "kvk_company"]
 
 
 def find_tables(root: Path) -> list[Path]:
@@ -57,12 +54,8 @@ def _min_max(dataset, column):
     col = dataset.to_table(columns=[column]).column(column).drop_null()
     if len(col) == 0:
         return None, None
-    try:
-        mm = pc.min_max(col)
-        return mm["min"].as_py(), mm["max"].as_py()
-    except Exception:  # types without min_max support in older pyarrow
-        values = col.to_pylist()
-        return min(values), max(values)
+    mm = pc.min_max(col)
+    return mm["min"].as_py(), mm["max"].as_py()
 
 
 def summarize(path: Path) -> dict:

@@ -107,20 +107,15 @@ def read_kvk_bronze(versions: dict | None = None, batches: list[str] | None = No
     if versions is not None:
         versions["bronze/kvk/_batch_log"] = log_dt.version()
         versions["bronze/kvk/basis_bedrijfsgegevens"] = data_dt.version()
-    log_columns = log_dt.schema().to_arrow().names if hasattr(log_dt.schema(), "to_arrow") \
-        else [f.name for f in log_dt.schema().fields]
-    logged = log_dt.to_pandas(columns=["batch_id", "ingested_at", "status",
-                                       *(["file_date"] if "file_date" in log_columns else [])])
+    logged = log_dt.to_pandas(columns=["batch_id", "ingested_at", "status", "file_date"])
     good = set(logged.loc[logged["status"] == "success", "batch_id"])
-    file_dates = (logged.dropna(subset=["file_date"]).set_index("batch_id")["file_date"].to_dict()
-                  if "file_date" in logged else {})
+    file_dates = logged.dropna(subset=["file_date"]).set_index("batch_id")["file_date"].to_dict()
 
     # Memory: 1.9M rows per snapshot. Read only the columns kvk_company uses (not the
     # long lineage texts _source_file/_source_sha256 or SBI_activiteiten), and keep
     # repeated text as pandas categories (each distinct value stored once). This took
     # silver KVK's peak memory from ~2.3 GB to ~1.3 GB; Docker's memory is limited.
-    names = data_dt.schema().to_arrow().names if hasattr(data_dt.schema(), "to_arrow") \
-        else [f.name for f in data_dt.schema().fields]
+    names = data_dt.schema().to_arrow().names
     found, _ = match_columns(names, REQUIRED_COLUMNS, OPTIONAL_COLUMNS)
     keep = [names[i] for k, i in found.items() if k != "sbi"]
     keep += ["_batch_id", "_ingested_at", "_row_number"]

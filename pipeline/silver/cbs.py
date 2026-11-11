@@ -94,9 +94,7 @@ BRONZE_FIXED = {"_request_key", "_table_id", "_entity", "_period", "_period_stat
 # =========================================================================== bronze io
 def read_bronze(table_id: str, entity: str, versions: dict | None = None) -> pd.DataFrame:
     """Bronze table as a DataFrame: one column per CBS field, plus the period status and
-    ingest time. Reads bronze's field columns; a table written before bronze had them is
-    read from raw_json instead. `versions` (optional) collects the Delta version read,
-    for the run log."""
+    ingest time. `versions` (optional) collects the Delta version read, for the run log."""
     path = BRONZE_ROOT / f"{table_id}_{entity}".lower()
     if not (path / "_delta_log").exists():
         log.warning("Bronze table missing: %s (run pipeline/bronze/cbs.py first)", path)
@@ -109,9 +107,6 @@ def read_bronze(table_id: str, entity: str, versions: dict | None = None) -> pd.
     fields = [n for n in names if n not in BRONZE_FIXED]
     # ID is only a row number in data rows; in CategoryGroups/DataProperties it's a real key
     drop_id = entity == "TypedDataSet"
-    if not fields:     # a table written before bronze had a column per field
-        raw = dt.to_pandas(columns=["_period_status", "_ingested_at", "raw_json"])
-        return parse_raw(raw, drop_id=drop_id)
     df = dt.to_pandas(columns=[*fields, *META_COLS])
     df["_ingested_at"] = df["_ingested_at"].astype("datetime64[ns, UTC]")   # as parse_raw gives
     # a field that was renamed in bronze because it clashed with a lineage column
@@ -143,8 +138,8 @@ def read_reference(dataset: str, versions: dict | None = None) -> pd.DataFrame:
 
 def parse_raw(raw: pd.DataFrame, drop_id: bool = True) -> pd.DataFrame:
     """Turn bronze rows' raw_json into a DataFrame with one column per CBS field, plus the
-    period status and ingest time from bronze's lineage columns. Used for bronze written
-    before it had field columns, and for the tests' sample data.
+    period status and ingest time from bronze's lineage columns. The tests build their
+    bronze from sample records this way (tests/conftest.py).
 
     CBS pads keys with spaces ('301000 ', 'NL01  '); they are stripped here once, so
     every later join can compare keys directly. `drop_id`: in data rows the ID column is
@@ -622,7 +617,7 @@ def build_fct_counts(table_id: str, data: pd.DataFrame, dataprops: pd.DataFrame,
     return out.sort_values(keys).reset_index(drop=True)
 
 
-# =========================================================================== orchestration
+# =========================================================================== mapping
 def build_map_sbi2008_sbi2025(ref: pd.DataFrame) -> pd.DataFrame:
     """The SBI 2008 -> SBI 2025 crosswalk (latest file version) with, per link, how many
     codes each side has: `link_type` is 1:1, split (one 2008 code -> several 2025 codes),
@@ -649,6 +644,7 @@ def build_map_sbi2008_sbi2025(ref: pd.DataFrame) -> pd.DataFrame:
     return df.sort_values(["sbi2008_code", "sbi2025_code"]).reset_index(drop=True)
 
 
+# =========================================================================== orchestration
 def build_all(read=read_bronze, read_ref=read_reference) -> dict[str, pd.DataFrame]:
     """Build every silver CBS table from bronze; returns {table name: DataFrame}.
 

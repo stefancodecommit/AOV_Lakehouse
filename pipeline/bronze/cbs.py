@@ -35,7 +35,7 @@ job. Field types come from the table's DataProperties (dimensions as text, measu
 their Datatype); fields not described there are typed from their values, and nested
 values are kept as JSON text. A field CBS adds later becomes a new column; a later batch
 can't change an existing column's type. A field named like a lineage column is stored
-as `field_<name>`. `--rebuild-columns` rebuilds the field columns from raw_json.
+as `field_<name>`.
 
 Scope cleanup
 -------------
@@ -55,7 +55,6 @@ Usage
     python -m pipeline.bronze.cbs --force                    # ignore the log and re-request (replaces rows)
     python -m pipeline.bronze.cbs --cleanup-scope --dry-run  # list what is outside the config
     python -m pipeline.bronze.cbs --cleanup-scope            # remove it
-    python -m pipeline.bronze.cbs --rebuild-columns          # field columns again from raw_json
 """
 from __future__ import annotations
 
@@ -72,6 +71,7 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
+from checks.cbs import DIMENSION_TYPES, NUMERIC_DATATYPES
 from pipeline.common.config import project_path, settings
 
 _CFG = settings["cbs"]
@@ -95,9 +95,6 @@ PERIOD_PREFERENCE = tuple(_CFG["period_preference"])      # e.g. quarters, else 
 class Endpoint:
     table_id: str                    # e.g. "86009NED"
     entity: str = ""                 # "" = service root (list of entity sets)
-    period_op: str | None = None     # eq | ge | gt | le | lt (only for non-split requests)
-    period_value: str | None = None  # e.g. "2015KW01"
-    top: int | None = None           # optional $top, sent exactly as given
     split_by_period: bool = False    # one request per period -> incremental
     start_year: int = START_YEAR     # split requests: first year to fetch
     period_types: tuple[str, ...] = PERIOD_PREFERENCE  # split requests: first type present wins
@@ -112,24 +109,15 @@ class Endpoint:
         """OData URL of the endpoint, without query parameters."""
         return f"{BASE_URL}/{self.table_id}" + (f"/{self.entity}" if self.entity else "")
 
-    def odata_filter(self) -> str | None:
-        """OData $filter for a fixed period selection, e.g. "Perioden ge '2025JJ00'"."""
-        if self.period_op:
-            return f"Perioden {self.period_op} '{self.period_value}'"
-        return None
-
 
 def endpoints_from_config(cfg: dict) -> list[Endpoint]:
     """`tables` -> their TypedDataSet, one request per period from START_YEAR up to the
     latest CBS publishes; `metadata` -> "TABLE/Entity" (or "TABLE" for the service root),
-    one request each. A metadata entry may also be a mapping of Endpoint fields."""
+    one request each."""
     eps = [Endpoint(t, "TypedDataSet", split_by_period=True) for t in cfg["tables"]]
     for item in cfg["metadata"]:
-        if isinstance(item, dict):
-            eps.append(Endpoint(**item))
-        else:
-            table_id, _, entity = str(item).partition("/")
-            eps.append(Endpoint(table_id, entity))
+        table_id, _, entity = str(item).partition("/")
+        eps.append(Endpoint(table_id, entity))
     return eps
 
 
@@ -228,14 +216,7 @@ def plan_requests(session: requests.Session, ep: Endpoint) -> list[Request]:
                 period_status=status,
             ))
         return reqs
-
-    params = {}
-    if ep.odata_filter():
-        params["$filter"] = ep.odata_filter()
-    if ep.top:
-        params["$top"] = str(ep.top)
-    key = f"{ep.table_id}/{ep.entity}" + (f"?{urlencode(sorted(params.items()))}" if params else "")
-    return [Request(endpoint=ep, key=key, params=params)]
+    return [Request(endpoint=ep, key=f"{ep.table_id}/{ep.entity}", params={})]
 
 
 # --------------------------------------------------------------------------- http
@@ -254,7 +235,6 @@ def fetch_all(session: requests.Session, url: str, params: dict) -> tuple[list[d
     """Fetch every page of one logical request. Returns (records, pages)."""
     records: list[dict] = []
     pages = 0
-    user_top = "$top" in params
     base_params = {**params, "$format": "json"}
     next_url, next_params, skip = url, base_params, 0
 
@@ -269,7 +249,7 @@ def fetch_all(session: requests.Session, url: str, params: dict) -> tuple[list[d
 
         if payload.get("odata.nextLink"):            # server-driven paging
             next_url, next_params = payload["odata.nextLink"], None
-        elif len(page) >= PAGE_SIZE and not user_top:  # full page, no nextLink -> $skip
+        elif len(page) >= PAGE_SIZE:                   # full page, no nextLink -> $skip
             skip += len(page)
             next_url, next_params = url, {**base_params, "$skip": str(skip)}
         else:
@@ -293,11 +273,8 @@ def done_keys() -> set[str]:
 # renaming, no stripping of CBS's padding spaces, no interpretation of codes: that is
 # silver's job. A field's type comes from CBS's description of the table (DataProperties)
 # when there is one; otherwise from the values. (Inferring from values alone isn't safe:
-# 80072NED's absence % arrives as 5 in one record and 5.4 in another.)
-_NUMERIC = {"Double": "float64", "Float": "float64", "Decimal": "float64",
-            "Long": "int64", "Integer": "int64", "Int16": "int64", "Int32": "int64",
-            "Int64": "int64", "Short": "int64", "Byte": "int64"}
-_DIMENSION_TYPES = {"Dimension", "TimeDimension", "GeoDimension", "GeoDetail"}
+# 80072NED's absence % arrives as 5 in one record and 5.4 in another.) The type lists
+# are shared with the checks (checks/cbs.py).
 
 
 def field_types(dataprops: list[dict] | None) -> dict[str, str]:
@@ -305,10 +282,10 @@ def field_types(dataprops: list[dict] | None) -> dict[str, str]:
     dimensions as text. Fields not described there are inferred from their values."""
     out = {}
     for d in dataprops or []:
-        if d.get("Type") in _DIMENSION_TYPES:
+        if d.get("Type") in DIMENSION_TYPES:
             out[d["Key"]] = "string"
         elif d.get("Type") == "Topic":
-            out[d["Key"]] = _NUMERIC.get(d.get("Datatype"), "string")
+            out[d["Key"]] = NUMERIC_DATATYPES.get(d.get("Datatype"), "string")
     return out
 
 
@@ -563,44 +540,6 @@ def cleanup_scope(session=None, dry_run: bool = True) -> list[str]:
     return actions
 
 
-def _bronze_dataprops(table_id: str) -> list[dict] | None:
-    """A table's DataProperties as stored in bronze (None when not ingested)."""
-    from deltalake import DeltaTable
-    path = BRONZE_ROOT / Endpoint(table_id, "DataProperties").name
-    if not (path / "_delta_log").exists():
-        return None
-    return [json.loads(x) for x in DeltaTable(str(path)).to_pandas(columns=["raw_json"])["raw_json"]]
-
-
-def rebuild_columns(dry_run: bool = False) -> list[str]:
-    """Rebuild the field columns of every CBS bronze table from its raw_json, without
-    calling the API: for tables written before bronze had a column per field, or after a
-    change in how fields are typed. Each table is overwritten as a whole (a new Delta
-    version; the old one stays readable through time travel). The lineage columns,
-    raw_json and the ingestion log are left as they are. Returns the tables done."""
-    from deltalake import DeltaTable, write_deltalake
-    fixed_names = bronze_schema().names
-    done = []
-    for log_dir in sorted(BRONZE_ROOT.glob("*/_delta_log")):   # kvk/ and reference/ are deeper
-        path = log_dir.parent
-        if path.name.startswith("_"):
-            continue
-        dt = DeltaTable(str(path))
-        fixed = dt.to_pyarrow_table(columns=fixed_names).cast(bronze_schema())
-        if dry_run:
-            done.append(f"bronze/{path.name}: {fixed.num_rows} rows")
-            continue
-        records = [json.loads(x) for x in fixed.column("raw_json").to_pylist()]
-        table_id = fixed.column("_table_id")[0].as_py() if fixed.num_rows else None
-        table = fixed
-        for name, column in structured_columns(records, _bronze_dataprops(table_id)).items():
-            table = table.append_column(f"field_{name}" if name in fixed_names else name, column)
-        write_deltalake(str(path), table, mode="overwrite", schema_mode="overwrite")
-        done.append(f"bronze/{path.name}: {table.num_rows} rows, "
-                    f"{table.num_columns - len(fixed_names)} field columns")
-    return done
-
-
 # --------------------------------------------------------------------------- main
 def run(only: str | None, force: bool, dry_run: bool) -> dict:
     """Ingest everything new for the configured endpoints.
@@ -680,14 +619,9 @@ if __name__ == "__main__":
     ap.add_argument("--cleanup-scope", action="store_true",
                     help="remove bronze data outside config.yaml instead of ingesting "
                          "(combine with --dry-run to only list it)")
-    ap.add_argument("--rebuild-columns", action="store_true",
-                    help="rebuild bronze's field columns from raw_json, without API calls")
     args = ap.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-    if args.rebuild_columns:
-        for line in rebuild_columns(dry_run=args.dry_run):
-            log.info("%s%s", "[dry-run] " if args.dry_run else "", line)
-    elif args.cleanup_scope:
+    if args.cleanup_scope:
         actions = cleanup_scope(dry_run=args.dry_run)
         for a in actions:
             log.info("%s%s", "[dry-run] " if args.dry_run else "", a)

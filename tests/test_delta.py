@@ -148,40 +148,6 @@ def test_nested_values_and_clashing_names_are_kept():
     assert bronze_types(ep)["Flag"] == "bool" and row["Flag"] == True  # noqa: E712
 
 
-def write_old_format(req, recs):
-    """A bronze table as written before bronze had a column per field."""
-    from deltalake import write_deltalake
-    table = b.bronze_table(req, recs, b.datetime.now(b.timezone.utc))
-    write_deltalake(str(b.BRONZE_ROOT / req.endpoint.name),
-                    table.select(b.bronze_schema().names), mode="append")
-
-
-def test_silver_reads_old_and_new_bronze_the_same():
-    recs = records("2026KW01", 6.0, 5.4)
-    write_old_format(period_request("2026KW01", "Voorlopig"), recs)
-    old = s.read_bronze("80072NED", "TypedDataSet")
-    b.rebuild_columns()
-    new = s.read_bronze("80072NED", "TypedDataSet")
-    pd.testing.assert_frame_equal(old, new)
-    assert "ID" not in new and new.BedrijfskenmerkenSBI2008.iloc[0] == "T001081"
-
-
-def test_rebuild_columns_keeps_rows_and_lineage_and_uses_bronze_dataproperties():
-    dp = Endpoint("80072NED", "DataProperties")
-    (dp_req,) = b.plan_requests(None, dp)
-    b.write_bronze(dp_req, DP_80072)
-    write_old_format(period_request("2026KW01", "Voorlopig"), records("2026KW01", 6))
-    before = bronze_rows()[b.bronze_schema().names]
-    assert b.rebuild_columns(dry_run=True) == ["bronze/80072ned_dataproperties: 3 rows",
-                                               "bronze/80072ned_typeddataset: 1 rows"]
-    assert "Perioden" not in bronze_rows()                         # dry run changes nothing
-    b.rebuild_columns()
-    after = bronze_rows()
-    pd.testing.assert_frame_equal(after[before.columns], before)
-    assert bronze_types()["Ziekteverzuimpercentage_1"] == "double"  # 6 is an int in the JSON
-    assert b.done_keys() == set()                                   # the log is left alone
-
-
 # =========================================================================== ingestion log
 def test_done_keys_is_empty_without_a_log():
     assert b.done_keys() == set()

@@ -230,8 +230,7 @@ silver `map_sbi2008_sbi2025` uses the newest version only.
   so failures are retried on the next run.
 - Stores each record as received twice: as text (`raw_json`) and as one column per CBS
   field, typed from the table's DataProperties, values unchanged (decided 2026-10-08, so
-  bronze can be queried directly; cleaning stays in silver). `--rebuild-columns` rebuilds
-  the columns from `raw_json` without API calls.
+  bronze can be queried directly; cleaning stays in silver).
 
 ### Bronze KVK — `pipeline/bronze/kvk_agent.py` (built)
 
@@ -544,7 +543,7 @@ TODO.md                  open work
 | Data checks before ingestion (CBS) | Built (`checks/cbs.py`) |
 | Quarantine | Built for CBS, KVK and reference files; monthly cleanup in `tools/maintenance.py` |
 | Alerting, freshness checks | To do |
-| pytest | 404 tests incl. real Delta tables, the dashboard pages and Dagster; one opt-in live CBS test |
+| pytest | 400 tests incl. real Delta tables, the dashboard pages and Dagster; one opt-in live CBS test |
 | Configuration file | Built (`config.yaml` + `pipeline/common/config.py`) |
 | Gold | Built: 7 tables, including the risk index for the insurer; provisional figures marked |
 | Streamlit dashboard | Built: 6 pages incl. data dictionary; provisional marked, "final only" switch |

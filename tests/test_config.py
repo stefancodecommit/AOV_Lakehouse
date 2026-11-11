@@ -82,13 +82,10 @@ def test_real_config_loads_without_overrides():
 def test_endpoints_from_config():
     eps = b.endpoints_from_config({
         "tables": ["80072NED"],
-        "metadata": ["80072NED/Perioden", "81589NED",
-                     {"table_id": "81644NED", "entity": "TypedDataSet", "period_op": "ge",
-                      "period_value": "2025JJ00"}]})
+        "metadata": ["80072NED/Perioden", "81589NED"]})
     assert [(e.table_id, e.entity, e.split_by_period) for e in eps] == [
         ("80072NED", "TypedDataSet", True), ("80072NED", "Perioden", False),
-        ("81589NED", "", False), ("81644NED", "TypedDataSet", False)]
-    assert eps[3].odata_filter() == "Perioden ge '2025JJ00'"
+        ("81589NED", "", False)]
 
 
 def test_exit_pause_prevents_the_deltalake_crash_at_exit(tmp_path):

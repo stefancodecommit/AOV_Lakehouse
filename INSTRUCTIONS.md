@@ -359,8 +359,7 @@ After raising the start year, removing a table or changing the period type in
 ### Other repairs
 
 ```bash
-.venv/bin/python -m pipeline.bronze.cbs --rebuild-columns   # rebuild bronze's field columns from raw_json (no API calls)
-ls lakehouse/quarantine/                                     # batches that failed their checks; report.json says why
+ls lakehouse/quarantine/      # batches that failed their checks; report.json says why
 ```
 
 A quarantined CBS batch is fetched and checked again on the next `pipeline.bronze.cbs`

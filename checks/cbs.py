@@ -19,9 +19,12 @@ MAX_AGE = {"Perkwartaal": timedelta(days=122), "Perjaar": timedelta(days=456),
 STOPPED_FREQUENCY = "Stopgezet"
 REGULAR_STATUS = "Regulier"
 
+# CBS's DataProperties types, also used by pipeline/bronze/cbs.py to type bronze columns:
+# dimension columns are text; numeric measures get the Arrow type next to their Datatype
 DIMENSION_TYPES = {"Dimension", "TimeDimension", "GeoDimension", "GeoDetail"}
-NUMERIC_DATATYPES = {"Double", "Float", "Decimal", "Long", "Integer", "Int16", "Int32",
-                     "Int64", "Short", "Byte"}
+NUMERIC_DATATYPES = {"Double": "float64", "Float": "float64", "Decimal": "float64",
+                     "Long": "int64", "Integer": "int64", "Int16": "int64", "Int32": "int64",
+                     "Int64": "int64", "Short": "int64", "Byte": "int64"}
 MAX_EXAMPLES = 5
 
 

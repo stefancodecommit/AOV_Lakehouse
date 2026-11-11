@@ -10,7 +10,9 @@ import pandas as pd
 
 from checks import CheckResult
 
-# table -> columns that must identify a row (no two rows with the same values)
+# table -> columns that must identify a row (no two rows with the same values). These two
+# dicts are also the list of which silver CBS and gold tables exist: the inspector, the
+# lakehouse viewer and the dashboard take their table names from here.
 SILVER_CBS_KEYS = {
     "dim_period": ["period_key"],
     "dim_sector": ["sector_key"],
@@ -23,14 +25,14 @@ SILVER_CBS_KEYS = {
     "fct_business_count": ["period_key", "sector_key", "measure_key"],
     "fct_establishment_count": ["period_key", "sector_key", "region_key", "measure_key"],
 }
-GOLD_KEYS = {
+GOLD_KEYS = {        # in the order the dashboard's data dictionary shows them
+    "gold_risk_index": ["basis", "group_type", "group_key"],
+    "gold_risk_index_history": ["period_key", "group_type", "group_key"],
     "gold_absence_by_sector": ["period_key", "sector_key"],
     "gold_absence_by_size": ["source_table", "period_key", "member_type", "size_key"],
     "gold_absence_profile": ["period_key", "characteristic_key", "measure_key"],
     "gold_business_context": ["period_key", "sector_key", "size_band"],
     "gold_kvk_context": ["legal_form", "sbi2008_section"],
-    "gold_risk_index": ["basis", "group_type", "group_key"],
-    "gold_risk_index_history": ["period_key", "group_type", "group_key"],
 }
 SBI_SECTIONS = set("ABCDEFGHIJKLMNOPQRSTU") | {"unknown"}
 

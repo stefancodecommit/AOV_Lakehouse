@@ -70,8 +70,8 @@ Ziekteverzuimpercentage_1   5.4        (a number: DataProperties says Float)
 ```
 
 The field columns hold the same values as `raw_json`, unchanged, so bronze can be queried
-directly; `raw_json` stays as the proof of what was received, and `python -m pipeline.bronze.cbs
---rebuild-columns` rebuilds the columns from it. A field CBS adds later becomes a new column.
+directly; `raw_json` stays as the proof of what was received. A field CBS adds later
+becomes a new column.
 
 Read on its own, such a row says little: what is `T001081`? What does
 `Ziekteverzuimpercentage_1` measure, in which unit? The answers sit in *other* bronze
@@ -147,8 +147,7 @@ Bronze tables that silver does **not** read, and why:
 ## 4. Steps every silver CBS table goes through
 
 1. **Read the bronze table's field columns.** Keep the period status and ingest time
-   from bronze's lineage columns. (A table written before bronze had field columns would
-   be read from `raw_json` instead; the result is the same.)
+   from bronze's lineage columns.
 2. **Strip the padding.** CBS pads keys with spaces (`'307500 '`, `'NL01  '`). Stripping
    them once here means every later join just works.
 3. **Drop the running number `ID`** in data records (it is only a position); in code lists
@@ -508,7 +507,7 @@ loaded on 2026-10-05.
 
 | Silver table | Function in `pipeline/silver/cbs.py` |
 |---|---|
-| (every table) reading bronze, stripping padding, dropping `ID` | `read_bronze`, `clean_fields`, `latest` (`parse_raw` for bronze without field columns) |
+| (every table) reading bronze, stripping padding, dropping `ID` | `read_bronze`, `clean_fields`, `latest` |
 | `map_characteristic` | `build_map_characteristic` (uses `parse_size`, `parse_sector`, `aggregate_flags`) |
 | `dim_sector` | `build_dim_sector` |
 | `dim_company_size` | `build_dim_company_size` |

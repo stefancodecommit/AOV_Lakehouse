@@ -40,9 +40,6 @@ Usage
     python -m pipeline.bronze.kvk_agent --file ~/Downloads/kvk-open-dataset-basis-bedrijfsgegevens.zip
                                                # no LLM: verify, confirm, ingest directly
     python -m pipeline.bronze.kvk_agent --inbox  # no LLM: the newest new file in inbox/kvk/
-    python -m pipeline.bronze.kvk_agent --backfill-file-dates
-                                               # batches loaded before file_date existed:
-                                               # read it from the same file in inbox/kvk/
 """
 from __future__ import annotations
 
@@ -364,15 +361,10 @@ def write_batch(v: Verification, batch_id: str, now: datetime) -> int:
         written += n
         return pa.RecordBatch.from_arrays(arrays, schema=schema)
 
-    import deltalake
     reader = pa.RecordBatchReader.from_batches(schema, batches())
     # One call = one Delta commit: a batch is either fully in bronze or not at all.
-    # schema_mode="merge" lets KVK add columns later without breaking older batches
-    # (deltalake < 1.0 only supports that with the rust engine).
-    kwargs = {"schema_mode": "merge"}
-    if int(deltalake.__version__.split(".")[0]) < 1:
-        kwargs["engine"] = "rust"
-    write_deltalake(str(DATA_TABLE), reader, mode="append", **kwargs)
+    # schema_mode="merge" lets KVK add columns later without breaking older batches.
+    write_deltalake(str(DATA_TABLE), reader, mode="append", schema_mode="merge")
     return written
 
 
@@ -397,43 +389,8 @@ def write_log(v: Verification, batch_id: str, now: datetime, rows: int,
         ("row_count", pa.int64()), ("column_count", pa.int64()),
         ("verified_at", pa.timestamp("us", tz="UTC")), ("verification_report", pa.string()),
         ("confirmed_by", pa.string()), ("status", pa.string()), ("file_date", pa.date32())]))
-    # "merge": a log written before file_date existed gets the column (empty for old rows)
+    # "merge": a column added to the log later is added to the table (empty for old rows)
     write_deltalake(str(LOG_TABLE), table, mode="append", schema_mode="merge")
-
-
-def backfill_file_dates(inbox: Path | None = None) -> dict[str, str]:
-    """For logged batches without a file_date (loaded before it was recorded): find the
-    same file (by SHA-256) in the inbox and take the date from its zip. Batches whose file
-    is gone stay empty; silver then uses the upload date and says so. Returns
-    {batch_id: file_date} of the batches filled in."""
-    if not (LOG_TABLE / "_delta_log").exists():
-        return {}
-    import pyarrow as pa
-    from deltalake import DeltaTable, write_deltalake
-
-    from checks.kvk import FileCheck, find_csv
-    table = DeltaTable(str(LOG_TABLE)).to_pyarrow_table()
-    rows = table.to_pylist()
-    todo = {r["file_sha256"]: r for r in rows if r.get("file_date") is None}
-    filled = {}
-    for f in sorted((inbox or INBOX).glob("*")):
-        if not todo or not f.is_file():
-            continue
-        digest = _sha256(f)
-        if digest in todo:
-            check = FileCheck(f, digest)
-            find_csv(f, check)
-            if check.file_date:
-                row = todo.pop(digest)
-                row["file_date"] = check.file_date
-                filled[row["batch_id"]] = check.file_date.isoformat()
-    if filled:
-        schema = table.schema
-        if "file_date" not in schema.names:
-            schema = schema.append(pa.field("file_date", pa.date32()))
-        write_deltalake(str(LOG_TABLE), pa.Table.from_pylist(rows, schema=schema),
-                        mode="overwrite", schema_mode="overwrite")
-    return filled
 
 
 # --------------------------------------------------------------------------- agent
@@ -533,13 +490,8 @@ if __name__ == "__main__":
                                     "(a bare file name is looked up in the inbox)")
     src.add_argument("--inbox", action="store_true",
                      help="skip the agent: verify and ingest the newest new file in the inbox")
-    src.add_argument("--backfill-file-dates", action="store_true",
-                     help="fill in file_date for batches loaded before it was recorded")
     args = ap.parse_args()
-    if args.backfill_file_dates:
-        filled = backfill_file_dates()
-        print(f"file_date filled in for {len(filled)} batches: {filled}")
-    elif args.inbox:
+    if args.inbox:
         newest = newest_new_inbox_file()
         if newest is None:
             sys.exit(f"No new KVK file in {INBOX}")

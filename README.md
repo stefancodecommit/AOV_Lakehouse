@@ -31,7 +31,7 @@ Four things, about 20 minutes, in this order:
    *lower* verdict held a year later in all 440 cases; the trend describes, it doesn't
    predict).
 3. **Proof that it works**: [the six phases, each with its README](#the-six-phases-each-with-its-readme),
-   [`tests/README.md`](tests/README.md) (404 tests, run by GitHub Actions on every push,
+   [`tests/README.md`](tests/README.md) (400 tests, run by GitHub Actions on every push,
    plus a weekly vulnerability scan) and [`docs/requirements.md`](docs/requirements.md)
    (every requirement with its status and the test that verifies it).
 4. **How GenAI was used**: [`docs/genai_use.md`](docs/genai_use.md): which decisions were
@@ -224,7 +224,6 @@ Useful options:
 | `python -m pipeline.bronze.cbs --dry-run` | List what would be requested, fetch nothing |
 | `python -m pipeline.bronze.cbs --only 81589` | Only endpoints whose name contains "81589" |
 | `python -m pipeline.bronze.cbs --cleanup-scope --dry-run` | Show bronze data outside the configuration (e.g. after raising the start year); without `--dry-run` it removes it |
-| `python -m pipeline.bronze.cbs --rebuild-columns` | Rebuild bronze's field columns from `raw_json`, no API calls (after a change in how fields are typed) |
 | `python -m pipeline.bronze.kvk_agent` | Chat with the KVK intake agent (needs Ollama) |
 | `python -m pipeline.bronze.kvk_agent --file <zip>` | Load one specific file without the agent |
 | `python -m pipeline.silver.cbs --preview`, `python -m pipeline.silver.kvk --preview`, `python -m pipeline.gold.build --preview` | Build and summarise, write nothing (silver KVK: what the next run would add or remove) |
@@ -515,7 +514,7 @@ A misspelled setting name stops the script with an error instead of being ignore
 ## Tests
 
 ```bash
-.venv/bin/pytest              # 404 tests, ~85 s, no internet needed
+.venv/bin/pytest              # 400 tests, ~85 s, no internet needed
 .venv/bin/pytest -m live      # one extra test against the real CBS API
 .venv/bin/ruff check .        # the linter (settings in pyproject.toml); CI runs it too
 ```

@@ -7,7 +7,7 @@ phase 4 (model design and testing) and the proof of working for every phase.
 .venv/bin/pytest            # all tests, ~85 s, no internet needed
 ```
 
-Expected: all pass (404 at the time of writing, 1 deselected: the live test below). The
+Expected: all pass (400 at the time of writing, 1 deselected: the live test below). The
 same suite runs on every push in GitHub Actions, on a clean Python 3.12.
 
 ## What is tested, per phase

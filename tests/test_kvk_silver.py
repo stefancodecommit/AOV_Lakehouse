@@ -124,7 +124,8 @@ def kvk_lakehouse():
     write_deltalake(str(k.KVK_BRONZE / "_batch_log"), pa.table({
         "batch_id": ["kvk_b1"], "status": ["success"],
         "ingested_at": pa.array([pd.Timestamp("2026-10-01", tz="UTC")],
-                                pa.timestamp("us", tz="UTC"))}))
+                                pa.timestamp("us", tz="UTC")),
+        "file_date": pa.array([None], pa.date32())}))        # no file date: upload date used
     publish.write_table(k.SILVER_ROOT / "map_sbi2008_sbi2025", CROSSWALK)
 
 
@@ -209,7 +210,8 @@ def upload(batch_id, day, rows=ROWS):
     write_deltalake(str(k.KVK_BRONZE / "basis_bedrijfsgegevens"), pa.Table.from_pandas(df), mode="append")
     write_deltalake(str(k.KVK_BRONZE / "_batch_log"), pa.table({
         "batch_id": [batch_id], "status": ["success"],
-        "ingested_at": pa.array([pd.Timestamp(day, tz="UTC")], pa.timestamp("us", tz="UTC"))}),
+        "ingested_at": pa.array([pd.Timestamp(day, tz="UTC")], pa.timestamp("us", tz="UTC")),
+        "file_date": pa.array([None], pa.date32())}),         # no file date: upload date used
         mode="append")
 
 

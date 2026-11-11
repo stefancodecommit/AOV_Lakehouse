@@ -69,8 +69,6 @@ def test_non_split_request_key_and_params():
     (req,) = b.plan_requests(None, Endpoint("86009NED", "Bedrijfskenmerken"))
     assert req.key == "86009NED/Bedrijfskenmerken"
     assert req.params == {} and req.period is None
-    (req,) = b.plan_requests(None, Endpoint("81644NED", "TypedDataSet", "ge", "2025JJ00", top=100))
-    assert req.params == {"$filter": "Perioden ge '2025JJ00'", "$top": "100"}
 
 
 # =========================================================================== pagination
@@ -110,13 +108,6 @@ def test_fetch_all_uses_skip_when_a_full_page_has_no_next_link(monkeypatch):
     records, pages = b.fetch_all(session, "https://x", {})
     assert records == [1, 2, 3, 4, 5] and pages == 3
     assert [c[1].get("$skip") for c in session.calls] == [None, "2", "4"]
-
-
-def test_fetch_all_does_not_page_past_a_user_top(monkeypatch):
-    monkeypatch.setattr(b, "PAGE_SIZE", 2)
-    session = FakeSession({"value": [1, 2]})
-    records, pages = b.fetch_all(session, "https://x", {"$top": "2"})
-    assert records == [1, 2] and pages == 1
 
 
 # =========================================================================== run(): skip / fetch rules
@@ -278,14 +269,14 @@ def test_dataprops_fetched_once_per_table_and_only_with_new_data(pipeline):
 
 # =========================================================================== configuration
 def test_endpoints_are_unique():
-    keys = [(e.table_id, e.entity, e.period_op, e.period_value) for e in b.ENDPOINTS]
+    keys = [(e.table_id, e.entity) for e in b.ENDPOINTS]
     assert len(keys) == len(set(keys))
 
 
 def test_all_typed_datasets_are_split_by_period():
     for e in b.ENDPOINTS:
         if e.entity == "TypedDataSet":
-            assert e.split_by_period and e.top is None, e.name
+            assert e.split_by_period, e.name
 
 
 def test_bronze_has_every_table_silver_reads():

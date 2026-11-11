@@ -13,7 +13,7 @@ silver (CBS, KVK), gold (7 tables, with the risk index), the Streamlit dashboard
 Docker Compose (including the KVK chat agent), column lineage, config, run log, the
 lakehouse viewer with data quality statistics (`python -m tools.lakehouse_viewer`),
 incremental silver KVK (2026-10-10), backup, log retention and vulnerability scanning
-(2026-10-17), 404 tests. Code is organised in `pipeline/` (per
+(2026-10-17), 400 tests. Code is organised in `pipeline/` (per
 layer) and `tools/` (2026-10-08), with a README per phase. Requirements in
 docs/requirements.md (every Must met; open: FR-19 alerts, NFR-15 default password, left
 open on purpose), Azure design in docs/cloud_design.md (not built). All committed; no containers or servers left running. See the README for how to start
@@ -289,9 +289,10 @@ kept; stripping and renaming stay in silver).
       becomes `field_<name>`
 - [x] A later batch can't change a column's type; a field CBS adds becomes a new column
 - [x] `python -m pipeline.bronze.cbs --rebuild-columns`: field columns from `raw_json`, no API calls; run
-      on the real lakehouse (32 tables)
-- [x] Silver reads the columns (falls back to `raw_json` for bronze without them); all 11
-      silver tables verified identical to before the change on the real data
+      on the real lakehouse (32 tables). Removed 2026-11-11 with silver's `raw_json`
+      fallback: every bronze table has its field columns now
+- [x] Silver reads the columns; all 11 silver tables verified identical to before the
+      change on the real data
 - [x] Lineage, docs/lineage.*, bronze_to_silver.md, README and PROJECT updated
 
 ### CBS: data checks before ingestion (done 2026-10-05)
@@ -496,7 +497,8 @@ rebuild every run would need ~1.2 GB more memory per month kept (~23M rows after
       2026-09-30, consistent). checks/kvk.py reads it (`file_date`; a 1980 zip date or a
       loose CSV: none, with a warning) and warns when a start date is later; the batch
       log stores it (`schema_mode="merge"`); `kvk_agent --backfill-file-dates` filled
-      the existing batch from the same file in the inbox. Silver: `snapshot_date` = file
+      the existing batch from the same file in the inbox (removed 2026-11-11: no batch
+      without a file date is left). Silver: `snapshot_date` = file
       date, else the upload day, with `snapshot_date_source` (kvk_file / upload);
       LOGIC_VERSION 3 rebuilt it: only snapshot_date changed (2026-10-05 → 2026-10-01),
       all else identical; gold's median ages moved ≤ 0.1 year. The KVK freshness check
@@ -774,7 +776,7 @@ crosswalk; `tests/test_checks.py` the CBS and KVK checks and quarantine;
 `tests/test_maintenance.py` the maintenance tasks; `tests/test_backup.py` backup and restore; `tests/test_config.py` the
 configuration; `tests/test_kvk_silver.py` silver KVK; `tests/test_gold.py` gold;
 `tests/test_dashboard.py` the dashboard (every page headless); `tests/test_orchestration.py`
-Dagster; `tests/test_delta.py` writes real Delta tables in `tmp_path` (404 tests, ~85 s). `conftest.py` fails a test when any module still points at the real
+Dagster; `tests/test_delta.py` writes real Delta tables in `tmp_path` (400 tests, ~85 s). `conftest.py` fails a test when any module still points at the real
 lakehouse or inbox. Checked by breaking the code on purpose:
 removing the delete-before-write, an empty `done_keys()` and non-UTC silver timestamps
 each make the right tests fail.

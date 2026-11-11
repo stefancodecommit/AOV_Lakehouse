@@ -3,7 +3,6 @@ import json
 import zipfile
 from pathlib import Path
 
-import pandas as pd
 import pytest
 
 from pipeline.bronze import kvk_agent as k
@@ -171,21 +170,3 @@ def test_the_batch_log_records_the_file_date():
     assert k.ingest_confirmed_file("kvk.zip", "kvk.zip", confirmed_by="t")["status"] == "INGESTED"
     log = DeltaTable(str(k.LOG_TABLE)).to_pandas()
     assert str(log["file_date"].iloc[0]) == "2026-10-01"
-
-
-def test_backfill_fills_old_batches_from_the_same_file_in_the_inbox():
-    import pyarrow as pa
-    from deltalake import DeltaTable, write_deltalake
-    path = dated_zip(k.INBOX / "kvk.zip")
-    # a log as written before file_date existed: no such column
-    write_deltalake(str(k.LOG_TABLE), pa.table({
-        "batch_id": ["old", "gone"], "file_sha256": [k._sha256(path), "no-such-file"],
-        "status": ["success", "success"]}))
-    assert k.backfill_file_dates() == {"old": "2026-10-01"}
-    log = DeltaTable(str(k.LOG_TABLE)).to_pandas().set_index("batch_id")
-    assert str(log.loc["old", "file_date"]) == "2026-10-01" and pd.isna(log.loc["gone", "file_date"])
-    assert k.backfill_file_dates() == {}                   # nothing left that can be filled
-    # a later load appends to the log that now has the column
-    dated_zip(k.INBOX / "new.zip", (2026, 11, 2, 22, 0, 0), rows=REAL_ROWS[:2])
-    assert k.ingest_confirmed_file("new.zip", "new.zip", confirmed_by="t")["status"] == "INGESTED"
-    assert len(DeltaTable(str(k.LOG_TABLE)).to_pandas()) == 3
