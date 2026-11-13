@@ -119,10 +119,26 @@ Still open (not done yet; in order of value):
 - Decision (2026-11-13): **this file is not shortened.** The finished tasks stay, so it
   remains a searchable log of what was worked on and why, also after the project and for
   the teacher
-- [ ] **One place per fact.** The same facts are repeated in many files: the test count
-      was in 12 files and the slides, the Dagster schedule, the memory figures and the
-      gold table list likewise. The README now links instead of repeating; the other
-      documents (PROJECT.md, the report) still repeat some of them
+- [x] **One place per fact** (2026-11-13). The test count was in 12 files and the slides,
+      the memory figures in 7, the table counts in 5; the test count alone changed four
+      times during the review. Approach, by kind of document:
+      - Reference documents (README, PROJECT, INSTRUCTIONS, cloud_design,
+        privacy_and_risks) link instead of repeating: the test count lives in
+        tests/README.md, silver KVK's memory in docs/requirements.md (NFR-7), Docker's
+        minimum machine in INSTRUCTIONS §6, the table counts in the phase READMEs. The
+        Dagster asset descriptions compute their table count from the lineage
+      - Documents that are read on their own (the report, Q&A, GenAI section,
+        requirements) keep the numbers, and `tests/test_doc_numbers.py` checks them: it
+        fails and names the files when the stated number of tests, or the report's
+        number of lineage columns, differs from the real one. The slides can't be read by
+        a test: they are on the "Before submitting" list below
+      - Settings (schedules, retention, risk-index window, freshness limits) stay where
+        they are explained, now with their source: `config.yaml`, `orchestration/dagster.yaml`
+        or `checks/freshness.py`. Measured results (1.9M companies, 90%, 440 backtest
+        cases) are the project's findings and are repeated on purpose
+- [ ] Optional: the CBS freshness limits are written twice in the code: `MAX_MONTHS` in
+      `checks/freshness.py` (4 and 15 months) and `MAX_AGE` in `checks/cbs.py` (122 and
+      456 days, the same rule for a different date). One could be derived from the other
 - [ ] **Q&A: why does the KVK upload use an LLM?** docs/qa_practice.md has no question on
       the Ollama agent (a 7B model, ~5 GB memory, to help load a zip file), the most
       likely "why?" question. Answer to prepare: it shows an LLM with tool calling
@@ -136,11 +152,18 @@ Still open (not done yet; in order of value):
 - [ ] Optional: `--cleanup-scope` in `pipeline/bronze/cbs.py` is rarely needed (~70
       lines and tests); it was used twice in this review, so keeping it is defensible
 
-The author's own steps after the review:
-- [ ] Slides (docs/presentatie.pptx), slide 9: the number and the speaker notes say
-      **380 tests** (the notes still said 404)
-- [ ] Export the report again (`python -m tools.export_report`): sources, diagram,
-      column count (263) and test count changed
+**Before submitting** (the numbers that live in the submitted documents):
+- [ ] `pytest` passes; that includes `tests/test_doc_numbers.py`, which checks the test
+      count in the report, Q&A, GenAI section, requirements and tests/README.md, and the
+      report's number of lineage columns
+- [ ] The slides (docs/presentatie.pptx), slide 9: the number and the speaker notes state
+      the test count that pytest reports (not checked automatically; the notes still said
+      404 on 2026-11-13)
+- [ ] If the data or the code changed since: the measured results quoted in the report and
+      the Q&A (silver KVK's memory, 1.9M companies, 90% with a sector, 440 backtest cases)
+      still match docs/requirements.md (NFR-7) and gold's README ("Backtest")
+- [ ] Export the report again (`python -m tools.export_report`) and check the word count
+      (≤5000) in the Word document
 
 ## First real run (done 2026-10-05)
 

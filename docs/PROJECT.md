@@ -203,7 +203,8 @@ with the start year 2020 it added no years that 86009NED doesn't have).
 
 Plus each table's code lists and metadata (sector and size codes, regions, margins,
 category groups, measure definitions, periods). Scope: every period from 2020 onward,
-quarters where available, otherwise years.
+quarters where available, otherwise years (`cbs.start_year` and `cbs.period_preference`
+in config.yaml).
 
 ### KVK Handelsregister Open Dataset Basis Bedrijfsgegevens
 
@@ -274,7 +275,7 @@ nothing used that history: the open dataset has no company number, so snapshots 
 linked company by company, and gold read only the latest one. So silver was simplified:
 each run builds kvk_company from the newest successful batch and publishes it like silver
 CBS (staging, one run_id, the run log), with the same layer checks plus "exactly one
-snapshot". Memory: one snapshot (~1.7 GB peak), however many uploads bronze keeps. Bronze
+snapshot". Memory: one snapshot, however many uploads bronze keeps (measured: docs/requirements.md, NFR-7). Bronze
 still keeps the older uploads, because KVK serves only its current file: an old upload
 can't be downloaded again, so the history stays available for a later analysis.
 
@@ -300,7 +301,8 @@ Built around the main question (column details in the `pipeline/gold/build.py` d
 - **`gold_risk_index`** (built 2026-10-15, for the insurer's data analyst): per sector
   (every SBI level) and size class, the **relative risk** = 4-quarter average absence ÷ the
   national 4-quarter average (1.00 = national); a **band** = the lowest and highest
-  quarterly relative risk of the last 8 quarters (CBS gives no margin of error for
+  quarterly relative risk of the last 8 quarters (window and trend threshold:
+  `gold.risk_index` in config.yaml; CBS gives no margin of error for
   80072NED, so the band shows how stable it is); an **assessment** (band wholly above 1:
   higher; wholly below: lower; else around national); a **trend** = the slope of a
   straight line through the 8 quarterly relative risks, per year (rising / falling beyond
@@ -359,14 +361,16 @@ job of the runtime checks above, which share the same validation functions.
   with the check report, instead of being dropped, so it can be inspected. It's not
   logged as ingested, so a corrected batch can still be loaded. The same content is
   saved once. A monthly cleanup removes entries that were resolved later or are older
-  than the retention period (90 days); a problem that persists is quarantined again.
+  than the retention period (90 days, `quarantine.retention_days` in config.yaml); a
+  problem that persists is quarantined again.
 - **Alerting:** failed runs and failed checks are shown in the Dagster UI (decided
   2026-10-06 for the prototype; in the insurer they would go to the data team by email or
   Slack, with a run failure sensor).
 - **Freshness:** a check warns when the newest data is older than expected:
   CBS quarterly data more than 4 months behind the current quarter, yearly data more than
-  15 months, the latest KVK snapshot older than the agreed upload interval. This catches a
-  pipeline that is silently stuck.
+  15 months, the latest KVK snapshot older than the agreed upload interval (the CBS limits
+  are in `checks/freshness.py`, KVK's is `kvk.max_snapshot_age_days` in config.yaml). This
+  catches a pipeline that is silently stuck.
 
 ## Consistent layers
 
@@ -396,9 +400,11 @@ mix of new and old tables. To prevent that:
 - **Schedule:** maintenance runs monthly as its own Dagster job, never at the same time
   as an ingestion.
 - **Retention of personal data in logs** (2026-10-17): `confirmed_by` in the KVK upload
-  log after 365 days, Dagster runs after 180 days, ticks after 90 days.
+  log after 365 days, Dagster runs after 180 days (`retention` in config.yaml), ticks after
+  90 days (orchestration/dagster.yaml).
 - **Backup** (2026-10-17): the maintenance job ends with a verified archive of
-  `lakehouse/` and `inbox/kvk/` (`tools/backup.py`), the newest 3 kept.
+  `lakehouse/` and `inbox/kvk/` (`tools/backup.py`), the newest 3 kept (`backup.keep` in
+  config.yaml).
 
 ## Source lifecycle and scope changes
 
@@ -406,7 +412,7 @@ mix of new and old tables. To prevent that:
   a new ID (83130NED ended in 2023 this way). Bronze checks each table's status and last
   modification date in CBS's `TableInfos` on every run and warns when a table is stopped
   or hasn't been updated for longer than its normal interval (quarterly 4 months, yearly
-  15 months). Warnings don't block ingestion. A `TableInfos` snapshot is kept in bronze
+  15 months; `checks/cbs.py`). Warnings don't block ingestion. A `TableInfos` snapshot is kept in bronze
   each time CBS changes it.
 - **Scope changes:** when the start year or period preference changes or a table is
   removed from `config.yaml`, `python -m pipeline.bronze.cbs --cleanup-scope` (try `--dry-run`
@@ -479,11 +485,10 @@ Services:
 Volumes: one shared volume for `lakehouse/` (the data moves with the project) and the
 `inbox/` folder for KVK uploads.
 
-Minimum machine (measured 2026-10-08): about 3 GB of Docker memory for the pipeline,
-about 8 GB with the KVK chat agent (its 7B model needs ~5 GB on CPU); disk ~1.3 GB for
-the image plus the lakehouse, which grows mostly with the KVK snapshots kept. Ollama and
-the agent are an optional Compose profile, because Dagster can load KVK files without
-them. Ports are published on 127.0.0.1 only. Details in INSTRUCTIONS.md, section 6.
+The minimum machine (memory and disk, measured) is in INSTRUCTIONS.md, section 6; the
+lakehouse grows mostly with the KVK uploads kept. Ollama and the agent are an optional
+Compose profile, because Dagster can load KVK files without them. Ports are published on
+127.0.0.1 only.
 
 ## Development
 
@@ -545,9 +550,9 @@ TODO.md                  open work
 | Data checks before ingestion (CBS) | Built (`checks/cbs.py`) |
 | Quarantine | Built for CBS, KVK and reference files; monthly cleanup in `tools/maintenance.py` |
 | Alerting, freshness checks | To do |
-| pytest | 380 tests incl. real Delta tables, the dashboard pages and Dagster; one opt-in live CBS test |
+| pytest | Tests incl. real Delta tables, the dashboard pages and Dagster; one opt-in live CBS test ([tests/README.md](../tests/README.md)) |
 | Configuration file | Built (`config.yaml` + `pipeline/common/config.py`) |
-| Gold | Built: 7 tables, including the risk index for the insurer; provisional figures marked |
+| Gold | Built: the dashboard tables, including the risk index for the insurer; provisional figures marked |
 | Streamlit dashboard | Built: 6 pages incl. data dictionary; provisional marked, "final only" switch |
 | Dagster orchestration and maintenance | Built: monthly CBS, automatic rebuilds after blocking checks, freshness, maintenance |
 | Docker Compose | Built and tested (pipeline, Dagster, dashboard); chat agent not yet tried in Docker |

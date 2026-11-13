@@ -239,7 +239,7 @@ Each step can be reversed: the local and Docker setups keep working throughout.
 | **Vendor lock-in** | Low by design: open formats (Delta Lake, Parquet), standard containers, PostgreSQL. Moving to another cloud means new infrastructure code, not a new pipeline. |
 | **Cost overrun** | Budget alerts; scale-to-zero; the estimate in section 9 is checked with the Pricing Calculator first. |
 | **Misconfiguration** (e.g. storage opened to the internet) | Infrastructure as code with review; Azure Policy to forbid public storage; Defender for Cloud recommendations. |
-| **Memory in containers** | silver KVK peaks at ~1.5–1.8 GB, flat in the number of snapshots (measured); the daemon gets 4 GiB with an alert near the limit. |
+| **Memory in containers** | silver KVK peaks below 2 GB, flat in the number of uploads kept (measured: docs/requirements.md, NFR-7); the daemon gets 4 GiB with an alert near the limit. |
 | **The KVK chat agent** | Not moved. Option for later: Azure OpenAI in an EU data zone; the KVK data is public, so the privacy risk is low, but the agent's design (it can't load without a human's confirmation) stays the same. |
 | **Open:** Dagster self-managed or Dagster+ (hosted) | Self-managed in this design (no extra licence); Dagster+ would add the column-lineage graph and managed alerting, at a cost. |
 | **Open:** who operates it | The insurer's data team (OR-3); the design assumes they know containers and Azure basics. |

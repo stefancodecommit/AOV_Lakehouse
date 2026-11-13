@@ -7,7 +7,7 @@ phase 4 (model design and testing) and the proof of working for every phase.
 .venv/bin/pytest            # all tests, ~85 s, no internet needed
 ```
 
-Expected: all pass (380 at the time of writing, 1 deselected: the live test below). The
+Expected: all pass (382 at the time of writing, 1 deselected: the live test below). The
 same suite runs on every push in GitHub Actions, on a clean Python 3.12.
 
 ## What is tested, per phase
@@ -20,7 +20,7 @@ same suite runs on every push in GitHub Actions, on a clean Python 3.12.
 | 4. Model | `test_gold.py` (risk index), `test_backtest.py` | (in 49) + 4 | the risk index on data with known answers, and its backtest (each verdict judged on the year after it) (see [gold's README](../pipeline/gold/README.md#phase-4--model-design-and-testing-the-risk-index)) |
 | 6. Deployment & monitoring | `test_orchestration.py`, `test_maintenance.py`, `test_backup.py` | 37 | the Dagster graph, blocking checks, automation, the one-writer limit, maintenance (in order), log retention, backup and restore |
 | All layers on real Delta tables | `test_delta.py` | 28 | bronze writes (revisions replace, repeats add nothing), silver end to end with types read back, publishing all-or-nothing, the run log |
-| Documentation and tools | `test_lineage.py`, `test_config.py`, `test_lakehouse_viewer.py`, `test_demo.py` | 70 | every silver and gold column has a documented origin; the generated docs are up to date; config errors are caught; the viewer's statistics |
+| Documentation and tools | `test_lineage.py`, `test_doc_numbers.py`, `test_config.py`, `test_lakehouse_viewer.py`, `test_demo.py` | 72 | every silver and gold column has a documented origin; the generated docs are up to date; the documents state the real number of tests and lineage columns; config errors are caught; the viewer's statistics |
 
 \* At the time of writing (2026-11-13).
 
@@ -48,7 +48,9 @@ same suite runs on every push in GitHub Actions, on a clean Python 3.12.
   tests failed.
 - **Documentation can't drift.** A new silver or gold column fails `test_lineage.py` until
   its origin is written down in `tools/lineage.py`, and the generated lineage documents
-  must be up to date.
+  must be up to date. `test_doc_numbers.py` fails when a document (the report, the Q&A,
+  the requirements, this file) states a different number of tests than there are, and
+  names the files to update.
 
 ## Run part of it
 

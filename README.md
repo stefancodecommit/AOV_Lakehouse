@@ -31,7 +31,7 @@ Four things, about 20 minutes, in this order:
    *lower* verdict held a year later in all 440 cases; the trend describes, it doesn't
    predict).
 3. **Proof that it works**: [the six phases, each with its README](#the-six-phases-each-with-its-readme),
-   [`tests/README.md`](tests/README.md) (380 tests, run by GitHub Actions on every push,
+   [`tests/README.md`](tests/README.md) (every test, run by GitHub Actions on every push,
    plus a weekly vulnerability scan) and [`docs/requirements.md`](docs/requirements.md)
    (every requirement with its status and the test that verifies it).
 4. **How GenAI was used**: [`docs/genai_use.md`](docs/genai_use.md): which decisions were
@@ -101,10 +101,10 @@ cbs-kvk-lakehouse/
  (outside)                as received              cleaned, typed            dashboard-ready
 
  CBS OData API ─────► bronze/cbs.py ───────┐
- (3 tables +              lakehouse/bronze/  ├──► silver/cbs.py ─────────┐
-  code lists)                                │    9 tables (dims,        │
- CBS crosswalk xlsx ─► bronze/reference.py ─┘    facts, SBI crosswalk)  ├──► gold/build.py ──► dashboard/
- (SBI 2008 -> 2025)       bronze/reference/            │                 │    7 tables          (Streamlit)
+ (tables +                lakehouse/bronze/  ├──► silver/cbs.py ─────────┐
+  code lists)                                │    dimensions,            │
+ CBS crosswalk xlsx ─► bronze/reference.py ─┘    facts, SBI crosswalk   ├──► gold/build.py ──► dashboard/
+ (SBI 2008 -> 2025)       bronze/reference/            │                 │    tables            (Streamlit)
                                                        │ crosswalk       │
  KVK zip in inbox/kvk ─► bronze/kvk_agent.py ──────► silver/kvk.py ─────┘
  (1.9M companies)         bronze/kvk/              kvk_company
@@ -133,7 +133,7 @@ docstring that explains it in detail.
 |---|---|---|
 | 1. Ingestion | [pipeline/bronze/](pipeline/bronze/README.md) | CBS API, the SBI crosswalk, the KVK file with an AI intake agent; checks and quarantine before writing |
 | 2. Transformation | [pipeline/silver/](pipeline/silver/README.md) | typed dimensions and facts; KVK companies translated to SBI 2008; edge cases flagged |
-| 3. Serving | [pipeline/gold/](pipeline/gold/README.md), [dashboard/](dashboard/README.md) | 7 gold tables; the Streamlit dashboard for the data analyst |
+| 3. Serving | [pipeline/gold/](pipeline/gold/README.md), [dashboard/](dashboard/README.md) | the gold tables; the Streamlit dashboard for the data analyst |
 | 4. Model design and testing | [pipeline/gold/](pipeline/gold/README.md#phase-4--model-design-and-testing-the-risk-index), [tests/](tests/README.md) | the risk index (a white-box model) and how everything is tested |
 | 5. Model integration | [pipeline/silver/](pipeline/silver/README.md#phase-5--model-integration) | CBS and KVK joined through the SBI crosswalk; absence with business counts; an LLM inside the KVK intake |
 | 6. Deployment and monitoring | [orchestration/](orchestration/README.md) | Dagster schedules and checks, Docker Compose, GitHub Actions, the run log |

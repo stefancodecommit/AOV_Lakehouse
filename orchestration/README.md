@@ -25,6 +25,10 @@ same on any machine, and tested on every push by GitHub Actions.
   keys, keys present in their dimension; [`checks/layers.py`](../checks/layers.py)).
 - **A person loads KVK.** `kvk_bronze` never runs on a schedule; it needs the file name
   typed as confirmation.
+- **Times and periods are settings:** the schedules, the retention of logs and runs, and
+  the number of backups kept are in [`config.yaml`](../config.yaml) (`schedules`,
+  `retention`, `backup`); the CBS freshness limits are in
+  [`checks/freshness.py`](../checks/freshness.py).
 - **One writer at a time** ([`dagster.yaml`](dagster.yaml)): runs that write to the
   lakehouse never overlap.
 - **Maintenance** on the 15th, one step after the other (a step waits for the previous

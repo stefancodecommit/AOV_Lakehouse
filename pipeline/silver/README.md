@@ -37,7 +37,7 @@ and [docs/lineage.md](../../docs/lineage.md) (generated, complete).
   of its run, which joins to the run log.
 - **KVK: the newest upload only.** Each KVK upload is a snapshot of ~1.9M rows without a
   company number, so snapshots can't be linked; gold uses the newest. Silver therefore
-  holds only that one (memory ~1.7 GB, however many uploads bronze keeps); bronze keeps
+  holds only that one (memory: one upload, however many bronze keeps; NFR-7 in docs/requirements.md); bronze keeps
   the older uploads, because KVK can't serve them again. (Until 2026-11 silver kept every
   snapshot and updated them incrementally; nothing used that history.)
 - **A snapshot is dated by KVK, not by us.** `snapshot_date` is KVK's export date, read

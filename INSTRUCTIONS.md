@@ -64,9 +64,9 @@ it skips what is already there.
 .venv/bin/python -m pipeline.bronze.cbs                # 1. CBS API -> bronze (~40 s the first time)
 .venv/bin/python -m pipeline.bronze.reference          # 2. SBI crosswalk (xlsx) -> bronze
 .venv/bin/python -m pipeline.bronze.kvk_agent --inbox  # 3. newest new KVK zip in inbox/kvk/ -> bronze (type YES)
-.venv/bin/python -m pipeline.silver.cbs                # 4. bronze CBS + crosswalk -> silver (9 tables)
+.venv/bin/python -m pipeline.silver.cbs                # 4. bronze CBS + crosswalk -> silver
 .venv/bin/python -m pipeline.silver.kvk                # 5. bronze KVK -> silver kvk_company (needs 4)
-.venv/bin/python -m pipeline.gold.build                # 6. silver -> gold (7 tables)
+.venv/bin/python -m pipeline.gold.build                # 6. silver -> gold
 .venv/bin/python -m tools.inspect_lakehouse            # 7. check: should end with "problems: none"
 .venv/bin/streamlit run dashboard/app.py               # 8. the dashboard: http://localhost:8501
 ```
@@ -118,7 +118,7 @@ Each `pipeline.…` above is run as `.venv/bin/python -m pipeline.…`.
 .venv/bin/python -m pipeline.silver.cbs --preview           # build and summarise, write nothing
 .venv/bin/python -m pipeline.silver.cbs
 .venv/bin/python -m pipeline.silver.kvk --preview           # build from the newest upload and summarise, write nothing
-.venv/bin/python -m pipeline.silver.kvk                     # rebuild from the newest upload (~1.7 GB memory)
+.venv/bin/python -m pipeline.silver.kvk                     # rebuild from the newest upload
 .venv/bin/python -m pipeline.gold.build --preview
 .venv/bin/python -m pipeline.gold.build
 ```
@@ -151,8 +151,8 @@ lakehouse/
   bronze/kvk/basis_bedrijfsgegevens/    KVK rows, one batch per uploaded file
   bronze/kvk/_batch_log/                which KVK files are loaded (by SHA-256), with KVK's file date
   bronze/reference/...                  the SBI crosswalk and its batch log
-  silver/                               9 CBS tables + kvk_company, each with run_id
-  gold/                                 7 dashboard tables, each with run_id
+  silver/                               the silver tables (pipeline/silver/README.md), each with run_id
+  gold/                                 the gold tables (pipeline/gold/README.md), each with run_id
   _run_log/                             one row per silver/gold run
   quarantine/<source>/<time>_<name>/    batches that failed a check: report.json + data
 ```
@@ -238,7 +238,7 @@ Dagster acts only while this command runs (Ctrl+C stops it). Then:
   click *Materialize*, and type the file name in `confirm_file_name`.
 - **By hand in the UI:** select an asset (e.g. `silver_cbs`) and click *Materialize*.
 - Freshness warnings: 1st of the month 09:00; maintenance: 15th 03:00. Results and
-  failures are shown in the UI.
+  failures are shown in the UI. All times are settings in `config.yaml` (`schedules`).
 
 ### When the computer was off: Dagster catches up
 
@@ -267,7 +267,8 @@ For runs that don't depend on a laptop being switched on, see the cloud design
 
 Needs only Docker, no Python setup. **Minimum machine** (measured): about **3 GB of
 memory** for the pipeline (the services use ~0.7 GB idle; the largest steps, silver KVK
-and gold, peak at ~1.7 and ~1.1 GB, and only one runs at a time), or about **8 GB** with
+and gold, each peak below 2 GB, and only one runs at a time; silver KVK's measurement is
+NFR-7 in docs/requirements.md), or about **8 GB** with
 the KVK chat agent (its 7B model needs ~5 GB). On Docker Desktop, set this under Settings
 → Resources → Memory (its default, 3.67 GB on the development machine, fits the pipeline
 but not the agent). Disk: ~1.3 GB for the image, the lakehouse (section 4), and ~4.7 GB
@@ -312,7 +313,8 @@ docker compose down                        # stop (data and run history stay)
 ### Monthly maintenance
 
 Dagster runs this on the 15th (and then also deletes Dagster runs older than 180 days and
-makes a backup); by hand, try `--dry-run` first:
+makes a backup; the periods are settings in `config.yaml`, `retention` and `backup`); by
+hand, try `--dry-run` first:
 
 ```bash
 .venv/bin/python -m tools.maintenance all --dry-run         # what would be done
