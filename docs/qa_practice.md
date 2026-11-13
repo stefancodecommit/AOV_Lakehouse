@@ -121,7 +121,7 @@ risicomanagement, en de vraag of pandas zou schalen, die tot de incrementele opz
 *Evidence:* `docs/genai_use.md`, section 3 (the author's decisions).
 
 **17. Hoe weet je dat de code van de AI klopt?**
-*Antwoord:* Niet op vertrouwen: 386 tests, ook op een schone machine in GitHub Actions; code
+*Antwoord:* Niet op vertrouwen: 389 tests, ook op een schone machine in GitHub Actions; code
 expres kapotgemaakt om te zien of de tests dat merken; resultaten vergeleken op de echte
 data na elke grote wijziging; en vragen als "hoe heb je dat getest?", die een onterecht
 afgevinkt item aan het licht brachten.
@@ -142,3 +142,21 @@ een verzekeraar hoort dit niet van een laptop af te hangen: in het clouddesign d
 altijd.
 *Evidence:* INSTRUCTIONS.md, section 5 ("When the computer was off"); Dagster's *Runs*
 page; `docs/cloud_design.md`.
+
+## The AI agent in the pipeline
+
+**20. Waarom gebruik je een taalmodel om een KVK-bestand te laden?**
+*Antwoord:* Het model laadt zelf niets; het begeleidt de medewerker: welk bestand staat
+klaar, waar download je het, wat zegt het controlerapport. Het kan alleen vijf vaste
+functies aanroepen. De controles zijn gewone Python-code; laden lukt alleen voor precies
+het bestand dat de controle doorstond (dezelfde SHA-256), en pas als de medewerker zelf
+YES typt op het toetsenbord, wat het model niet kan. Het draait lokaal via Ollama: er gaat
+niets naar buiten.
+*Eerlijk:* nodig is het niet. `--inbox` of Dagster laadt hetzelfde bestand zonder model,
+en het model kost ~5 GB geheugen. Het laat zien hoe je een taalmodel veilig in een
+pijplijn zet (fase 5, modelintegratie): het model kiest, de code en de mens beslissen.
+Bij een verzekeraar zou het een collega zonder technische kennis door de upload helpen.
+*Evidence:* `pipeline/bronze/kvk_agent.py` (`TOOLS`, `SYSTEM_PROMPT`, `_confirm`,
+`_ingest`); `tests/test_kvk_logic.py` ("the agent's gates": not verified, no YES, file
+changed; each test fails when its gate is removed); report 3.4; [bronze's
+README](../pipeline/bronze/README.md#design-decisions).

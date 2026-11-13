@@ -133,6 +133,39 @@ def test_dagster_entry_point_is_not_an_agent_tool():
                             "ingest_verified_dataset", "list_batches"}
 
 
+# =========================================================================== the agent's gates
+# The model can call ingest_verified_dataset, but the code around it decides: only a file
+# that passed verification, unchanged since, and only after the person types YES.
+def agent_ingest(path, typed, monkeypatch):
+    """ingest_verified_dataset as the model calls it; `typed` is what the person types."""
+    monkeypatch.setattr("builtins.input", lambda prompt="": typed)
+    return json.loads(k.ingest_verified_dataset(str(path)))
+
+
+def test_the_agent_cannot_ingest_a_file_that_was_not_verified(monkeypatch):
+    path = inbox_zip("kvk.zip")
+    result = agent_ingest(path, "YES", monkeypatch)
+    assert result["status"] == "REFUSED" and not k.DATA_TABLE.exists()
+
+
+def test_nothing_is_written_unless_the_person_types_yes(monkeypatch):
+    path = inbox_zip("kvk.zip")
+    assert json.loads(k.verify_dataset(str(path)))["status"] == "PASSED"
+    for typed in ("yes", "ja", "", "YES please"):
+        assert agent_ingest(path, typed, monkeypatch)["status"] == "CANCELLED", typed
+    assert not k.DATA_TABLE.exists()
+    assert agent_ingest(path, "YES", monkeypatch)["status"] == "INGESTED"
+
+
+def test_a_file_changed_after_verification_is_refused(monkeypatch):
+    path = inbox_zip("kvk.zip")
+    assert json.loads(k.verify_dataset(str(path)))["status"] == "PASSED"
+    inbox_zip("kvk.zip", rows=REAL_ROWS[:1])           # replaced after it was checked
+    result = agent_ingest(path, "YES", monkeypatch)
+    assert result["status"] == "REFUSED" and "changed" in result["reason"]
+    assert not k.DATA_TABLE.exists()
+
+
 # =========================================================================== KVK's own file date
 def dated_zip(path, when=(2026, 10, 1, 23, 34, 22), rows=REAL_ROWS):
     """A KVK zip whose CSV carries the export time `when`, as in the real file."""

@@ -150,11 +150,15 @@ Still open (not done yet; in order of value):
       evidence in the comment; the checks take them as arguments; the unused weekly and
       monthly limits dropped; docs point to config.yaml. Tests with the real cases
       (80072NED on 2026-11-13, 86009NED just before its April release)
-- [ ] **Q&A: why does the KVK upload use an LLM?** docs/qa_practice.md has no question on
-      the Ollama agent (a 7B model, ~5 GB memory, to help load a zip file), the most
-      likely "why?" question. Answer to prepare: it shows an LLM with tool calling
-      inside the pipeline; the checks and the YES confirmation stay in Python; `--inbox`
-      works without it
+- [x] **Q&A: why does the KVK upload use an LLM?** (2026-11-13) Question 20 in
+      docs/qa_practice.md, in its own section: the model only guides and chooses among
+      five tools; the checks are Python; loading needs the exact verified file and a typed
+      YES; it runs locally; and honestly, it isn't needed (`--inbox`, Dagster), it shows
+      model integration with the code and the person deciding. While checking the answer
+      against the code: the agent's own gates had no tests (only the Dagster path and the
+      tool list did). Added three in `tests/test_kvk_logic.py` (not verified → refused;
+      anything but YES → nothing written; file changed after verification → refused);
+      each fails when its gate is removed from the code (checked by breaking each gate)
 - [ ] Optional: the column lineage exists in three generated formats (`docs/lineage.md`
       alone is ~7,300 words); the interactive explorer plus Dagster's column list may
       be enough
