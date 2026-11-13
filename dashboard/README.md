@@ -32,7 +32,9 @@ and turns them into pages that answer the main question: which company character
   date the data was loaded, the gold run, and the source credits (CC BY 4.0).
 - **Charts with a purpose** ([`charts.py`](charts.py)): red above national, blue below,
   grey for context; colours validated for colour-blind readers, with dark-mode variants;
-  every chart also as a table, so no number is reachable only by hovering.
+  every chart also as a table, so no number is reachable only by hovering. (The palette
+  values were taken as published, a validated set; its validator script was not re-run
+  here, because Node.js isn't installed.)
 - **Context on hover** (2026-11-11): every tooltip says what a value *means*, with a
   "How to read" line per chart; the risk index's tooltip adds the stability band, the
   trend with "no forecast", absence vs national, provisional quarters and businesses; survey charts say whether a

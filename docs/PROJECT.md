@@ -320,7 +320,7 @@ from silver tables of different runs.
 ### Streamlit dashboard — `dashboard/` (built)
 
 Reads only gold tables. Caches data per gold table version, so it shows new data as soon
-as gold is rebuilt without needing a restart. Pages (details in the README):
+as gold is rebuilt without needing a restart. Pages (details in dashboard/README.md):
 
 1. **Overview:** national absence trend, plus the sectors and size classes furthest above
    and below average in the latest quarter.
@@ -456,7 +456,7 @@ then runs locally, in Docker, or on another machine with only the configuration 
 - A separate monthly maintenance job (see Storage and maintenance).
 - Failures are shown in the Dagster UI; no email or Slack alerts yet (prototype).
 - First time on a lakehouse filled by hand: the job `register_existing_data` records the
-  existing bronze data, so automatic rebuilds can start. Details in the README.
+  existing bronze data, so automatic rebuilds can start. Details in INSTRUCTIONS.md, section 5.
 
 Note on timing: CBS publishes quarterly figures some weeks after a quarter ends, and dates
 vary. A single run per quarter can therefore miss a release by a few days. Because runs
@@ -483,7 +483,7 @@ Minimum machine (measured 2026-10-08): about 3 GB of Docker memory for the pipel
 about 8 GB with the KVK chat agent (its 7B model needs ~5 GB on CPU); disk ~1.3 GB for
 the image plus the lakehouse, which grows mostly with the KVK snapshots kept. Ollama and
 the agent are an optional Compose profile, because Dagster can load KVK files without
-them. Ports are published on 127.0.0.1 only. Details in the README.
+them. Ports are published on 127.0.0.1 only. Details in INSTRUCTIONS.md, section 6.
 
 ## Development
 

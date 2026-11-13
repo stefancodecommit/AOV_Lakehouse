@@ -83,7 +83,7 @@ Bronze bewaart oudere uploads; silver verwerkt alleen de nieuwste, want alleen d
 gebruikt. Het geheugen groeit dus niet mee met het aantal uploads (gemeten: 1,74 GB piek).
 Een eerdere versie hield alle momentopnamen in silver bij; die bleek ongebruikt en is
 vereenvoudigd. Bij veel meer data zijn Polars of de cloud de volgende stap.
-*Evidence:* README, section "Silver"; docs/PROJECT.md, "Silver KVK"; docs/requirements.md, NFR-7.
+*Evidence:* pipeline/silver/README.md; docs/PROJECT.md, "Silver KVK"; docs/requirements.md, NFR-7.
 
 **12. Een reviewer vond een mogelijke fout in de koppeling met de bedrijfsaantallen. Wat was het?**
 *Antwoord:* De aantallen werden op SBI-code gekoppeld; een samengestelde sector heeft geen

@@ -135,10 +135,31 @@ finished by the next one.
 .venv/bin/python -m tools.inspect_lakehouse --layer silver  # one layer (bronze, silver or gold)
 .venv/bin/python -m tools.lakehouse_viewer                  # browse any table + data quality: http://localhost:8502
 .venv/bin/streamlit run dashboard/app.py                    # the dashboard: http://localhost:8501
+.venv/bin/python -m tools.backtest_risk                     # backtest of the risk index (pipeline/gold/README.md)
 ```
 
 `inspect_lakehouse` exits with code 1 when it finds problems. The viewer and the
 dashboard keep running until Ctrl+C; both can run at the same time.
+
+What is in `lakehouse/` (not in git; everything can be rebuilt from the sources, except
+older KVK uploads, which KVK no longer serves; see section 7 for backups):
+
+```
+lakehouse/
+  bronze/<table>_<entity>/              CBS records as received, one Delta table per endpoint
+  bronze/_ingestion_log/                which CBS requests are already loaded
+  bronze/kvk/basis_bedrijfsgegevens/    KVK rows, one batch per uploaded file
+  bronze/kvk/_batch_log/                which KVK files are loaded (by SHA-256), with KVK's file date
+  bronze/reference/...                  the SBI crosswalk and its batch log
+  silver/                               9 CBS tables + kvk_company, each with run_id
+  gold/                                 7 dashboard tables, each with run_id
+  _run_log/                             one row per silver/gold run
+  quarantine/<source>/<time>_<name>/    batches that failed a check: report.json + data
+```
+
+Sizes (measured 2026-11-13): bronze CBS ~6 MB, bronze KVK ~22 MB per kept upload, silver
+~74 MB and gold ~4 MB (both including older Delta versions, until the monthly vacuum);
+about 106 MB in total.
 
 ### The lakehouse viewer: every table, with data quality
 
@@ -202,7 +223,9 @@ export DAGSTER_HOME=$PWD/orchestration
 Dagster acts only while this command runs (Ctrl+C stops it). Then:
 
 - **Once, on a lakehouse filled by hand:** run the job `register_existing_data` (UI:
-  *Jobs*), or from a second terminal:
+  *Jobs*). Dagster only rebuilds a layer automatically when every input was materialized
+  in Dagster at least once; this job records the existing bronze data as such. Or from a
+  second terminal:
 
   ```bash
   DAGSTER_HOME=$PWD/orchestration .venv/bin/dagster job execute \
@@ -242,7 +265,13 @@ For runs that don't depend on a laptop being switched on, see the cloud design
 
 ## 6. Run everything in Docker
 
-Needs only Docker (about 3 GB memory for the pipeline, 8 GB with the chat agent).
+Needs only Docker, no Python setup. **Minimum machine** (measured): about **3 GB of
+memory** for the pipeline (the services use ~0.7 GB idle; the largest steps, silver KVK
+and gold, peak at ~1.7 and ~1.1 GB, and only one runs at a time), or about **8 GB** with
+the KVK chat agent (its 7B model needs ~5 GB). On Docker Desktop, set this under Settings
+→ Resources → Memory (its default, 3.67 GB on the development machine, fits the pipeline
+but not the agent). Disk: ~1.3 GB for the image, the lakehouse (section 4), and ~4.7 GB
+for the agent's model; the Ollama image itself is ~9 GB (it includes GPU libraries).
 
 ```bash
 docker compose build --build-arg CODE_VERSION=$(git rev-parse --short HEAD)   # after a code change
@@ -252,7 +281,13 @@ docker compose logs -f dagster-daemon      # follow the pipeline runs (Ctrl+C st
 docker compose down                        # stop (data and run history stay)
 ```
 
-- The containers use the same `lakehouse/` and `inbox/` folders as the local commands.
+- The containers use the same `lakehouse/` and `inbox/` folders as the local commands, and
+  run as your user (`HOST_UID`/`HOST_GID`, see `.env.example`), so the files they write
+  are yours.
+- Services: `dagster-webserver` (the UI), `dagster-daemon` (schedules and automatic
+  rebuilds; the pipeline runs execute here), `postgres` (Dagster's run history, not the
+  data), `dashboard`, and optionally `ollama` and `kvk-agent` (profile `agent`).
+- Only reachable from this machine: the ports are published on 127.0.0.1.
 - Once, on a lakehouse filled by hand: run the job `register_existing_data` in the
   Dagster UI (*Jobs*).
 - Loading a KVK file: in the Dagster UI, as in [section 5](#5-run-it-automatically-dagster).
@@ -262,6 +297,14 @@ docker compose down                        # stop (data and run history stay)
   docker compose --profile agent up -d                 # start Ollama
   docker compose --profile agent run --rm kvk-agent    # the chat; type exit to stop
   docker compose --profile agent down                  # stop Ollama too
+  ```
+
+  To reuse a model already on this machine instead of downloading it, copy it into
+  Docker's volume once (this only reads your `~/.ollama`):
+
+  ```bash
+  docker compose --profile agent run --rm --no-deps --entrypoint sh \
+    -v ~/.ollama/models:/src:ro ollama -c "mkdir -p /root/.ollama/models && cp -a /src/. /root/.ollama/models/"
   ```
 
 ## 7. Maintenance and repairs

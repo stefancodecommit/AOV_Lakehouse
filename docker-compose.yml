@@ -89,7 +89,7 @@ services:
     profiles: ["agent"]
     volumes:
       # a Docker volume: the model is downloaded once (~4.7 GB). To reuse a model already
-      # on this machine instead, copy it in (see README, "Running everything in Docker");
+      # on this machine instead, copy it in (see INSTRUCTIONS.md, section 6);
       # not mounting ~/.ollama directly, because Ollama runs as root and would leave
       # root-owned files in your home folder
       - ollama_models:/root/.ollama

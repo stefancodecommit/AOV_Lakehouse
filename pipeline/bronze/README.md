@@ -44,8 +44,8 @@ keeps the original, every later step can be rebuilt without asking a source agai
 - **Source lifecycle.** CBS sometimes stops a table (83130NED ended in 2023). Every run
   reads each table's status and warns when it is stopped or not updated for too long.
 
-More detail: the docstring at the top of each script, and
-[README → The scripts one by one](../../README.md#the-scripts-one-by-one).
+More detail: the docstring at the top of each script, and every command in
+[INSTRUCTIONS.md, section 3](../../INSTRUCTIONS.md#3-run-one-part).
 
 ## Run it
 

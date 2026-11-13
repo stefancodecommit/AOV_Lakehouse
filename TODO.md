@@ -5,7 +5,7 @@ Open work, in the order of `docs/PROJECT.md`. Each phase builds on the one befor
 Rule for every phase: run each new layer on real data and check it before building the
 next layer on top of it.
 
-## Where to continue (status 2026-10-26)
+## Where to continue (status 2026-11-13)
 
 Built and run on real data: bronze (CBS, KVK, SBI crosswalk) with checks and quarantine
 (CBS bronze with a column per field next to `raw_json`),
@@ -33,9 +33,11 @@ per phase, Azure design, GDPR and risks, GenAI section, report and presentation
 (2026-10-17); backup, log retention, vulnerability scanning incl. the Docker image,
 Python 3.12 (2026-10-17 to 10-26); the review follow-up with the backtest, KVK's own file
 date (2026-10-26); the author's reflection (2026-11-05); the demo launcher, the linter
-(2026-11-09); the move to Ubuntu 26.04, locally and in CI (2026-11-11).
+(2026-11-09); the move to Ubuntu 26.04, locally and in CI (2026-11-11); a code review
+with simplifications (2026-11-11 to 11-13, section "Code review").
 
-Still open, technical: nothing for the assignment.
+Still open: the remaining points of the code review (section "Code review": mostly
+shorter documentation, one Q&A question); nothing else for the assignment.
 
 Later or optional, not needed for the assignment:
 - **Backup to another disk** (section 5): decided 2026-10-26 to keep it on this disk for
@@ -78,6 +80,67 @@ Local setup: `.venv/` holds the Python packages (`pip install -r requirements-de
 Ollama is installed in `~/.local/ollama` (no sudo) with model `qwen2.5:7b`; start the
 server with `~/.local/ollama/bin/ollama serve` before using the KVK agent in chat mode
 (not needed for `--inbox` / `--file`).
+
+## Code review (2026-11-11 to 2026-11-13)
+
+A critical review of the whole codebase, done with Claude (GenAI) at the author's
+request: *"be critical and check if everything is needed"*. The author decided on every
+point; each change was checked with the tests and, where data was involved, on a copy of
+the real lakehouse (gold before and after compared) before the real lakehouse was touched.
+
+Findings that were fixed:
+- [x] **Bug:** `tools/inspect_lakehouse.py` checked only 5 of the 7 gold tables (not the
+      risk index tables). Cause: the list of tables was kept in five places. Now one
+      list in `checks/layers.py` (commit d68598a, 2026-11-11)
+- [x] Migration code removed that the real lakehouse no longer needed:
+      `--rebuild-columns`, silver's `raw_json` fallback, `--backfill-file-dates`, shims
+      for older deltalake/pyarrow versions; unused `Endpoint` options (d68598a)
+- [x] **Silver KVK simplified to the newest upload** (commit 4554632, 2026-11-11):
+      nothing used the snapshot history in silver (see section 2, "KVK: silver holds
+      only the newest upload"); bronze keeps the uploads. About 360 lines fewer
+      (code, tests and docs together)
+- [x] **CBS 81644NED removed** (establishments per region; no gold table used it)
+      (commit c08684d, 2026-11-13)
+- [x] **CBS 83130NED removed** (the old absence survey; no gold table used it, and with
+      start year 2020 it added no years) (commit 7d68a7b, 2026-11-13)
+- Result: 3 CBS tables instead of 5, all feeding the dashboard; 380 tests (404 before
+  the review); every gold table identical to before on the real data
+
+Still open (not done yet; in order of value):
+- [x] **README.md shortened** (2026-11-13) from ~5,300 words (longer than the 5,000-word
+      report) to ~1,650: what it is, "Start here", the documents, concepts, both
+      diagrams, the six phases, a quick start, configuration, limitations, sources.
+      Reference parts that repeated other files now only live there: commands in
+      INSTRUCTIONS.md, pages in dashboard/README.md, tables and scripts in the phase
+      READMEs. Facts that were only in the README were moved, not dropped: Docker's
+      minimum machine, `HOST_UID`, reusing an Ollama model (INSTRUCTIONS §6); the
+      lakehouse layout and sizes, the backtest command (§4); why `register_existing_data`
+      is needed (§5); the palette note (dashboard/README.md)
+- Decision (2026-11-13): **this file is not shortened.** The finished tasks stay, so it
+  remains a searchable log of what was worked on and why, also after the project and for
+  the teacher
+- [ ] **One place per fact.** The same facts are repeated in many files: the test count
+      was in 12 files and the slides, the Dagster schedule, the memory figures and the
+      gold table list likewise. The README now links instead of repeating; the other
+      documents (PROJECT.md, the report) still repeat some of them
+- [ ] **Q&A: why does the KVK upload use an LLM?** docs/qa_practice.md has no question on
+      the Ollama agent (a 7B model, ~5 GB memory, to help load a zip file), the most
+      likely "why?" question. Answer to prepare: it shows an LLM with tool calling
+      inside the pipeline; the checks and the YES confirmation stay in Python; `--inbox`
+      works without it
+- [ ] Optional: the column lineage exists in three generated formats (`docs/lineage.md`
+      alone is ~7,300 words); the interactive explorer plus Dagster's column list may
+      be enough
+- [ ] Optional: `tools/inspect_lakehouse.py` and `tools/lakehouse_viewer.py` overlap;
+      give each one stated role (the command-line check with exit code 1; the browser)
+- [ ] Optional: `--cleanup-scope` in `pipeline/bronze/cbs.py` is rarely needed (~70
+      lines and tests); it was used twice in this review, so keeping it is defensible
+
+The author's own steps after the review:
+- [ ] Slides (docs/presentatie.pptx), slide 9: the number and the speaker notes say
+      **380 tests** (the notes still said 404)
+- [ ] Export the report again (`python -m tools.export_report`): sources, diagram,
+      column count (263) and test count changed
 
 ## First real run (done 2026-10-05)
 

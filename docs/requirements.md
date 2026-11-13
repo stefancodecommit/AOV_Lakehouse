@@ -135,7 +135,7 @@ How well the system must work, per quality attribute.
 |---|---|---|---|---|---|
 | NFR-6 | The whole pipeline runs on one ordinary machine | Must | ✅ | Delta Lake with delta-rs, no Spark or database server | measured: silver CBS ~3 s, gold ~17 s, silver KVK ~9–12 s (2026-10) |
 | NFR-7 | Silver KVK's memory does not grow with the number of KVK uploads kept in bronze (latest + 1 per month) | Must | ✅ | silver reads only the newest upload; the staged table is streamed into the live one | measured on the real data (2026-11-11): 1.74 GB peak; `test_a_run_builds_only_the_newest_upload` (only one upload is read) |
-| NFR-8 | Docker needs at most ~3 GB of memory for the pipeline | Should | ✅ | one writing run at a time | measured (README, *Minimum machine*) |
+| NFR-8 | Docker needs at most ~3 GB of memory for the pipeline | Should | ✅ | one writing run at a time | measured (INSTRUCTIONS.md, section 6, *Minimum machine*) |
 | NFR-9 | Storage stays small: old file versions removed after 7 days, small files compacted monthly | Should | ✅ | `tools/maintenance.py` (optimize, vacuum) | `test_optimize_and_vacuum_removes_files_old_versions_no_longer_need` |
 
 ### Security and privacy
