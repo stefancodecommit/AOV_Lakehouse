@@ -200,8 +200,8 @@ opens it directly, for example
 `docs/lineage_explorer.html#gold:gold_risk_index.relative_risk` (add the part from `#` to
 the address in the browser).
 
-The same lineage as tables and static diagrams: [docs/lineage.md](docs/lineage.md) and
-[docs/lineage.html](docs/lineage.html). All three are generated from `tools/lineage.py`:
+The same lineage as tables and diagrams: [docs/lineage.md](docs/lineage.md) (GitHub draws
+the diagrams). Both are generated from `tools/lineage.py`:
 after changing the lineage there, run `.venv/bin/python -m tools.lineage`.
 
 ### The demo, with one command
@@ -415,7 +415,7 @@ run; a quarantined KVK file is checked again when you load it again.
 .venv/bin/pytest                              # all tests (~70 s, no internet needed)
 .venv/bin/pytest tests/test_gold.py           # one file
 .venv/bin/pytest -m live                      # the one test that calls the real CBS API
-.venv/bin/python -m tools.lineage             # regenerate docs/lineage.md, .html and the explorer
+.venv/bin/python -m tools.lineage             # regenerate docs/lineage.md and the explorer
 .venv/bin/ruff check .                        # the linter: errors, bug patterns, import order
 .venv/bin/ruff check --fix .                  # fix what it can fix safely
 ```

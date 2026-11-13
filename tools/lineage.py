@@ -4,9 +4,8 @@ and field(s) it comes from; for every gold column, the silver column(s) it is ma
 and what happens to it on the way.
 
 This file is the single source of truth. From it:
-- `python -m tools.lineage` writes docs/lineage.md (a diagram and a table per silver table),
-  docs/lineage.html (all diagrams on one page, for a browser) and
-  docs/lineage_explorer.html (interactive: pick a column or field, see its whole chain;
+- `python -m tools.lineage` writes docs/lineage.md (a diagram and a table per silver and
+  gold table; GitHub draws the diagrams) and docs/lineage_explorer.html (interactive: pick a column or field, see its whole chain;
   built from lineage_explorer_template.html, works offline)
 - orchestration/definitions.py shows the same lineage in the Dagster UI: in the free
   (open-source) Dagster, as the column list of the silver_cbs and silver_kvk assets,
@@ -697,59 +696,6 @@ _CLASSES = [
 ]
 
 
-def html() -> str:
-    """docs/lineage.html: all diagrams on one page (opens in any browser; loads the
-    Mermaid library from the internet to draw them)."""
-    sections = [("Overview: bronze → silver → gold", mermaid_overview())]
-    sections += [(f"silver: {t}", mermaid_table(t)) for t in SILVER_LINEAGE]
-    sections += [(f"gold: {t}", mermaid_table(t)) for t in GOLD_LINEAGE]
-    body = "\n".join(
-        f'<section id="{_id("s", title)}"><h2>{title}</h2>'
-        f'<pre class="mermaid">\n{diagram}\n</pre></section>' for title, diagram in sections)
-    toc = "\n".join(f'<li><a href="#{_id("s", title)}">{title}</a></li>' for title, _ in sections)
-    return f"""<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Column lineage</title>
-<style>
-  :root {{ --bg: #fcfcfb; --ink: #0b0b0b; --muted: #52514e; --line: #e1e0d9; }}
-  body {{ margin: 0; padding: 24px 16px 64px; background: var(--bg); color: var(--ink);
-         font-family: system-ui, -apple-system, "Segoe UI", sans-serif; line-height: 1.5; }}
-  main {{ max-width: 1200px; margin: 0 auto; }}
-  h1 {{ font-size: 1.6rem; margin: 0 0 4px; }}
-  h2 {{ font-size: 1.15rem; margin: 40px 0 8px; padding-top: 16px; border-top: 1px solid var(--line); }}
-  p, li {{ color: var(--muted); }}
-  .mermaid {{ background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 12px;
-              overflow-x: auto; }}
-  .legend span {{ display: inline-block; padding: 2px 8px; margin-right: 8px; border-radius: 4px;
-                  border: 1px solid; font-size: .85rem; color: var(--ink); }}
-</style>
-</head>
-<body>
-<main>
-<h1>Column lineage: bronze → silver → gold</h1>
-<p>Where every silver column comes from in bronze, and every gold column in silver. Generated from <code>tools/lineage.py</code>
-by <code>python -m tools.lineage</code>; the same lineage as a table:
-<a href="lineage.md">lineage.md</a>; explained with examples:
-<a href="bronze_to_silver.md">bronze_to_silver.md</a>.</p>
-<p class="legend"><span style="background:#f3e3c9;border-color:#a8743a">bronze field</span>
-<span style="background:#e4e7ec;border-color:#6b7480">silver column</span>
-<span style="background:#f6ecb8;border-color:#9c7f12">gold column</span>
-<span style="background:#f2f3f5;border-color:#9aa1ab;border-style:dashed">silver column it is made from</span></p>
-<ul>
-{toc}
-</ul>
-{body}
-</main>
-<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
-<script>mermaid.initialize({{ startOnLoad: true, theme: "neutral", flowchart: {{ useMaxWidth: false }} }});</script>
-</body>
-</html>
-"""
-
-
 # --------------------------------------------------------------------------- the document
 def markdown() -> str:
     """docs/lineage.md: one table per silver table."""
@@ -780,9 +726,9 @@ def markdown() -> str:
         "| `silver:map_characteristic.member_type` | a silver column (its own lineage "
         "is listed below) |",
         "",
-        "Diagrams of the same lineage: below in this file (drawn by GitHub), or all on one page "
-        "in [lineage.html](lineage.html) (open it in a browser). Interactive, to follow one "
-        "column or field through all steps: [lineage_explorer.html](lineage_explorer.html).",
+        "Diagrams of the same lineage are below in this file (drawn by GitHub). Interactive, "
+        "to follow one column or field through all steps: "
+        "[lineage_explorer.html](lineage_explorer.html) (open it in a browser).",
         "",
         "## Overview: bronze → silver → gold",
         "",
@@ -915,8 +861,7 @@ if __name__ == "__main__":
     from pathlib import Path
     docs = Path(__file__).resolve().parents[1] / "docs"
     (docs / "lineage.md").write_text(markdown(), encoding="utf-8")
-    (docs / "lineage.html").write_text(html(), encoding="utf-8")
     (docs / "lineage_explorer.html").write_text(explorer_html(), encoding="utf-8")
-    print(f"Wrote {docs / 'lineage.md'}, lineage.html and lineage_explorer.html "
+    print(f"Wrote {docs / 'lineage.md'} and lineage_explorer.html "
           f"({sum(len(c) for c in LINEAGE.values())} columns, {len(SILVER_LINEAGE)} silver and "
           f"{len(GOLD_LINEAGE)} gold tables)")

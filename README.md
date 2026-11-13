@@ -53,7 +53,7 @@ from, `docs/lineage_explorer.html` in a browser); both are explained in
 | [`docs/cloud_design.md`](docs/cloud_design.md) | A design (not built) for running the project on Azure |
 | [`docs/genai_use.md`](docs/genai_use.md) | How generative AI (Claude) was used, checked, and where it went wrong |
 | [`docs/bronze_to_silver.md`](docs/bronze_to_silver.md) | How bronze becomes silver, table by table, with real examples |
-| [`docs/lineage.md`](docs/lineage.md), [`lineage.html`](docs/lineage.html), [`lineage_explorer.html`](docs/lineage_explorer.html) | Column lineage bronze → silver → gold, generated from `tools/lineage.py`: tables, diagrams, and an interactive explorer |
+| [`docs/lineage.md`](docs/lineage.md), [`lineage_explorer.html`](docs/lineage_explorer.html) | Column lineage bronze → silver → gold, generated from `tools/lineage.py`: tables, diagrams, and an interactive explorer |
 | [`docs/presentatie.pptx`](docs/presentatie.pptx), [`demo.md`](docs/demo.md), [`qa_practice.md`](docs/qa_practice.md) | The presentation (Dutch), the demo script, practice questions |
 | [`TODO.md`](TODO.md) | Open work, and a log of every decision and real run, including the code review |
 

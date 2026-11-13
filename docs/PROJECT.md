@@ -526,7 +526,7 @@ tools/                   run by hand (some also scheduled by Dagster); python -m
 dashboard/               Streamlit app: app.py, views/ (pages), charts.py, data.py
 orchestration/           Dagster definitions (assets, checks, schedules, maintenance job) and dagster.yaml
 tests/                   pytest
-docs/                    this file, bronze_to_silver.md, lineage.md/.html, lineage_explorer.html
+docs/                    this file, bronze_to_silver.md, lineage.md, lineage_explorer.html
 config.yaml              all settings
 inbox/                   kvk/: KVK zip uploads for the agent; reference/: downloaded
                          reference files (not in git)

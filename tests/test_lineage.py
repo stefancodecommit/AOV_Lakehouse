@@ -136,10 +136,9 @@ def test_gold_is_followed_back_to_the_bronze_field_columns():
 
 
 # =========================================================================== outputs
-def test_docs_lineage_md_and_html_are_up_to_date():
+def test_docs_lineage_md_and_explorer_are_up_to_date():
     """Regenerate with: python -m tools.lineage"""
     assert (ROOT / "docs" / "lineage.md").read_text(encoding="utf-8") == L.markdown()
-    assert (ROOT / "docs" / "lineage.html").read_text(encoding="utf-8") == L.html()
     assert (ROOT / "docs" / "lineage_explorer.html").read_text(encoding="utf-8") == L.explorer_html()
 
 
