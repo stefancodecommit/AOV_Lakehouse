@@ -187,9 +187,6 @@ DP_86009 = dataprops([
     (15, 14, "Topic", "Rug_9", "Rug", "%"),
     (30, 5, "TopicGroup", None, "Klacht meest recente verzuim (va. 2022)", None),
     (35, 30, "Topic", "Rug_28", "Rug", "%")])
-DP_83130 = dataprops([
-    (2, None, "Topic", "AandeelWerknemersDatHeeftVerzuimd_1", "Aandeel werknemers dat heeft verzuimd", "%"),
-    (3, None, "Topic", "GemiddeldeVerzuimduur_3", "Gemiddelde verzuimduur", "aantal werkdagen")])
 DP_81589 = dataprops(
     [(2, None, "Topic", "TotaalBedrijven_1", "Totaal bedrijven", "aantal"),
      (3, None, "TopicGroup", None, "Bedrijfsgrootte", None)]
@@ -242,10 +239,6 @@ def sample_bronze():
         ("86009NED", "TypedDataSet"): raw(survey_rows(
             ["T001081", "301000", "WN19044"], ["2022JJ00", "2023JJ00"], topic_keys(DP_86009),
             null_for={("301000", "Rug_9"), ("301000", "Rug_28")}), "Definitief"),
-        ("83130NED", "Bedrijfskenmerken"): raw(code_list(SECTORS_86009[:3])),
-        ("83130NED", "DataProperties"): raw(DP_83130),
-        ("83130NED", "TypedDataSet"): raw(survey_rows(["T001081"], ["2023JJ00"],
-                                                      topic_keys(DP_83130)), "Definitief"),
         ("81589NED", "BedrijfstakkenBranchesSBI2008"): raw(code_list(SECTORS_81589)),
         ("81589NED", "DataProperties"): raw(DP_81589),
         ("81589NED", "TypedDataSet"): raw(business, "Voorlopig"),

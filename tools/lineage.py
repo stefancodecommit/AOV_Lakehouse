@@ -59,13 +59,12 @@ def each(tables, *fields: str) -> tuple[Source, ...]:
 
 # --------------------------------------------------------------------------- bronze tables
 TYPED = {"80072NED": "80072ned_typeddataset", "86009NED": "86009ned_typeddataset",
-         "83130NED": "83130ned_typeddataset", "81589NED": "81589ned_typeddataset"}
+         "81589NED": "81589ned_typeddataset"}
 CODE_LISTS = ["80072ned_bedrijfskenmerkensbi2008", "86009ned_bedrijfskenmerken",
-              "83130ned_bedrijfskenmerken", "81589ned_bedrijfstakkenbranchessbi2008"]
-CATEGORY_GROUPS = ["80072ned_categorygroups", "86009ned_categorygroups",
-                   "83130ned_categorygroups"]
-SURVEY = ["86009ned_typeddataset", "83130ned_typeddataset"]
-SURVEY_PROPS = ["86009ned_dataproperties", "83130ned_dataproperties"]
+              "81589ned_bedrijfstakkenbranchessbi2008"]
+CATEGORY_GROUPS = ["80072ned_categorygroups", "86009ned_categorygroups"]
+SURVEY = ["86009ned_typeddataset"]
+SURVEY_PROPS = ["86009ned_dataproperties"]
 COUNT_PROPS = ["81589ned_dataproperties"]
 KVK = "kvk/basis_bedrijfsgegevens"
 KVK_LOG = "kvk/_batch_log"
@@ -242,7 +241,8 @@ SILVER_LINEAGE: dict[str, dict[str, Column]] = {
     },
     "fct_absence_survey": {
         "source_table": Column(each(SURVEY, "_table_id"),
-                               "86009NED or 83130NED: kept apart, never mixed"),
+                               "the survey table (86009NED); a successor table "
+                               "would be kept apart, never mixed"),
         "period_key": Column(each(SURVEY, "Perioden"), "as given"),
         "characteristic_key": Column(each(SURVEY, "Bedrijfskenmerken"),
                                      "as given (padding removed)"),
@@ -594,14 +594,12 @@ def bronze_sources(table: str, column: str, _seen=None) -> set[Source]:
 
 # --------------------------------------------------------------------------- diagrams
 # Mermaid flowcharts (text that GitHub and the HTML page draw as diagrams). Where several
-# bronze tables feed a column through the same field (e.g. the four code lists' Title),
+# bronze tables feed a column through the same field (e.g. the three code lists' Title),
 # they are drawn as one box, named after the group, so the diagrams stay readable.
 GROUPS = {
-    frozenset(CODE_LISTS): "4 code lists of sectors and size classes",
-    frozenset(TYPED.values()): "the 4 data tables (TypedDataSet)",
-    frozenset(SURVEY): "survey data: 86009NED + 83130NED",
-    frozenset(SURVEY_PROPS): "survey DataProperties: 86009NED + 83130NED",
-    frozenset(CATEGORY_GROUPS): "3 category-group lists",
+    frozenset(CODE_LISTS): "3 code lists of sectors and size classes",
+    frozenset(TYPED.values()): "the 3 data tables (TypedDataSet)",
+    frozenset(CATEGORY_GROUPS): "2 category-group lists",
 }
 
 

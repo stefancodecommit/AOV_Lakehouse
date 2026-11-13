@@ -31,7 +31,7 @@ Four things, about 20 minutes, in this order:
    *lower* verdict held a year later in all 440 cases; the trend describes, it doesn't
    predict).
 3. **Proof that it works**: [the six phases, each with its README](#the-six-phases-each-with-its-readme),
-   [`tests/README.md`](tests/README.md) (381 tests, run by GitHub Actions on every push,
+   [`tests/README.md`](tests/README.md) (380 tests, run by GitHub Actions on every push,
    plus a weekly vulnerability scan) and [`docs/requirements.md`](docs/requirements.md)
    (every requirement with its status and the test that verifies it).
 4. **How GenAI was used**: [`docs/genai_use.md`](docs/genai_use.md): which decisions were
@@ -133,7 +133,7 @@ How data moves through the scripts:
  (outside)                as received              cleaned, typed            dashboard-ready
 
  CBS OData API ─────► bronze/cbs.py ───────┐
- (4 tables +              lakehouse/bronze/  ├──► silver/cbs.py ─────────┐
+ (3 tables +              lakehouse/bronze/  ├──► silver/cbs.py ─────────┐
   code lists)                                │    9 tables (dims,        │
  CBS crosswalk xlsx ─► bronze/reference.py ─┘    facts, SBI crosswalk)  ├──► gold/build.py ──► dashboard/
  (SBI 2008 -> 2025)       bronze/reference/            │                 │    7 tables          (Streamlit)
@@ -367,7 +367,7 @@ Every script starts with a docstring that explains it in more detail; this is th
 
 ### Bronze
 
-**`pipeline/bronze/cbs.py`** — reads the CBS OData API (v3) for the four tables in `config.yaml`:
+**`pipeline/bronze/cbs.py`** — reads the CBS OData API (v3) for the three tables in `config.yaml`:
 the data itself (`TypedDataSet`) and the code lists that explain it.
 - *Incremental:* data is requested one period at a time. A log table
   (`bronze/_ingestion_log`) records every request already loaded, so a second run only
@@ -512,7 +512,7 @@ A misspelled setting name stops the script with an error instead of being ignore
 ## Tests
 
 ```bash
-.venv/bin/pytest              # 381 tests, ~85 s, no internet needed
+.venv/bin/pytest              # 380 tests, ~85 s, no internet needed
 .venv/bin/pytest -m live      # one extra test against the real CBS API
 .venv/bin/ruff check .        # the linter (settings in pyproject.toml); CI runs it too
 ```
@@ -565,6 +565,6 @@ Limitations worth knowing when reading the results:
 
 ## Sources and licence
 
-- CBS StatLine tables 80072NED, 86009NED, 83130NED, 81589NED and the SBI 2008 –
+- CBS StatLine tables 80072NED, 86009NED, 81589NED and the SBI 2008 –
   SBI 2025 crosswalk: © CBS, [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
 - KVK Handelsregister Open Dataset Basis Bedrijfsgegevens: © KVK, CC BY 4.0.

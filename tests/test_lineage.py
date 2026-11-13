@@ -44,9 +44,8 @@ def bronze_fields() -> dict[str, set[str]]:
     for (table_id, entity), raw in sample_bronze().items():
         keys = set().union(*(json.loads(x) for x in raw["raw_json"]))
         out[f"{table_id}_{entity}".lower()] = keys | lineage_cols
-    # CategoryGroups of the survey tables have the same fields as 80072NED's
-    for t in ("86009ned_categorygroups", "83130ned_categorygroups"):
-        out[t] = out["80072ned_categorygroups"]
+    # CategoryGroups of the survey table has the same fields as 80072NED's
+    out["86009ned_categorygroups"] = out["80072ned_categorygroups"]
     out[L.KVK] = set(KVK_HEADER) | {"_batch_id", "_ingested_at", "_source_file",
                                      "_source_sha256", "_row_number"}
     out[L.KVK_LOG] = {"batch_id", "ingested_at", "source_file", "file_sha256", "csv_member",
@@ -131,9 +130,9 @@ def test_silver_to_silver_steps_are_followed_back_to_bronze():
 def test_gold_is_followed_back_to_the_bronze_field_columns():
     assert L.bronze_sources("gold_absence_by_sector", "absence_pct") == {
         L.Source("80072ned_typeddataset", "Ziekteverzuimpercentage_1")}
-    # through dim_sector back to the four code lists' Title
+    # through dim_sector back to the three code lists' Title
     names = L.bronze_sources("gold_business_context", "sector_name")
-    assert {s.field for s in names} == {"Title"} and len(names) == 4
+    assert {s.field for s in names} == {"Title"} and len(names) == 3
 
 
 # =========================================================================== outputs

@@ -132,7 +132,7 @@ repository ([docs/requirements.md](requirements.md)). Dit hoofdstuk geeft de hoo
 
 | Rol | Wie | Behoefte of bijdrage |
 |---|---|---|
-| Datatoeleverancier | **CBS**: verzuim (80072NED per kwartaal; 86009NED en 83130NED per jaar, met 95%-intervallen), aantallen bedrijven (81589NED) en de omzettabel SBI 2008 naar 2025 | openbaar (CC BY 4.0), opgehaald via de OData-API; geen afspraken over beschikbaarheid |
+| Datatoeleverancier | **CBS**: verzuim (80072NED per kwartaal; 86009NED per jaar, met 95%-intervallen), aantallen bedrijven (81589NED) en de omzettabel SBI 2008 naar 2025 | openbaar (CC BY 4.0), opgehaald via de OData-API; geen afspraken over beschikbaarheid |
 | Datatoeleverancier | **KVK**: open dataset basisbedrijfsgegevens (alleen BV's en NV's, zonder namen of adressen) | een zip-bestand, door een medewerker gedownload; hergebruik voor het herleiden van bedrijven is niet toegestaan |
 | Ontwikkelaar en beheerder | **data engineer** (in dit project ik; bij de verzekeraar het datateam) | bouwt en onderhoudt de pijplijn, laadt maandelijks het KVK-bestand, volgt fouten en waarschuwingen op |
 | Directe gebruiker | **data-analist** | vindt de risico's per SBI-sector en grootteklasse en beoordeelt of een verschil echt is |
@@ -198,7 +198,7 @@ flowchart TB
   REQ["<b>Eisen</b>: 19 functioneel, 27 niet-functioneel, 6 organisatorisch"]
   subgraph BRON["Bronnen: acquisitie en voorbereiding"]
     direction LR
-    S1[("CBS verzuim<br/>80072, 86009, 83130")]
+    S1[("CBS verzuim<br/>80072, 86009")]
     S2[("CBS bedrijven<br/>81589")]
     S3[("CBS omzettabel<br/>SBI 2008-2025")]
     S4[("KVK open data<br/>BV / NV")]
@@ -341,7 +341,7 @@ datakwaliteitsstatistieken toont.
 
 ### 4.3 Testen en validatie
 
-Er zijn **381 geautomatiseerde tests**, van vier soorten:
+Er zijn **380 geautomatiseerde tests**, van vier soorten:
 
 - **eenheidstests** op de logica (codes ontleden, controles, de berekening van de
   risico-index) met kleine, zelfgemaakte gegevens waarvan het juiste antwoord vooraf
@@ -561,7 +561,7 @@ De antwoorden op de deelvragen:
 
 Als dataproduct voldoet de oplossing aan alle *must*-eisen: zij haalt de gegevens
 automatisch en zonder dubbelingen op, controleert ze op elke laag, maakt elk getal
-herleidbaar en uitlegbaar, en is aangetoond met 381 tests. Daarmee verschuift het werken
+herleidbaar en uitlegbaar, en is aangetoond met 380 tests. Daarmee verschuift het werken
 met deze cijfers van incidenteel handwerk naar een herhaalbaar en gecontroleerd proces.
 
 ### 6.2 Aanbevelingen
@@ -594,7 +594,7 @@ met deze cijfers van incidenteel handwerk naar een herhaalbaar en gecontroleerd 
   AI: Strategies for explaining algorithmic decision-making in government. *Government
   Information Quarterly*.
 - Reis, J., & Housley, M. (2022). *Fundamentals of data engineering*. O'Reilly Media.
-- CBS StatLine, tabellen 80072NED, 86009NED, 83130NED en 81589NED, en de omzettabel
+- CBS StatLine, tabellen 80072NED, 86009NED en 81589NED, en de omzettabel
   SBI 2008–SBI 2025 (CC BY 4.0).
 - KVK, open dataset basisbedrijfsgegevens (CC BY 4.0).
 

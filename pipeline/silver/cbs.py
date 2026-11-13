@@ -21,11 +21,11 @@ map_sbi2008_sbi2025 CBS crosswalk SBI 2008 <-> SBI 2025 (from pipeline/bronze/re
 Facts
 -----
 fct_absence_rate          80072NED  period x sector/size class -> absence_pct (quarterly)
-fct_absence_survey        86009NED + 83130NED, long format:
+fct_absence_survey        86009NED, long format:
                           period x characteristic x measure -> value, lower_95, upper_95.
-                          The two tables overlap (2014-2023) and their averages use
-                          different populations, so they are kept side by side
-                          (source_table) and never mixed under one measure name.
+                          source_table says which survey a row is from: when CBS
+                          replaces a survey by a new table (as 86009NED replaced
+                          83130NED in 2023), the two are kept apart, never mixed.
 fct_business_count        81589NED  period x sector x breakdown -> count
                           breakdown = total | size | legal_form. Size rows carry
                           size_key, size_band and size_is_aggregate (True when the class
@@ -73,10 +73,11 @@ log = logging.getLogger("cbs_silver")
 CHARACTERISTIC_DIMS = {
     "80072NED": "BedrijfskenmerkenSBI2008",
     "86009NED": "Bedrijfskenmerken",
-    "83130NED": "Bedrijfskenmerken",
     "81589NED": "BedrijfstakkenBranchesSBI2008",
 }
-SURVEY_TABLES = ("86009NED", "83130NED")
+# Survey tables, kept apart by source_table. 83130NED (2014-2023, stopped by CBS) was
+# loaded until 2026-11-13; it reached no gold table, and 86009NED covers the same years.
+SURVEY_TABLES = ("86009NED",)
 TOTAL_KEY = "T001081"  # "A-U Alle economische activiteiten"
 
 # Coarse bands for comparing size classes across tables: (name, lower, upper-exclusive)
@@ -461,7 +462,7 @@ def _margin_col(key: str) -> str:
 
 
 def build_dim_survey_measure(dataprops: dict[str, pd.DataFrame]) -> pd.DataFrame:
-    """One row per survey measure (86009NED, 83130NED): key, snake_case name, CBS title,
+    """One row per survey measure (86009NED): key, snake_case name, CBS title,
     topic group and unit, taken from DataProperties."""
     frames = []
     for table_id in SURVEY_TABLES:
@@ -486,12 +487,12 @@ def build_dim_survey_measure(dataprops: dict[str, pd.DataFrame]) -> pd.DataFrame
 
 def build_fct_absence_survey(data: dict[str, pd.DataFrame], dim_measure: pd.DataFrame,
                              mapping: pd.DataFrame) -> pd.DataFrame:
-    """86009NED and 83130NED in long format: one row per period x characteristic x
-    measure, with the estimate and its 95% bounds side by side.
+    """The survey tables (86009NED) in long format: one row per period x characteristic
+    x measure, with the estimate and its 95% bounds side by side.
 
     In the source the bounds are separate rows (dimension 'Marges'); they are pivoted
-    into columns so a value and its interval stay together. The two tables measure
-    similar things over different populations, so `source_table` keeps them apart."""
+    into columns so a value and its interval stay together. `source_table` keeps the
+    rows of different survey tables apart (their populations differ)."""
     frames = []
     for table_id in SURVEY_TABLES:
         df = data.get(table_id, pd.DataFrame())

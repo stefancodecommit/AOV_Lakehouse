@@ -153,7 +153,6 @@ def test_map_characteristic_aggregate_flags_are_per_source_table(silver):
     m = silver["map_characteristic"].set_index(["source_table", "characteristic_key"])
     assert m.at[("86009NED", "WN19044"), "size_is_aggregate"]       # 1-10 contains 1-5 and 5-10
     assert not m.at[("86009NED", "WN19041"), "size_is_aggregate"]
-    assert not m.at[("83130NED", "WN19044"), "size_is_aggregate"]   # no sub-classes in 83130 sample
 
 
 def test_dim_sector_is_conformed_on_cbs_key(silver):
@@ -186,14 +185,6 @@ def test_survey_measure_names_unique_and_era_suffixed(silver):
     assert {"rug_until_2022", "rug_from_2022"} <= names
 
 
-def test_survey_sources_never_share_a_measure_name(silver):
-    """83130NED and 86009NED averages use different populations; names must not collide."""
-    d = silver["dim_survey_measure"]
-    a = set(d.loc[d["source_table"] == "86009NED", "measure_name"])
-    b = set(d.loc[d["source_table"] == "83130NED", "measure_name"])
-    assert a and b and not (a & b)
-
-
 # =========================================================================== facts
 def test_fct_absence_rate(silver):
     f = silver["fct_absence_rate"]
@@ -224,8 +215,8 @@ def test_fct_absence_survey_pivots_margins(silver):
 def test_fct_absence_survey_grain_is_unique(silver):
     f = silver["fct_absence_survey"]
     assert not f.duplicated(["source_table", "period_key", "characteristic_key", "measure_key"]).any()
-    # 86009: 3 characteristics x 2 years x 5 measures; 83130: 1 x 1 x 2
-    assert len(f) == 3 * 2 * 5 + 2
+    # 86009: 3 characteristics x 2 years x 5 measures
+    assert len(f) == 3 * 2 * 5
 
 
 def test_fct_absence_survey_keeps_cbs_nulls(silver):

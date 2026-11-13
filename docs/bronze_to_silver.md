@@ -20,7 +20,7 @@ the code; the last section says where each step lives in it.
 5. [Code lists → `map_characteristic`, `dim_sector`, `dim_company_size`](#5-code-lists--map_characteristic-dim_sector-dim_company_size)
 6. [Periods → `dim_period`](#6-periods--dim_period)
 7. [Absence percentage (80072NED) → `fct_absence_rate`](#7-absence-percentage-80072ned--fct_absence_rate)
-8. [Absence survey (86009NED, 83130NED) → `dim_survey_measure`, `fct_absence_survey`](#8-absence-survey-86009ned-83130ned--dim_survey_measure-fct_absence_survey)
+8. [Absence survey (86009NED) → `dim_survey_measure`, `fct_absence_survey`](#8-absence-survey-86009ned--dim_survey_measure-fct_absence_survey)
 9. [Business counts (81589NED) → `fct_business_count`](#9-business-counts-81589ned--fct_business_count)
 10. [SBI crosswalk → `map_sbi2008_sbi2025`](#10-sbi-crosswalk--map_sbi2008_sbi2025)
 11. [KVK companies → `kvk_company`](#11-kvk-companies--kvk_company)
@@ -112,18 +112,15 @@ silver row carries the `run_id` of the run that made it (see section 12).
  BRONZE (one table per CBS endpoint)               SILVER
 
  80072ned_typeddataset ────────────────────────────► fct_absence_rate
- 86009ned_typeddataset ─┐
- 83130ned_typeddataset ─┴──────────────────────────► fct_absence_survey
- 86009ned_dataproperties ─┐
- 83130ned_dataproperties ─┴────────────────────────► dim_survey_measure
+ 86009ned_typeddataset ────────────────────────────► fct_absence_survey
+ 86009ned_dataproperties ──────────────────────────► dim_survey_measure
  81589ned_typeddataset ──────── + its dataproperties ► fct_business_count
 
  code lists of sectors and size classes:
    80072ned_bedrijfskenmerkensbi2008               ┐
    86009ned_bedrijfskenmerken                      │  map_characteristic
-   83130ned_bedrijfskenmerken                      ├─► dim_sector
-   81589ned_bedrijfstakkenbranchessbi2008          │  dim_company_size
-   *_categorygroups (80072NED, 86009NED, 83130NED) ┘
+   81589ned_bedrijfstakkenbranchessbi2008          ├─► dim_sector
+   *_categorygroups (80072NED, 86009NED)           ┘  dim_company_size
 
  the period keys found in all fact tables ─────────► dim_period
 
@@ -259,7 +256,7 @@ Read: *"in 2026 Q2 (provisional), Industrie (section C) had 6.2% absence, and co
 with 1-9 persons employed 2.5%."* `sector_key` joins to `dim_sector`, `size_key` to
 `dim_company_size`, `period_key` to `dim_period`.
 
-## 8. Absence survey (86009NED, 83130NED) → `dim_survey_measure`, `fct_absence_survey`
+## 8. Absence survey (86009NED) → `dim_survey_measure`, `fct_absence_survey`
 
 The yearly survey explains *what lies behind* absence: how often, how long, which
 complaints, whether it was work-related. It has 65 measures and every estimate comes with
@@ -298,8 +295,10 @@ records**, told apart by the dimension `Marges`. Real records for sector Q (heal
 Read: *"in 2025, 54.3% of employees in health care were absent at least once (95%
 interval 53.2-55.3%)."*
 
-The two survey tables overlap (2014-2023) but average over different groups of people, so
-they are never mixed: `source_table` keeps them apart.
+`source_table` says which survey a row comes from. CBS replaced its earlier survey
+(83130NED, 2014–2023) by 86009NED; the two average over different groups of people, so a
+successor would be kept apart, never mixed. (83130NED itself was loaded until 2026-11-13;
+nothing used it, and 86009NED covers the same years.)
 
 ### `dim_survey_measure`: what each measure is
 

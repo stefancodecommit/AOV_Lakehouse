@@ -77,7 +77,7 @@ requirements with their status and verification, conditions for use) are in
   command).
 - **Employees, not the self-employed.** CBS's absence figures describe *employees*:
   80072NED gives the absence percentage at private companies and the government,
-  86009NED and 83130NED are about the absence of employees aged 15–75 (CBS's own table
+  86009NED is about the absence of employees aged 15–75 (CBS's own table
   descriptions). For products for the self-employed they are a proxy, not a measurement
   of their own absence.
 - **Correlation, not cause.** A sector with high absence is a higher-risk group; the data
@@ -194,11 +194,12 @@ lakehouse/
 |---|---|---|---|---|
 | 80072NED | Sickness absence percentage | Sector or size class | Quarter | Main metric |
 | 86009NED | Absence survey: share absent, frequency, duration, complaints, work-relatedness, with 95% margins | Sector or size class | Year | Explaining differences |
-| 83130NED | Earlier absence survey (2014–2023, averages over all employees) | Sector or size class | Year | Historical comparison |
 | 81589NED | Number of businesses by size class and legal form | Sector | Quarter | Context |
 
-81644NED (establishments per sector and region) was loaded until 2026-11-13 "for a later
-regional analysis", but no gold table or dashboard page used it, so it was removed.
+Two tables were loaded until 2026-11-13 and then removed, because no gold table or
+dashboard page used them: 81644NED (establishments per sector and region, "for a later
+regional analysis") and 83130NED (the earlier absence survey, 2014–2023, stopped by CBS;
+with the start year 2020 it added no years that 86009NED doesn't have).
 
 Plus each table's code lists and metadata (sector and size codes, regions, margins,
 category groups, measure definitions, periods). Scope: every period from 2020 onward,
@@ -254,7 +255,7 @@ Rebuilt from bronze on every run.
   `dim_survey_measure`, and `map_characteristic` (what each source key is: total, sector,
   size class).
 - **Facts:** `fct_absence_rate`, `fct_absence_survey` (long format, value plus 95% bounds,
-  the two survey tables kept apart), `fct_business_count`.
+  `source_table` keeps different survey tables apart), `fct_business_count`.
 
 ### Silver KVK — `pipeline/silver/kvk.py` (built)
 
@@ -544,7 +545,7 @@ TODO.md                  open work
 | Data checks before ingestion (CBS) | Built (`checks/cbs.py`) |
 | Quarantine | Built for CBS, KVK and reference files; monthly cleanup in `tools/maintenance.py` |
 | Alerting, freshness checks | To do |
-| pytest | 381 tests incl. real Delta tables, the dashboard pages and Dagster; one opt-in live CBS test |
+| pytest | 380 tests incl. real Delta tables, the dashboard pages and Dagster; one opt-in live CBS test |
 | Configuration file | Built (`config.yaml` + `pipeline/common/config.py`) |
 | Gold | Built: 7 tables, including the risk index for the insurer; provisional figures marked |
 | Streamlit dashboard | Built: 6 pages incl. data dictionary; provisional marked, "final only" switch |

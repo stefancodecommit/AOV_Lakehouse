@@ -15,7 +15,7 @@ keeps the original, every later step can be rebuilt without asking a source agai
 
 | Script | Source | How it arrives | Key behaviour |
 |---|---|---|---|
-| [`cbs.py`](cbs.py) | CBS StatLine: absence (80072NED, 86009NED, 83130NED), businesses (81589NED), their code lists and metadata | pulled from the OData API, monthly | one request per period; only periods not yet loaded; a revised provisional period replaces its old rows |
+| [`cbs.py`](cbs.py) | CBS StatLine: absence (80072NED, 86009NED), businesses (81589NED), their code lists and metadata | pulled from the OData API, monthly | one request per period; only periods not yet loaded; a revised provisional period replaces its old rows |
 | [`reference.py`](reference.py) | the CBS SBI 2008 → SBI 2025 crosswalk (Excel) | downloaded when CBS publishes a new version | a file already loaded (same content) is skipped |
 | [`kvk_agent.py`](kvk_agent.py) | the KVK open dataset (zip, ~13 MB, ~1.9M companies) | placed in `inbox/kvk/` by a person | verified, then loaded only after the person confirms; never the same file twice |
 

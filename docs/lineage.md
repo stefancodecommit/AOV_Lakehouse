@@ -23,7 +23,6 @@ flowchart LR
   subgraph bronze_layer["bronze"]
     n_source_CBS_80072NED["<b>CBS 80072NED</b><br/>80072ned_bedrijfskenmerkensbi2008<br/>80072ned_categorygroups<br/>80072ned_typeddataset"]:::bronze
     n_source_CBS_81589NED["<b>CBS 81589NED</b><br/>81589ned_bedrijfstakkenbranchessbi2008<br/>81589ned_dataproperties<br/>81589ned_typeddataset"]:::bronze
-    n_source_CBS_83130NED["<b>CBS 83130NED</b><br/>83130ned_bedrijfskenmerken<br/>83130ned_categorygroups<br/>83130ned_dataproperties<br/>83130ned_typeddataset"]:::bronze
     n_source_CBS_86009NED["<b>CBS 86009NED</b><br/>86009ned_bedrijfskenmerken<br/>86009ned_categorygroups<br/>86009ned_dataproperties<br/>86009ned_typeddataset"]:::bronze
     n_source_CBS_SBI_crosswalk__xlsx_["<b>CBS SBI crosswalk (xlsx)</b><br/>reference/sbi2008_sbi2025"]:::bronze
     n_source_KVK_file["<b>KVK file</b><br/>kvk/_batch_log<br/>kvk/basis_bedrijfsgegevens"]:::bronze
@@ -92,12 +91,6 @@ flowchart LR
   n_source_CBS_81589NED --> n_silver_dim_sector
   n_source_CBS_81589NED --> n_silver_fct_business_count
   n_source_CBS_81589NED --> n_silver_map_characteristic
-  n_source_CBS_83130NED --> n_silver_dim_company_size
-  n_source_CBS_83130NED --> n_silver_dim_period
-  n_source_CBS_83130NED --> n_silver_dim_sector
-  n_source_CBS_83130NED --> n_silver_dim_survey_measure
-  n_source_CBS_83130NED --> n_silver_fct_absence_survey
-  n_source_CBS_83130NED --> n_silver_map_characteristic
   n_source_CBS_86009NED --> n_silver_dim_company_size
   n_source_CBS_86009NED --> n_silver_dim_period
   n_source_CBS_86009NED --> n_silver_dim_sector
@@ -125,13 +118,13 @@ A silver table, built by `pipeline/silver/cbs.py`.
 
 ```mermaid
 flowchart LR
-  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken_CategoryGroupID["4 code lists of sectors and size classes<br/>CategoryGroupID"]:::bronze
-  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken_Key["4 code lists of sectors and size classes<br/>Key"]:::bronze
-  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken_Title["4 code lists of sectors and size classes<br/>Title"]:::bronze
-  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken__entity["4 code lists of sectors and size classes<br/>_entity"]:::bronze
-  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken__table_id["4 code lists of sectors and size classes<br/>_table_id"]:::bronze
-  n_src_80072ned_categorygroups_83130ned_categorygroups_86009ned_categorygroups_ID["3 category-group lists<br/>ID"]:::bronze
-  n_src_80072ned_categorygroups_83130ned_categorygroups_86009ned_categorygroups_Title["3 category-group lists<br/>Title"]:::bronze
+  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_86009ned_bedrijfskenmerken_CategoryGroupID["3 code lists of sectors and size classes<br/>CategoryGroupID"]:::bronze
+  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_86009ned_bedrijfskenmerken_Key["3 code lists of sectors and size classes<br/>Key"]:::bronze
+  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_86009ned_bedrijfskenmerken_Title["3 code lists of sectors and size classes<br/>Title"]:::bronze
+  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_86009ned_bedrijfskenmerken__entity["3 code lists of sectors and size classes<br/>_entity"]:::bronze
+  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_86009ned_bedrijfskenmerken__table_id["3 code lists of sectors and size classes<br/>_table_id"]:::bronze
+  n_src_80072ned_categorygroups_86009ned_categorygroups_ID["2 category-group lists<br/>ID"]:::bronze
+  n_src_80072ned_categorygroups_86009ned_categorygroups_Title["2 category-group lists<br/>Title"]:::bronze
   run(["the silver run (pipeline/common/publish.py)"]):::run
   subgraph n_tbl_map_characteristic["silver: map_characteristic"]
     n_col_source_table["source_table"]:::silver
@@ -145,18 +138,18 @@ flowchart LR
     n_col_size_is_aggregate["size_is_aggregate"]:::silver
     n_col_run_id["run_id"]:::silver
   end
-  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken__table_id --> n_col_source_table
-  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken__entity --> n_col_dimension
-  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken_Key --> n_col_characteristic_key
-  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken_Title --> n_col_title
-  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken_CategoryGroupID --> n_col_category_group
-  n_src_80072ned_categorygroups_83130ned_categorygroups_86009ned_categorygroups_ID --> n_col_category_group
-  n_src_80072ned_categorygroups_83130ned_categorygroups_86009ned_categorygroups_Title --> n_col_category_group
-  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken_Key --> n_col_member_type
-  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken_Title --> n_col_member_type
-  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken_Key --> n_col_sector_key
-  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken_Title --> n_col_size_key
-  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken_Title --> n_col_size_is_aggregate
+  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_86009ned_bedrijfskenmerken__table_id --> n_col_source_table
+  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_86009ned_bedrijfskenmerken__entity --> n_col_dimension
+  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_86009ned_bedrijfskenmerken_Key --> n_col_characteristic_key
+  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_86009ned_bedrijfskenmerken_Title --> n_col_title
+  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_86009ned_bedrijfskenmerken_CategoryGroupID --> n_col_category_group
+  n_src_80072ned_categorygroups_86009ned_categorygroups_ID --> n_col_category_group
+  n_src_80072ned_categorygroups_86009ned_categorygroups_Title --> n_col_category_group
+  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_86009ned_bedrijfskenmerken_Key --> n_col_member_type
+  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_86009ned_bedrijfskenmerken_Title --> n_col_member_type
+  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_86009ned_bedrijfskenmerken_Key --> n_col_sector_key
+  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_86009ned_bedrijfskenmerken_Title --> n_col_size_key
+  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_86009ned_bedrijfskenmerken_Title --> n_col_size_is_aggregate
   run --> n_col_run_id
   classDef bronze fill:#f3e3c9,stroke:#a8743a,color:#1d1d1d
   classDef silver fill:#e4e7ec,stroke:#6b7480,color:#1d1d1d
@@ -167,15 +160,15 @@ flowchart LR
 
 | Column | Comes from | How |
 |---|---|---|
-| `source_table` | `80072ned_bedrijfskenmerkensbi2008._table_id`<br>`86009ned_bedrijfskenmerken._table_id`<br>`83130ned_bedrijfskenmerken._table_id`<br>`81589ned_bedrijfstakkenbranchessbi2008._table_id` | the CBS table the key belongs to |
-| `dimension` | `80072ned_bedrijfskenmerkensbi2008._entity`<br>`86009ned_bedrijfskenmerken._entity`<br>`83130ned_bedrijfskenmerken._entity`<br>`81589ned_bedrijfstakkenbranchessbi2008._entity` | the code list's name, e.g. BedrijfskenmerkenSBI2008 |
-| `characteristic_key` | `80072ned_bedrijfskenmerkensbi2008.Key`<br>`86009ned_bedrijfskenmerken.Key`<br>`83130ned_bedrijfskenmerken.Key`<br>`81589ned_bedrijfstakkenbranchessbi2008.Key` | as given (padding removed) |
-| `title` | `80072ned_bedrijfskenmerkensbi2008.Title`<br>`86009ned_bedrijfskenmerken.Title`<br>`83130ned_bedrijfskenmerken.Title`<br>`81589ned_bedrijfstakkenbranchessbi2008.Title` | as given (spaces trimmed) |
-| `category_group` | `80072ned_bedrijfskenmerkensbi2008.CategoryGroupID`<br>`86009ned_bedrijfskenmerken.CategoryGroupID`<br>`83130ned_bedrijfskenmerken.CategoryGroupID`<br>`81589ned_bedrijfstakkenbranchessbi2008.CategoryGroupID`<br>`80072ned_categorygroups.ID`<br>`80072ned_categorygroups.Title`<br>`86009ned_categorygroups.ID`<br>`86009ned_categorygroups.Title`<br>`83130ned_categorygroups.ID`<br>`83130ned_categorygroups.Title` | the title of the key's category group (e.g. Bedrijfsgrootte) |
-| `member_type` | `80072ned_bedrijfskenmerkensbi2008.Key`<br>`80072ned_bedrijfskenmerkensbi2008.Title`<br>`86009ned_bedrijfskenmerken.Key`<br>`86009ned_bedrijfskenmerken.Title`<br>`83130ned_bedrijfskenmerken.Key`<br>`83130ned_bedrijfskenmerken.Title`<br>`81589ned_bedrijfstakkenbranchessbi2008.Key`<br>`81589ned_bedrijfstakkenbranchessbi2008.Title` | 'size' when the title reads like a size class (whole words 'werknemers' / 'werkzame personen'), 'total' for T001081 or a title starting with A-U, otherwise 'sector' |
-| `sector_key` | `80072ned_bedrijfskenmerkensbi2008.Key`<br>`86009ned_bedrijfskenmerken.Key`<br>`83130ned_bedrijfskenmerken.Key`<br>`81589ned_bedrijfstakkenbranchessbi2008.Key` | the key itself, for sectors and the total |
-| `size_key` | `80072ned_bedrijfskenmerkensbi2008.Title`<br>`86009ned_bedrijfskenmerken.Title`<br>`83130ned_bedrijfskenmerken.Title`<br>`81589ned_bedrijfstakkenbranchessbi2008.Title` | size class parsed from the title, e.g. '1 tot 10 werkzame personen' -> WP_1_10 (size rows only) |
-| `size_is_aggregate` | `80072ned_bedrijfskenmerkensbi2008.Title`<br>`86009ned_bedrijfskenmerken.Title`<br>`83130ned_bedrijfskenmerken.Title`<br>`81589ned_bedrijfstakkenbranchessbi2008.Title` | true when the class contains other classes of the same table, e.g. 1-9 contains 1-4 and 5-9 (size rows only) |
+| `source_table` | `80072ned_bedrijfskenmerkensbi2008._table_id`<br>`86009ned_bedrijfskenmerken._table_id`<br>`81589ned_bedrijfstakkenbranchessbi2008._table_id` | the CBS table the key belongs to |
+| `dimension` | `80072ned_bedrijfskenmerkensbi2008._entity`<br>`86009ned_bedrijfskenmerken._entity`<br>`81589ned_bedrijfstakkenbranchessbi2008._entity` | the code list's name, e.g. BedrijfskenmerkenSBI2008 |
+| `characteristic_key` | `80072ned_bedrijfskenmerkensbi2008.Key`<br>`86009ned_bedrijfskenmerken.Key`<br>`81589ned_bedrijfstakkenbranchessbi2008.Key` | as given (padding removed) |
+| `title` | `80072ned_bedrijfskenmerkensbi2008.Title`<br>`86009ned_bedrijfskenmerken.Title`<br>`81589ned_bedrijfstakkenbranchessbi2008.Title` | as given (spaces trimmed) |
+| `category_group` | `80072ned_bedrijfskenmerkensbi2008.CategoryGroupID`<br>`86009ned_bedrijfskenmerken.CategoryGroupID`<br>`81589ned_bedrijfstakkenbranchessbi2008.CategoryGroupID`<br>`80072ned_categorygroups.ID`<br>`80072ned_categorygroups.Title`<br>`86009ned_categorygroups.ID`<br>`86009ned_categorygroups.Title` | the title of the key's category group (e.g. Bedrijfsgrootte) |
+| `member_type` | `80072ned_bedrijfskenmerkensbi2008.Key`<br>`80072ned_bedrijfskenmerkensbi2008.Title`<br>`86009ned_bedrijfskenmerken.Key`<br>`86009ned_bedrijfskenmerken.Title`<br>`81589ned_bedrijfstakkenbranchessbi2008.Key`<br>`81589ned_bedrijfstakkenbranchessbi2008.Title` | 'size' when the title reads like a size class (whole words 'werknemers' / 'werkzame personen'), 'total' for T001081 or a title starting with A-U, otherwise 'sector' |
+| `sector_key` | `80072ned_bedrijfskenmerkensbi2008.Key`<br>`86009ned_bedrijfskenmerken.Key`<br>`81589ned_bedrijfstakkenbranchessbi2008.Key` | the key itself, for sectors and the total |
+| `size_key` | `80072ned_bedrijfskenmerkensbi2008.Title`<br>`86009ned_bedrijfskenmerken.Title`<br>`81589ned_bedrijfstakkenbranchessbi2008.Title` | size class parsed from the title, e.g. '1 tot 10 werkzame personen' -> WP_1_10 (size rows only) |
+| `size_is_aggregate` | `80072ned_bedrijfskenmerkensbi2008.Title`<br>`86009ned_bedrijfskenmerken.Title`<br>`81589ned_bedrijfstakkenbranchessbi2008.Title` | true when the class contains other classes of the same table, e.g. 1-9 contains 1-4 and 5-9 (size rows only) |
 | `run_id` | *(the run)* | added when the run publishes the table: the silver run that made the row; joins to lakehouse/_run_log (when, which code, which bronze versions) |
 
 ## dim_sector
@@ -184,8 +177,8 @@ A silver table, built by `pipeline/silver/cbs.py`.
 
 ```mermaid
 flowchart LR
-  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken_Key["4 code lists of sectors and size classes<br/>Key"]:::bronze
-  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken_Title["4 code lists of sectors and size classes<br/>Title"]:::bronze
+  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_86009ned_bedrijfskenmerken_Key["3 code lists of sectors and size classes<br/>Key"]:::bronze
+  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_86009ned_bedrijfskenmerken_Title["3 code lists of sectors and size classes<br/>Title"]:::bronze
   n_src_silver_map_characteristic_member_type["map_characteristic<br/>member_type"]:::silverref
   run(["the silver run (pipeline/common/publish.py)"]):::run
   subgraph n_tbl_dim_sector["silver: dim_sector"]
@@ -196,12 +189,12 @@ flowchart LR
     n_col_title["title"]:::silver
     n_col_run_id["run_id"]:::silver
   end
-  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken_Key --> n_col_sector_key
+  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_86009ned_bedrijfskenmerken_Key --> n_col_sector_key
   n_src_silver_map_characteristic_member_type --> n_col_sector_key
-  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken_Title --> n_col_sbi_code
-  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken_Title --> n_col_sector_name
-  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken_Title --> n_col_sbi_level
-  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken_Title --> n_col_title
+  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_86009ned_bedrijfskenmerken_Title --> n_col_sbi_code
+  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_86009ned_bedrijfskenmerken_Title --> n_col_sector_name
+  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_86009ned_bedrijfskenmerken_Title --> n_col_sbi_level
+  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_86009ned_bedrijfskenmerken_Title --> n_col_title
   run --> n_col_run_id
   classDef bronze fill:#f3e3c9,stroke:#a8743a,color:#1d1d1d
   classDef silver fill:#e4e7ec,stroke:#6b7480,color:#1d1d1d
@@ -212,11 +205,11 @@ flowchart LR
 
 | Column | Comes from | How |
 |---|---|---|
-| `sector_key` | `80072ned_bedrijfskenmerkensbi2008.Key`<br>`86009ned_bedrijfskenmerken.Key`<br>`83130ned_bedrijfskenmerken.Key`<br>`81589ned_bedrijfstakkenbranchessbi2008.Key`<br>`silver:map_characteristic.member_type` | the keys map_characteristic marks as sector or total; one row per key (CBS uses the same key in every table) |
-| `sbi_code` | `80072ned_bedrijfskenmerkensbi2008.Title`<br>`86009ned_bedrijfskenmerken.Title`<br>`83130ned_bedrijfskenmerken.Title`<br>`81589ned_bedrijfstakkenbranchessbi2008.Title` | the code at the start of the title: 'C Industrie' -> C |
-| `sector_name` | `80072ned_bedrijfskenmerkensbi2008.Title`<br>`86009ned_bedrijfskenmerken.Title`<br>`83130ned_bedrijfskenmerken.Title`<br>`81589ned_bedrijfstakkenbranchessbi2008.Title` | the rest of the title: 'C Industrie' -> Industrie |
-| `sbi_level` | `80072ned_bedrijfskenmerkensbi2008.Title`<br>`86009ned_bedrijfskenmerken.Title`<br>`83130ned_bedrijfskenmerken.Title`<br>`81589ned_bedrijfstakkenbranchessbi2008.Title` | from the code's form: A-U total, C section, B-F section_group, 47 division, 812 group, 10-12 division_group, ... |
-| `title` | `80072ned_bedrijfskenmerkensbi2008.Title`<br>`86009ned_bedrijfskenmerken.Title`<br>`83130ned_bedrijfskenmerken.Title`<br>`81589ned_bedrijfstakkenbranchessbi2008.Title` | as given; when tables differ, the most common title |
+| `sector_key` | `80072ned_bedrijfskenmerkensbi2008.Key`<br>`86009ned_bedrijfskenmerken.Key`<br>`81589ned_bedrijfstakkenbranchessbi2008.Key`<br>`silver:map_characteristic.member_type` | the keys map_characteristic marks as sector or total; one row per key (CBS uses the same key in every table) |
+| `sbi_code` | `80072ned_bedrijfskenmerkensbi2008.Title`<br>`86009ned_bedrijfskenmerken.Title`<br>`81589ned_bedrijfstakkenbranchessbi2008.Title` | the code at the start of the title: 'C Industrie' -> C |
+| `sector_name` | `80072ned_bedrijfskenmerkensbi2008.Title`<br>`86009ned_bedrijfskenmerken.Title`<br>`81589ned_bedrijfstakkenbranchessbi2008.Title` | the rest of the title: 'C Industrie' -> Industrie |
+| `sbi_level` | `80072ned_bedrijfskenmerkensbi2008.Title`<br>`86009ned_bedrijfskenmerken.Title`<br>`81589ned_bedrijfstakkenbranchessbi2008.Title` | from the code's form: A-U total, C section, B-F section_group, 47 division, 812 group, 10-12 division_group, ... |
+| `title` | `80072ned_bedrijfskenmerkensbi2008.Title`<br>`86009ned_bedrijfskenmerken.Title`<br>`81589ned_bedrijfstakkenbranchessbi2008.Title` | as given; when tables differ, the most common title |
 | `run_id` | *(the run)* | added when the run publishes the table: the silver run that made the row; joins to lakehouse/_run_log (when, which code, which bronze versions) |
 
 ## dim_company_size
@@ -225,7 +218,7 @@ A silver table, built by `pipeline/silver/cbs.py`.
 
 ```mermaid
 flowchart LR
-  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_81589ned_dataproperties_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken_Title["80072ned_bedrijfskenmerkensbi2008, 81589ned_bedrijfstakkenbranchessbi2008, 81589ned_dataproperties, 83130ned_bedrijfskenmerken, 86009ned_bedrijfskenmerken<br/>Title"]:::bronze
+  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_81589ned_dataproperties_86009ned_bedrijfskenmerken_Title["80072ned_bedrijfskenmerkensbi2008, 81589ned_bedrijfstakkenbranchessbi2008, 81589ned_dataproperties, 86009ned_bedrijfskenmerken<br/>Title"]:::bronze
   run(["the silver run (pipeline/common/publish.py)"]):::run
   subgraph n_tbl_dim_company_size["silver: dim_company_size"]
     n_col_size_key["size_key"]:::silver
@@ -237,13 +230,13 @@ flowchart LR
     n_col_title["title"]:::silver
     n_col_run_id["run_id"]:::silver
   end
-  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_81589ned_dataproperties_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken_Title --> n_col_size_key
-  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_81589ned_dataproperties_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken_Title --> n_col_size_unit
-  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_81589ned_dataproperties_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken_Title --> n_col_lower_bound
-  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_81589ned_dataproperties_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken_Title --> n_col_upper_bound_excl
-  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_81589ned_dataproperties_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken_Title --> n_col_size_range
-  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_81589ned_dataproperties_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken_Title --> n_col_size_band
-  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_81589ned_dataproperties_83130ned_bedrijfskenmerken_86009ned_bedrijfskenmerken_Title --> n_col_title
+  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_81589ned_dataproperties_86009ned_bedrijfskenmerken_Title --> n_col_size_key
+  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_81589ned_dataproperties_86009ned_bedrijfskenmerken_Title --> n_col_size_unit
+  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_81589ned_dataproperties_86009ned_bedrijfskenmerken_Title --> n_col_lower_bound
+  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_81589ned_dataproperties_86009ned_bedrijfskenmerken_Title --> n_col_upper_bound_excl
+  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_81589ned_dataproperties_86009ned_bedrijfskenmerken_Title --> n_col_size_range
+  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_81589ned_dataproperties_86009ned_bedrijfskenmerken_Title --> n_col_size_band
+  n_src_80072ned_bedrijfskenmerkensbi2008_81589ned_bedrijfstakkenbranchessbi2008_81589ned_dataproperties_86009ned_bedrijfskenmerken_Title --> n_col_title
   run --> n_col_run_id
   classDef bronze fill:#f3e3c9,stroke:#a8743a,color:#1d1d1d
   classDef silver fill:#e4e7ec,stroke:#6b7480,color:#1d1d1d
@@ -254,13 +247,13 @@ flowchart LR
 
 | Column | Comes from | How |
 |---|---|---|
-| `size_key` | `80072ned_bedrijfskenmerkensbi2008.Title`<br>`86009ned_bedrijfskenmerken.Title`<br>`83130ned_bedrijfskenmerken.Title`<br>`81589ned_bedrijfstakkenbranchessbi2008.Title`<br>`81589ned_dataproperties.Title` | unit and bounds parsed from a size-class title: WN (employees) or WP (persons employed), lower, upper -> e.g. WP_1_10 |
-| `size_unit` | `80072ned_bedrijfskenmerkensbi2008.Title`<br>`86009ned_bedrijfskenmerken.Title`<br>`83130ned_bedrijfskenmerken.Title`<br>`81589ned_bedrijfstakkenbranchessbi2008.Title`<br>`81589ned_dataproperties.Title` | 'employees' (werknemers) or 'persons_employed' (werkzame personen) |
-| `lower_bound` | `80072ned_bedrijfskenmerkensbi2008.Title`<br>`86009ned_bedrijfskenmerken.Title`<br>`83130ned_bedrijfskenmerken.Title`<br>`81589ned_bedrijfstakkenbranchessbi2008.Title`<br>`81589ned_dataproperties.Title` | the first number of the title ('1 000' -> 1000) |
-| `upper_bound_excl` | `80072ned_bedrijfskenmerkensbi2008.Title`<br>`86009ned_bedrijfskenmerken.Title`<br>`83130ned_bedrijfskenmerken.Title`<br>`81589ned_bedrijfstakkenbranchessbi2008.Title`<br>`81589ned_dataproperties.Title` | the upper bound, exclusive; empty for 'of meer' (no upper bound) |
-| `size_range` | `80072ned_bedrijfskenmerkensbi2008.Title`<br>`86009ned_bedrijfskenmerken.Title`<br>`83130ned_bedrijfskenmerken.Title`<br>`81589ned_bedrijfstakkenbranchessbi2008.Title`<br>`81589ned_dataproperties.Title` | readable range from the bounds: 1-9, 100+ |
-| `size_band` | `80072ned_bedrijfskenmerkensbi2008.Title`<br>`86009ned_bedrijfskenmerken.Title`<br>`83130ned_bedrijfskenmerken.Title`<br>`81589ned_bedrijfstakkenbranchessbi2008.Title`<br>`81589ned_dataproperties.Title` | <10, 10-99 or 100+: the band that contains the class |
-| `title` | `80072ned_bedrijfskenmerkensbi2008.Title`<br>`86009ned_bedrijfskenmerken.Title`<br>`83130ned_bedrijfskenmerken.Title`<br>`81589ned_bedrijfstakkenbranchessbi2008.Title`<br>`81589ned_dataproperties.Title` | as given (spaces normalised) |
+| `size_key` | `80072ned_bedrijfskenmerkensbi2008.Title`<br>`86009ned_bedrijfskenmerken.Title`<br>`81589ned_bedrijfstakkenbranchessbi2008.Title`<br>`81589ned_dataproperties.Title` | unit and bounds parsed from a size-class title: WN (employees) or WP (persons employed), lower, upper -> e.g. WP_1_10 |
+| `size_unit` | `80072ned_bedrijfskenmerkensbi2008.Title`<br>`86009ned_bedrijfskenmerken.Title`<br>`81589ned_bedrijfstakkenbranchessbi2008.Title`<br>`81589ned_dataproperties.Title` | 'employees' (werknemers) or 'persons_employed' (werkzame personen) |
+| `lower_bound` | `80072ned_bedrijfskenmerkensbi2008.Title`<br>`86009ned_bedrijfskenmerken.Title`<br>`81589ned_bedrijfstakkenbranchessbi2008.Title`<br>`81589ned_dataproperties.Title` | the first number of the title ('1 000' -> 1000) |
+| `upper_bound_excl` | `80072ned_bedrijfskenmerkensbi2008.Title`<br>`86009ned_bedrijfskenmerken.Title`<br>`81589ned_bedrijfstakkenbranchessbi2008.Title`<br>`81589ned_dataproperties.Title` | the upper bound, exclusive; empty for 'of meer' (no upper bound) |
+| `size_range` | `80072ned_bedrijfskenmerkensbi2008.Title`<br>`86009ned_bedrijfskenmerken.Title`<br>`81589ned_bedrijfstakkenbranchessbi2008.Title`<br>`81589ned_dataproperties.Title` | readable range from the bounds: 1-9, 100+ |
+| `size_band` | `80072ned_bedrijfskenmerkensbi2008.Title`<br>`86009ned_bedrijfskenmerken.Title`<br>`81589ned_bedrijfstakkenbranchessbi2008.Title`<br>`81589ned_dataproperties.Title` | <10, 10-99 or 100+: the band that contains the class |
+| `title` | `80072ned_bedrijfskenmerkensbi2008.Title`<br>`86009ned_bedrijfskenmerken.Title`<br>`81589ned_bedrijfstakkenbranchessbi2008.Title`<br>`81589ned_dataproperties.Title` | as given (spaces normalised) |
 | `run_id` | *(the run)* | added when the run publishes the table: the silver run that made the row; joins to lakehouse/_run_log (when, which code, which bronze versions) |
 
 ## dim_period
@@ -269,7 +262,7 @@ A silver table, built by `pipeline/silver/cbs.py`.
 
 ```mermaid
 flowchart LR
-  n_src_80072ned_typeddataset_81589ned_typeddataset_83130ned_typeddataset_86009ned_typeddataset_Perioden["the 4 data tables (TypedDataSet)<br/>Perioden"]:::bronze
+  n_src_80072ned_typeddataset_81589ned_typeddataset_86009ned_typeddataset_Perioden["the 3 data tables (TypedDataSet)<br/>Perioden"]:::bronze
   run(["the silver run (pipeline/common/publish.py)"]):::run
   subgraph n_tbl_dim_period["silver: dim_period"]
     n_col_period_key["period_key"]:::silver
@@ -282,14 +275,14 @@ flowchart LR
     n_col_period_label["period_label"]:::silver
     n_col_run_id["run_id"]:::silver
   end
-  n_src_80072ned_typeddataset_81589ned_typeddataset_83130ned_typeddataset_86009ned_typeddataset_Perioden --> n_col_period_key
-  n_src_80072ned_typeddataset_81589ned_typeddataset_83130ned_typeddataset_86009ned_typeddataset_Perioden --> n_col_period_type
-  n_src_80072ned_typeddataset_81589ned_typeddataset_83130ned_typeddataset_86009ned_typeddataset_Perioden --> n_col_year
-  n_src_80072ned_typeddataset_81589ned_typeddataset_83130ned_typeddataset_86009ned_typeddataset_Perioden --> n_col_quarter
-  n_src_80072ned_typeddataset_81589ned_typeddataset_83130ned_typeddataset_86009ned_typeddataset_Perioden --> n_col_month
-  n_src_80072ned_typeddataset_81589ned_typeddataset_83130ned_typeddataset_86009ned_typeddataset_Perioden --> n_col_start_date
-  n_src_80072ned_typeddataset_81589ned_typeddataset_83130ned_typeddataset_86009ned_typeddataset_Perioden --> n_col_end_date
-  n_src_80072ned_typeddataset_81589ned_typeddataset_83130ned_typeddataset_86009ned_typeddataset_Perioden --> n_col_period_label
+  n_src_80072ned_typeddataset_81589ned_typeddataset_86009ned_typeddataset_Perioden --> n_col_period_key
+  n_src_80072ned_typeddataset_81589ned_typeddataset_86009ned_typeddataset_Perioden --> n_col_period_type
+  n_src_80072ned_typeddataset_81589ned_typeddataset_86009ned_typeddataset_Perioden --> n_col_year
+  n_src_80072ned_typeddataset_81589ned_typeddataset_86009ned_typeddataset_Perioden --> n_col_quarter
+  n_src_80072ned_typeddataset_81589ned_typeddataset_86009ned_typeddataset_Perioden --> n_col_month
+  n_src_80072ned_typeddataset_81589ned_typeddataset_86009ned_typeddataset_Perioden --> n_col_start_date
+  n_src_80072ned_typeddataset_81589ned_typeddataset_86009ned_typeddataset_Perioden --> n_col_end_date
+  n_src_80072ned_typeddataset_81589ned_typeddataset_86009ned_typeddataset_Perioden --> n_col_period_label
   run --> n_col_run_id
   classDef bronze fill:#f3e3c9,stroke:#a8743a,color:#1d1d1d
   classDef silver fill:#e4e7ec,stroke:#6b7480,color:#1d1d1d
@@ -300,14 +293,14 @@ flowchart LR
 
 | Column | Comes from | How |
 |---|---|---|
-| `period_key` | `80072ned_typeddataset.Perioden`<br>`86009ned_typeddataset.Perioden`<br>`83130ned_typeddataset.Perioden`<br>`81589ned_typeddataset.Perioden` | every period key that occurs in a fact table |
-| `period_type` | `80072ned_typeddataset.Perioden`<br>`86009ned_typeddataset.Perioden`<br>`83130ned_typeddataset.Perioden`<br>`81589ned_typeddataset.Perioden` | from the key: KW quarter, JJ year, MM month, HJ half year |
-| `year` | `80072ned_typeddataset.Perioden`<br>`86009ned_typeddataset.Perioden`<br>`83130ned_typeddataset.Perioden`<br>`81589ned_typeddataset.Perioden` | the first four digits |
-| `quarter` | `80072ned_typeddataset.Perioden`<br>`86009ned_typeddataset.Perioden`<br>`83130ned_typeddataset.Perioden`<br>`81589ned_typeddataset.Perioden` | the quarter (KW, MM keys) |
-| `month` | `80072ned_typeddataset.Perioden`<br>`86009ned_typeddataset.Perioden`<br>`83130ned_typeddataset.Perioden`<br>`81589ned_typeddataset.Perioden` | the month (MM keys) |
-| `start_date` | `80072ned_typeddataset.Perioden`<br>`86009ned_typeddataset.Perioden`<br>`83130ned_typeddataset.Perioden`<br>`81589ned_typeddataset.Perioden` | first day of the period |
-| `end_date` | `80072ned_typeddataset.Perioden`<br>`86009ned_typeddataset.Perioden`<br>`83130ned_typeddataset.Perioden`<br>`81589ned_typeddataset.Perioden` | last day of the period |
-| `period_label` | `80072ned_typeddataset.Perioden`<br>`86009ned_typeddataset.Perioden`<br>`83130ned_typeddataset.Perioden`<br>`81589ned_typeddataset.Perioden` | readable label: 2026 Q2, 2025 |
+| `period_key` | `80072ned_typeddataset.Perioden`<br>`86009ned_typeddataset.Perioden`<br>`81589ned_typeddataset.Perioden` | every period key that occurs in a fact table |
+| `period_type` | `80072ned_typeddataset.Perioden`<br>`86009ned_typeddataset.Perioden`<br>`81589ned_typeddataset.Perioden` | from the key: KW quarter, JJ year, MM month, HJ half year |
+| `year` | `80072ned_typeddataset.Perioden`<br>`86009ned_typeddataset.Perioden`<br>`81589ned_typeddataset.Perioden` | the first four digits |
+| `quarter` | `80072ned_typeddataset.Perioden`<br>`86009ned_typeddataset.Perioden`<br>`81589ned_typeddataset.Perioden` | the quarter (KW, MM keys) |
+| `month` | `80072ned_typeddataset.Perioden`<br>`86009ned_typeddataset.Perioden`<br>`81589ned_typeddataset.Perioden` | the month (MM keys) |
+| `start_date` | `80072ned_typeddataset.Perioden`<br>`86009ned_typeddataset.Perioden`<br>`81589ned_typeddataset.Perioden` | first day of the period |
+| `end_date` | `80072ned_typeddataset.Perioden`<br>`86009ned_typeddataset.Perioden`<br>`81589ned_typeddataset.Perioden` | last day of the period |
+| `period_label` | `80072ned_typeddataset.Perioden`<br>`86009ned_typeddataset.Perioden`<br>`81589ned_typeddataset.Perioden` | readable label: 2026 Q2, 2025 |
 | `run_id` | *(the run)* | added when the run publishes the table: the silver run that made the row; joins to lakehouse/_run_log (when, which code, which bronze versions) |
 
 ## dim_survey_measure
@@ -316,12 +309,12 @@ A silver table, built by `pipeline/silver/cbs.py`.
 
 ```mermaid
 flowchart LR
-  n_src_83130ned_dataproperties_86009ned_dataproperties_Key["survey DataProperties: 86009NED + 83130NED<br/>Key"]:::bronze
-  n_src_83130ned_dataproperties_86009ned_dataproperties_ParentID["survey DataProperties: 86009NED + 83130NED<br/>ParentID"]:::bronze
-  n_src_83130ned_dataproperties_86009ned_dataproperties_Title["survey DataProperties: 86009NED + 83130NED<br/>Title"]:::bronze
-  n_src_83130ned_dataproperties_86009ned_dataproperties_Type["survey DataProperties: 86009NED + 83130NED<br/>Type"]:::bronze
-  n_src_83130ned_dataproperties_86009ned_dataproperties_Unit["survey DataProperties: 86009NED + 83130NED<br/>Unit"]:::bronze
-  n_src_83130ned_dataproperties_86009ned_dataproperties__table_id["survey DataProperties: 86009NED + 83130NED<br/>_table_id"]:::bronze
+  n_src_86009ned_dataproperties_Key["86009ned_dataproperties<br/>Key"]:::bronze
+  n_src_86009ned_dataproperties_ParentID["86009ned_dataproperties<br/>ParentID"]:::bronze
+  n_src_86009ned_dataproperties_Title["86009ned_dataproperties<br/>Title"]:::bronze
+  n_src_86009ned_dataproperties_Type["86009ned_dataproperties<br/>Type"]:::bronze
+  n_src_86009ned_dataproperties_Unit["86009ned_dataproperties<br/>Unit"]:::bronze
+  n_src_86009ned_dataproperties__table_id["86009ned_dataproperties<br/>_table_id"]:::bronze
   run(["the silver run (pipeline/common/publish.py)"]):::run
   subgraph n_tbl_dim_survey_measure["silver: dim_survey_measure"]
     n_col_source_table["source_table"]:::silver
@@ -332,16 +325,16 @@ flowchart LR
     n_col_unit["unit"]:::silver
     n_col_run_id["run_id"]:::silver
   end
-  n_src_83130ned_dataproperties_86009ned_dataproperties__table_id --> n_col_source_table
-  n_src_83130ned_dataproperties_86009ned_dataproperties_Key --> n_col_measure_key
-  n_src_83130ned_dataproperties_86009ned_dataproperties_Type --> n_col_measure_key
-  n_src_83130ned_dataproperties_86009ned_dataproperties_Key --> n_col_measure_name
-  n_src_83130ned_dataproperties_86009ned_dataproperties_ParentID --> n_col_measure_name
-  n_src_83130ned_dataproperties_86009ned_dataproperties_Title --> n_col_measure_name
-  n_src_83130ned_dataproperties_86009ned_dataproperties_Title --> n_col_title
-  n_src_83130ned_dataproperties_86009ned_dataproperties_ParentID --> n_col_topic_group
-  n_src_83130ned_dataproperties_86009ned_dataproperties_Title --> n_col_topic_group
-  n_src_83130ned_dataproperties_86009ned_dataproperties_Unit --> n_col_unit
+  n_src_86009ned_dataproperties__table_id --> n_col_source_table
+  n_src_86009ned_dataproperties_Key --> n_col_measure_key
+  n_src_86009ned_dataproperties_Type --> n_col_measure_key
+  n_src_86009ned_dataproperties_Key --> n_col_measure_name
+  n_src_86009ned_dataproperties_ParentID --> n_col_measure_name
+  n_src_86009ned_dataproperties_Title --> n_col_measure_name
+  n_src_86009ned_dataproperties_Title --> n_col_title
+  n_src_86009ned_dataproperties_ParentID --> n_col_topic_group
+  n_src_86009ned_dataproperties_Title --> n_col_topic_group
+  n_src_86009ned_dataproperties_Unit --> n_col_unit
   run --> n_col_run_id
   classDef bronze fill:#f3e3c9,stroke:#a8743a,color:#1d1d1d
   classDef silver fill:#e4e7ec,stroke:#6b7480,color:#1d1d1d
@@ -352,12 +345,12 @@ flowchart LR
 
 | Column | Comes from | How |
 |---|---|---|
-| `source_table` | `86009ned_dataproperties._table_id`<br>`83130ned_dataproperties._table_id` | the survey table |
-| `measure_key` | `86009ned_dataproperties.Key`<br>`86009ned_dataproperties.Type`<br>`83130ned_dataproperties.Key`<br>`83130ned_dataproperties.Type` | the key of every Topic (measure) in DataProperties |
-| `measure_name` | `86009ned_dataproperties.Key`<br>`86009ned_dataproperties.ParentID`<br>`86009ned_dataproperties.Title`<br>`83130ned_dataproperties.Key`<br>`83130ned_dataproperties.ParentID`<br>`83130ned_dataproperties.Title` | the key in snake_case ('AantalKeerVerzuimd_2' -> aantal_keer_verzuimd); a name that occurs twice gets the era of its topic group (_until_2022 / _from_2022) |
-| `title` | `86009ned_dataproperties.Title`<br>`83130ned_dataproperties.Title` | as given |
-| `topic_group` | `86009ned_dataproperties.ParentID`<br>`86009ned_dataproperties.Title`<br>`83130ned_dataproperties.ParentID`<br>`83130ned_dataproperties.Title` | the titles of the TopicGroups above the measure (via ParentID), joined with ' / ' |
-| `unit` | `86009ned_dataproperties.Unit`<br>`83130ned_dataproperties.Unit` | as given: %, gemiddelde, ... |
+| `source_table` | `86009ned_dataproperties._table_id` | the survey table |
+| `measure_key` | `86009ned_dataproperties.Key`<br>`86009ned_dataproperties.Type` | the key of every Topic (measure) in DataProperties |
+| `measure_name` | `86009ned_dataproperties.Key`<br>`86009ned_dataproperties.ParentID`<br>`86009ned_dataproperties.Title` | the key in snake_case ('AantalKeerVerzuimd_2' -> aantal_keer_verzuimd); a name that occurs twice gets the era of its topic group (_until_2022 / _from_2022) |
+| `title` | `86009ned_dataproperties.Title` | as given |
+| `topic_group` | `86009ned_dataproperties.ParentID`<br>`86009ned_dataproperties.Title` | the titles of the TopicGroups above the measure (via ParentID), joined with ' / ' |
+| `unit` | `86009ned_dataproperties.Unit` | as given: %, gemiddelde, ... |
 | `run_id` | *(the run)* | added when the run publishes the table: the silver run that made the row; joins to lakehouse/_run_log (when, which code, which bronze versions) |
 
 ## map_sbi2008_sbi2025
@@ -492,13 +485,13 @@ A silver table, built by `pipeline/silver/cbs.py`.
 
 ```mermaid
 flowchart LR
-  n_src_83130ned_typeddataset_86009ned_typeddataset_Bedrijfskenmerken["survey data: 86009NED + 83130NED<br/>Bedrijfskenmerken"]:::bronze
-  n_src_83130ned_typeddataset_86009ned_typeddataset_Marges["survey data: 86009NED + 83130NED<br/>Marges"]:::bronze
-  n_src_83130ned_typeddataset_86009ned_typeddataset_Perioden["survey data: 86009NED + 83130NED<br/>Perioden"]:::bronze
-  n_src_83130ned_typeddataset_86009ned_typeddataset__ingested_at["survey data: 86009NED + 83130NED<br/>_ingested_at"]:::bronze
-  n_src_83130ned_typeddataset_86009ned_typeddataset__measure_["survey data: 86009NED + 83130NED<br/>(each measure)"]:::bronze
-  n_src_83130ned_typeddataset_86009ned_typeddataset__period_status["survey data: 86009NED + 83130NED<br/>_period_status"]:::bronze
-  n_src_83130ned_typeddataset_86009ned_typeddataset__table_id["survey data: 86009NED + 83130NED<br/>_table_id"]:::bronze
+  n_src_86009ned_typeddataset_Bedrijfskenmerken["86009ned_typeddataset<br/>Bedrijfskenmerken"]:::bronze
+  n_src_86009ned_typeddataset_Marges["86009ned_typeddataset<br/>Marges"]:::bronze
+  n_src_86009ned_typeddataset_Perioden["86009ned_typeddataset<br/>Perioden"]:::bronze
+  n_src_86009ned_typeddataset__ingested_at["86009ned_typeddataset<br/>_ingested_at"]:::bronze
+  n_src_86009ned_typeddataset__measure_["86009ned_typeddataset<br/>(each measure)"]:::bronze
+  n_src_86009ned_typeddataset__period_status["86009ned_typeddataset<br/>_period_status"]:::bronze
+  n_src_86009ned_typeddataset__table_id["86009ned_typeddataset<br/>_table_id"]:::bronze
   n_src_silver_dim_survey_measure_measure_name["dim_survey_measure<br/>measure_name"]:::silverref
   n_src_silver_map_characteristic_member_type["map_characteristic<br/>member_type"]:::silverref
   n_src_silver_map_characteristic_sector_key["map_characteristic<br/>sector_key"]:::silverref
@@ -522,23 +515,23 @@ flowchart LR
     n_col_ingested_at["ingested_at"]:::silver
     n_col_run_id["run_id"]:::silver
   end
-  n_src_83130ned_typeddataset_86009ned_typeddataset__table_id --> n_col_source_table
-  n_src_83130ned_typeddataset_86009ned_typeddataset_Perioden --> n_col_period_key
-  n_src_83130ned_typeddataset_86009ned_typeddataset_Bedrijfskenmerken --> n_col_characteristic_key
+  n_src_86009ned_typeddataset__table_id --> n_col_source_table
+  n_src_86009ned_typeddataset_Perioden --> n_col_period_key
+  n_src_86009ned_typeddataset_Bedrijfskenmerken --> n_col_characteristic_key
   n_src_silver_map_characteristic_member_type --> n_col_member_type
   n_src_silver_map_characteristic_sector_key --> n_col_sector_key
   n_src_silver_map_characteristic_size_key --> n_col_size_key
   n_src_silver_map_characteristic_size_is_aggregate --> n_col_size_is_aggregate
-  n_src_83130ned_typeddataset_86009ned_typeddataset__measure_ --> n_col_measure_key
+  n_src_86009ned_typeddataset__measure_ --> n_col_measure_key
   n_src_silver_dim_survey_measure_measure_name --> n_col_measure_name
-  n_src_83130ned_typeddataset_86009ned_typeddataset__measure_ --> n_col_value
-  n_src_83130ned_typeddataset_86009ned_typeddataset_Marges --> n_col_value
-  n_src_83130ned_typeddataset_86009ned_typeddataset__measure_ --> n_col_lower_95
-  n_src_83130ned_typeddataset_86009ned_typeddataset_Marges --> n_col_lower_95
-  n_src_83130ned_typeddataset_86009ned_typeddataset__measure_ --> n_col_upper_95
-  n_src_83130ned_typeddataset_86009ned_typeddataset_Marges --> n_col_upper_95
-  n_src_83130ned_typeddataset_86009ned_typeddataset__period_status --> n_col_period_status
-  n_src_83130ned_typeddataset_86009ned_typeddataset__ingested_at --> n_col_ingested_at
+  n_src_86009ned_typeddataset__measure_ --> n_col_value
+  n_src_86009ned_typeddataset_Marges --> n_col_value
+  n_src_86009ned_typeddataset__measure_ --> n_col_lower_95
+  n_src_86009ned_typeddataset_Marges --> n_col_lower_95
+  n_src_86009ned_typeddataset__measure_ --> n_col_upper_95
+  n_src_86009ned_typeddataset_Marges --> n_col_upper_95
+  n_src_86009ned_typeddataset__period_status --> n_col_period_status
+  n_src_86009ned_typeddataset__ingested_at --> n_col_ingested_at
   run --> n_col_run_id
   classDef bronze fill:#f3e3c9,stroke:#a8743a,color:#1d1d1d
   classDef silver fill:#e4e7ec,stroke:#6b7480,color:#1d1d1d
@@ -549,20 +542,20 @@ flowchart LR
 
 | Column | Comes from | How |
 |---|---|---|
-| `source_table` | `86009ned_typeddataset._table_id`<br>`83130ned_typeddataset._table_id` | 86009NED or 83130NED: kept apart, never mixed |
-| `period_key` | `86009ned_typeddataset.Perioden`<br>`83130ned_typeddataset.Perioden` | as given |
-| `characteristic_key` | `86009ned_typeddataset.Bedrijfskenmerken`<br>`83130ned_typeddataset.Bedrijfskenmerken` | as given (padding removed) |
+| `source_table` | `86009ned_typeddataset._table_id` | the survey table (86009NED); a successor table would be kept apart, never mixed |
+| `period_key` | `86009ned_typeddataset.Perioden` | as given |
+| `characteristic_key` | `86009ned_typeddataset.Bedrijfskenmerken` | as given (padding removed) |
 | `member_type` | `silver:map_characteristic.member_type` | looked up by characteristic_key: sector, size, total or unknown |
 | `sector_key` | `silver:map_characteristic.sector_key` | looked up by characteristic_key; filled for sectors and the total, joins to dim_sector |
 | `size_key` | `silver:map_characteristic.size_key` | looked up by characteristic_key; filled for size classes, joins to dim_company_size |
 | `size_is_aggregate` | `silver:map_characteristic.size_is_aggregate` | looked up by characteristic_key (size classes only) |
-| `measure_key` | `86009ned_typeddataset.<measure>`<br>`83130ned_typeddataset.<measure>` | the name of the measure field; one row per measure (wide -> long) |
+| `measure_key` | `86009ned_typeddataset.<measure>` | the name of the measure field; one row per measure (wide -> long) |
 | `measure_name` | `silver:dim_survey_measure.measure_name` | looked up by source_table and measure_key |
-| `value` | `86009ned_typeddataset.<measure>`<br>`86009ned_typeddataset.Marges`<br>`83130ned_typeddataset.<measure>`<br>`83130ned_typeddataset.Marges` | the measure's value in the record with Marges = MW00000 (the estimate) |
-| `lower_95` | `86009ned_typeddataset.<measure>`<br>`86009ned_typeddataset.Marges`<br>`83130ned_typeddataset.<measure>`<br>`83130ned_typeddataset.Marges` | the same measure in the record with Marges = MOG0095 |
-| `upper_95` | `86009ned_typeddataset.<measure>`<br>`86009ned_typeddataset.Marges`<br>`83130ned_typeddataset.<measure>`<br>`83130ned_typeddataset.Marges` | the same measure in the record with Marges = MBG0095 |
-| `period_status` | `86009ned_typeddataset._period_status`<br>`83130ned_typeddataset._period_status` | the period's CBS status when it was loaded (Definitief / Voorlopig / NaderVoorlopig) |
-| `ingested_at` | `86009ned_typeddataset._ingested_at`<br>`83130ned_typeddataset._ingested_at` | when the bronze row was loaded (UTC) |
+| `value` | `86009ned_typeddataset.<measure>`<br>`86009ned_typeddataset.Marges` | the measure's value in the record with Marges = MW00000 (the estimate) |
+| `lower_95` | `86009ned_typeddataset.<measure>`<br>`86009ned_typeddataset.Marges` | the same measure in the record with Marges = MOG0095 |
+| `upper_95` | `86009ned_typeddataset.<measure>`<br>`86009ned_typeddataset.Marges` | the same measure in the record with Marges = MBG0095 |
+| `period_status` | `86009ned_typeddataset._period_status` | the period's CBS status when it was loaded (Definitief / Voorlopig / NaderVoorlopig) |
+| `ingested_at` | `86009ned_typeddataset._ingested_at` | when the bronze row was loaded (UTC) |
 | `run_id` | *(the run)* | added when the run publishes the table: the silver run that made the row; joins to lakehouse/_run_log (when, which code, which bronze versions) |
 
 ## fct_business_count

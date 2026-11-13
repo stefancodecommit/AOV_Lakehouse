@@ -24,7 +24,6 @@ cbs:
   tables:
     - 86009NED   # absence survey: share absent, frequency, duration, causes (yearly)
     - 80072NED   # absence percentage per sector and size class (quarterly)
-    - 83130NED   # earlier absence survey, 2014-2023 (stopped by CBS)
     - 81589NED   # businesses per sector, size class and legal form (quarterly)
   # Code lists and metadata: one small request each, made once.
   # To refresh one later: python -m pipeline.bronze.cbs --only <name> --force
@@ -35,11 +34,6 @@ cbs:
     - 86009NED/Marges
     - 86009NED/DataProperties
     - 86009NED/Perioden
-    - 83130NED/Bedrijfskenmerken
-    - 83130NED/CategoryGroups
-    - 83130NED/Marges
-    - 83130NED/DataProperties
-    - 83130NED/Perioden
     - 80072NED/BedrijfskenmerkenSBI2008
     - 80072NED/CategoryGroups
     - 80072NED/DataProperties

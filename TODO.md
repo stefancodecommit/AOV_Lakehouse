@@ -13,7 +13,7 @@ silver (CBS, KVK), gold (7 tables, with the risk index), the Streamlit dashboard
 Docker Compose (including the KVK chat agent), column lineage, config, run log, the
 lakehouse viewer with data quality statistics (`python -m tools.lakehouse_viewer`),
 silver KVK (newest upload only, 2026-11-11), backup, log retention and vulnerability scanning
-(2026-10-17), 381 tests. Code is organised in `pipeline/` (per
+(2026-10-17), 380 tests. Code is organised in `pipeline/` (per
 layer) and `tools/` (2026-10-08), with a README per phase. Requirements in
 docs/requirements.md (every Must met; open: FR-19 alerts, NFR-15 default password, left
 open on purpose), Azure design in docs/cloud_design.md (not built). All committed; no containers or servers left running. See the README for how to start
@@ -385,6 +385,11 @@ Source: CBS "schakelschema SBI 2008 - SBI 2025" v2.0
       page or backtest used them. Gone: its 5 endpoints, `fct_establishment_count`,
       `dim_region`. Checked on a copy of the real lakehouse: all 7 gold tables identical;
       `dim_company_size` lost 3 classes only 81644NED had, `dim_period` lost 2026JJ00
+- [x] Removed 83130NED (2026-11-13, from the code review): the earlier absence survey
+      (2014-2023, stopped by CBS) reached no gold table, and with start_year 2020 it added
+      no years 86009NED doesn't have. `source_table` stays, so a successor survey would be
+      kept apart. The lifecycle check keeps its tests; 83130NED is now its past example.
+      Real data (copy): all 7 gold tables identical
 - [x] Fixed 2026-10-05: "942/9420 Werknemersorganisaties" (sectors: trade unions) were
       parsed as size classes because their name contains "werknemer"; size words now
       have to be whole words. Checked over all 1,678 titles: only these two changed
@@ -798,7 +803,7 @@ crosswalk; `tests/test_checks.py` the CBS and KVK checks and quarantine;
 `tests/test_maintenance.py` the maintenance tasks; `tests/test_backup.py` backup and restore; `tests/test_config.py` the
 configuration; `tests/test_kvk_silver.py` silver KVK; `tests/test_gold.py` gold;
 `tests/test_dashboard.py` the dashboard (every page headless); `tests/test_orchestration.py`
-Dagster; `tests/test_delta.py` writes real Delta tables in `tmp_path` (381 tests, ~85 s). `conftest.py` fails a test when any module still points at the real
+Dagster; `tests/test_delta.py` writes real Delta tables in `tmp_path` (380 tests, ~85 s). `conftest.py` fails a test when any module still points at the real
 lakehouse or inbox. Checked by breaking the code on purpose:
 removing the delete-before-write, an empty `done_keys()` and non-UTC silver timestamps
 each make the right tests fail.
