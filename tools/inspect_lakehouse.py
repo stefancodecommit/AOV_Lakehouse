@@ -158,13 +158,15 @@ def lifecycle_warnings(bronze: Path) -> list[str]:
 
     from checks import warnings
     from checks.cbs import check_table_lifecycle
+    from pipeline.common.config import settings
+    limits = settings["cbs"]["max_update_interval_days"]
     out = []
     for path in sorted(bronze.glob("*_tableinfos")):
         df = DeltaTable(str(path)).to_pandas(columns=["_table_id", "_ingested_at", "raw_json"])
         if df.empty:
             continue
         newest = df.sort_values("_ingested_at").iloc[-1]
-        for w in warnings(check_table_lifecycle(json.loads(newest["raw_json"]))):
+        for w in warnings(check_table_lifecycle(json.loads(newest["raw_json"]), limits)):
             out.append(f"{newest['_table_id']}: {w.detail}")
     return out
 

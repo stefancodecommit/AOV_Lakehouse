@@ -7,14 +7,14 @@ phase 4 (model design and testing) and the proof of working for every phase.
 .venv/bin/pytest            # all tests, ~85 s, no internet needed
 ```
 
-Expected: all pass (382 at the time of writing, 1 deselected: the live test below). The
+Expected: all pass (386 at the time of writing, 1 deselected: the live test below). The
 same suite runs on every push in GitHub Actions, on a clean Python 3.12.
 
 ## What is tested, per phase
 
 | Phase | Test files | Tests* | What they prove |
 |---|---|---|---|
-| 1. Ingestion | `test_bronze_logic.py`, `test_checks.py`, `test_reference.py`, `test_kvk_logic.py` | 91 | only new data is requested; a failing batch is quarantined and retried; every CBS and KVK check; a file is never loaded twice |
+| 1. Ingestion | `test_bronze_logic.py`, `test_checks.py`, `test_reference.py`, `test_kvk_logic.py` | 95 | only new data is requested; a failing batch is quarantined and retried; every CBS and KVK check; a file is never loaded twice |
 | 2. Transformation | `test_silver_logic.py`, `test_kvk_silver.py` | 101 | every silver table and its keys; no padded keys; unknown keys flagged; SBI translation per case; silver KVK holds only the newest upload |
 | 3. Serving | `test_gold.py`, `test_dashboard.py` | 49 | every gold table; every dashboard page, with and without *Final figures only* |
 | 4. Model | `test_gold.py` (risk index), `test_backtest.py` | (in 49) + 4 | the risk index on data with known answers, and its backtest (each verdict judged on the year after it) (see [gold's README](../pipeline/gold/README.md#phase-4--model-design-and-testing-the-risk-index)) |

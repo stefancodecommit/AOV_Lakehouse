@@ -3,10 +3,14 @@
 A pipeline can fail silently: every run succeeds, but nothing new arrives (a changed
 URL, a stopped table, nobody uploading KVK files). These checks compare the newest data
 with today:
-- CBS quarterly tables: the newest quarter ended at most 4 months ago
-- CBS yearly tables: the newest year ended at most 15 months ago
+- CBS: the newest period ended at most `cbs.max_data_age_months` ago (config.yaml; per
+  period type: the period's length + CBS's publication delay + slack)
 - tables CBS has stopped are skipped (the lifecycle check already warns about them)
 - KVK: the newest snapshot is at most kvk.max_snapshot_age_days old
+
+This is not the same rule as the lifecycle check in checks/cbs.py, which measures how
+long ago CBS last *updated* a table; that limit is shorter, because it has no
+publication delay in it.
 """
 from __future__ import annotations
 
@@ -15,8 +19,6 @@ from datetime import date
 import pandas as pd
 
 from checks import CheckResult
-
-MAX_MONTHS = {"KW": 4, "JJ": 15, "MM": 2}
 
 
 def period_end(key: str) -> date | None:
@@ -34,15 +36,17 @@ def months_between(a: date, b: date) -> float:
     return (b - a).days / 30.44
 
 
-def check_cbs_freshness(latest: dict[str, str], stopped: set[str],
+def check_cbs_freshness(latest: dict[str, str], stopped: set[str], max_months: dict[str, float],
                         today: date | None = None) -> list[CheckResult]:
-    """`latest`: table_id -> newest period key in bronze; `stopped`: tables CBS stopped."""
+    """`latest`: table_id -> newest period key in bronze; `stopped`: tables CBS stopped;
+    `max_months`: period type (KW, JJ) -> limit (`cbs.max_data_age_months`). A period type
+    without a limit isn't checked."""
     today = today or date.today()
     results = []
     for table_id, key in sorted(latest.items()):
         if table_id in stopped:
             continue
-        end, limit = period_end(key), MAX_MONTHS.get(key[4:6])
+        end, limit = period_end(key), max_months.get(key[4:6])
         if end is None or limit is None:
             continue
         behind = months_between(end, today)

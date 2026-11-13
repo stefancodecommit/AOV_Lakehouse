@@ -366,11 +366,12 @@ job of the runtime checks above, which share the same validation functions.
 - **Alerting:** failed runs and failed checks are shown in the Dagster UI (decided
   2026-10-06 for the prototype; in the insurer they would go to the data team by email or
   Slack, with a run failure sensor).
-- **Freshness:** a check warns when the newest data is older than expected:
-  CBS quarterly data more than 4 months behind the current quarter, yearly data more than
-  15 months, the latest KVK snapshot older than the agreed upload interval (the CBS limits
-  are in `checks/freshness.py`, KVK's is `kvk.max_snapshot_age_days` in config.yaml). This
-  catches a pipeline that is silently stuck.
+- **Freshness:** a check warns when the newest data is older than expected: a CBS period
+  that ended longer ago than its length plus CBS's publication delay allows
+  (`cbs.max_data_age_months` in config.yaml), or a KVK snapshot older than the agreed
+  upload interval (`kvk.max_snapshot_age_days`). This catches a pipeline that is silently
+  stuck. The CBS limits were too tight until 2026-11-13: they left out the publication
+  delay, so the warning fired every quarter just before CBS's next release.
 
 ## Consistent layers
 
@@ -411,8 +412,10 @@ mix of new and old tables. To prevent that:
 - **Discontinued CBS tables:** CBS regularly stops a table and continues the series under
   a new ID (83130NED ended in 2023 this way). Bronze checks each table's status and last
   modification date in CBS's `TableInfos` on every run and warns when a table is stopped
-  or hasn't been updated for longer than its normal interval (quarterly 4 months, yearly
-  15 months; `checks/cbs.py`). Warnings don't block ingestion. A `TableInfos` snapshot is kept in bronze
+  or hasn't been updated for longer than its normal interval plus some slack
+  (`cbs.max_update_interval_days` in config.yaml; a different limit from the freshness
+  check, because it measures CBS's last update, not the age of the data). Warnings don't
+  block ingestion. A `TableInfos` snapshot is kept in bronze
   each time CBS changes it.
 - **Scope changes:** when the start year or period preference changes or a table is
   removed from `config.yaml`, `python -m pipeline.bronze.cbs --cleanup-scope` (try `--dry-run`

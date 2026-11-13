@@ -11,11 +11,6 @@ from datetime import datetime, timedelta, timezone
 
 from checks import CheckResult
 
-# How far behind a table may be before it counts as stale: the time since CBS last
-# modified it (TableInfos.Modified), per publication frequency. Matches the freshness
-# rule in docs/PROJECT.md (quarterly 4 months, yearly 15 months).
-MAX_AGE = {"Perkwartaal": timedelta(days=122), "Perjaar": timedelta(days=456),
-           "Permaand": timedelta(days=62), "Perweek": timedelta(days=14)}
 STOPPED_FREQUENCY = "Stopgezet"
 REGULAR_STATUS = "Regulier"
 
@@ -103,9 +98,16 @@ def check_metadata(records: list[dict]) -> list[CheckResult]:
     return [check_not_empty(records)]
 
 
-def check_table_lifecycle(info: dict, now: datetime | None = None) -> list[CheckResult]:
+def check_table_lifecycle(info: dict, max_days: dict[str, int] | None = None,
+                          now: datetime | None = None) -> list[CheckResult]:
     """Warnings (never errors) from a table's TableInfos record: stopped by CBS, or not
-    modified for longer than its publication frequency allows."""
+    modified for longer than its publication frequency allows.
+
+    `max_days`: frequency (Perkwartaal, Perjaar) -> days since CBS's last modification
+    (`cbs.max_update_interval_days`). This is the update interval, not the age of the data
+    (that is checks/freshness.py, with a longer limit that includes CBS's publication
+    delay). Without `max_days`, or for a frequency without a limit, only the stopped
+    check runs."""
     now = now or datetime.now(timezone.utc)
     freq, status = info.get("Frequency"), info.get("OutputStatus")
     stopped = freq == STOPPED_FREQUENCY or (status not in (None, REGULAR_STATUS))
@@ -115,14 +117,14 @@ def check_table_lifecycle(info: dict, now: datetime | None = None) -> list[Check
         f"{info.get('Period')}); no new data expected" if stopped
         else f"Frequency={freq}, OutputStatus={status}", severity="warning")]
 
-    modified = info.get("Modified")
-    if not stopped and freq in MAX_AGE and modified:
+    modified, limit = info.get("Modified"), (max_days or {}).get(freq)
+    if not stopped and limit is not None and modified:
         # CBS gives Dutch local time without a zone; a few hours don't matter here
         age = now - datetime.fromisoformat(modified).replace(tzinfo=timezone.utc)
-        stale = age > MAX_AGE[freq]
+        stale = age > timedelta(days=limit)
         results.append(CheckResult(
             "table_recently_modified", not stale,
             f"last modified {modified[:10]}, {age.days} days ago; expected within "
-            f"{MAX_AGE[freq].days} days for {freq}" if stale
+            f"{limit} days for {freq}" if stale
             else f"last modified {modified[:10]} ({age.days} days ago)", severity="warning"))
     return results

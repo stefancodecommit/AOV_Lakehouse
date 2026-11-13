@@ -108,7 +108,7 @@ What the system must do.
 | ID | Requirement | Prio | Status | Implemented in | Verified by |
 |---|---|---|---|---|---|
 | FR-15 | Fetch CBS figures monthly; rebuild silver and gold only after new data, and only when the layer below passed its checks | Must | ✅ | `orchestration/definitions.py` | `test_new_data_triggers_the_next_layer_only_when_upstream_is_known`, `test_failing_blocking_check_stops_gold` |
-| FR-16 | Warn when a source is stale or stopped (CBS quarterly > 4 months, yearly > 15 months, KVK > 45 days) | Should | ✅ | `checks/freshness.py`, `checks/cbs.py` | `test_freshness_checks_warn_without_failing`, `test_stale_table_warning` |
+| FR-16 | Warn when a source is stale or stopped (CBS: the newest period is older than its length plus CBS's publication delay; KVK: older than the upload interval; limits in config.yaml) | Should | ✅ | `checks/freshness.py`, `checks/cbs.py` | `test_freshness_checks_warn_without_failing`, `test_stale_table_warning` |
 | FR-17 | Make every number traceable: the run that made it, the input versions it read, and the source column it came from | Must | ✅ | `lakehouse/_run_log`, `tools/lineage.py` | `test_successful_run_is_logged_and_joinable`, `test_every_column_has_lineage_in_the_same_order`, `test_every_gold_column_has_lineage_in_the_same_order` |
 | FR-18 | Let the data engineer inspect any table, any version, with data-quality statistics | Should | ✅ | `tools/lakehouse_viewer.py`, `tools/inspect_lakehouse.py` | `test_quality_statistics`, `test_page_rows_quality_and_history` |
 | FR-19 | Alert the data team by email or chat when a run or check fails | Could | ❌ | — (failures are shown in the Dagster UI only) | — |
@@ -162,7 +162,7 @@ How well the system must work, per quality attribute.
 | ID | Requirement | Prio | Status | How | Verified by |
 |---|---|---|---|---|---|
 | NFR-19 | All settings in one file; a typo is an error, not a silent default | Must | ✅ | `config.yaml`, `pipeline/common/config.py` | `test_typos_are_errors` |
-| NFR-20 | Automated tests on every change | Must | ✅ | 382 tests; GitHub Actions on every push (Python 3.12 and the Docker image) | GitHub Actions runs |
+| NFR-20 | Automated tests on every change | Must | ✅ | 386 tests; GitHub Actions on every push (Python 3.12 and the Docker image) | GitHub Actions runs |
 | NFR-21 | The same package versions everywhere (locally, CI, Docker) | Must | ✅ | exact versions in `requirements.txt` and `constraints.txt` | CI install; found and fixed a pandas 3 mismatch (2026-10-08) |
 | NFR-22 | Runs the same on any machine with one command | Should | ✅ | Docker Compose | `docker compose config`; image built in CI |
 | NFR-23 | Documentation a reviewer can follow: what, why and how to run, per phase | Must | ✅ | README, INSTRUCTIONS, PROJECT, bronze_to_silver, lineage, and a README per phase (course slide 22) with a proof of working | README → *The six phases* |

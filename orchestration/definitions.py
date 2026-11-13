@@ -237,7 +237,7 @@ def gold_checks():
 def cbs_fresh() -> dg.AssetCheckResult:
     from checks.freshness import check_cbs_freshness
     latest, stopped = bronze_cbs_state()
-    results = check_cbs_freshness(latest, stopped)
+    results = check_cbs_freshness(latest, stopped, settings["cbs"]["max_data_age_months"])
     stale = [r for r in results if not r.passed]
     return dg.AssetCheckResult(
         passed=not stale, severity=dg.AssetCheckSeverity.WARN,

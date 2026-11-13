@@ -121,7 +121,7 @@ risicomanagement, en de vraag of pandas zou schalen, die tot de incrementele opz
 *Evidence:* `docs/genai_use.md`, section 3 (the author's decisions).
 
 **17. Hoe weet je dat de code van de AI klopt?**
-*Antwoord:* Niet op vertrouwen: 382 tests, ook op een schone machine in GitHub Actions; code
+*Antwoord:* Niet op vertrouwen: 386 tests, ook op een schone machine in GitHub Actions; code
 expres kapotgemaakt om te zien of de tests dat merken; resultaten vergeleken op de echte
 data na elke grote wijziging; en vragen als "hoe heb je dat getest?", die een onterecht
 afgevinkt item aan het licht brachten.

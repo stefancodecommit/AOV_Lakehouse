@@ -198,13 +198,16 @@ def test_kvk_check_rows_counts():
 NOW = datetime(2026, 10, 5, tzinfo=timezone.utc)
 
 
+LIMITS = {"Perkwartaal": 122, "Perjaar": 456}       # as in config.yaml
+
+
 def test_regular_recent_table_has_no_warnings():
-    assert all_passed(check_table_lifecycle(table_info(), NOW))
+    assert all_passed(check_table_lifecycle(table_info(), LIMITS, NOW))
 
 
 def test_stopped_table_is_a_warning_not_an_error():
     results = check_table_lifecycle(
-        table_info("Stopgezet", "2024-04-17T02:00:00", "Gediscontinueerd"), NOW)
+        table_info("Stopgezet", "2024-04-17T02:00:00", "Gediscontinueerd"), LIMITS, NOW)
     assert [w.name for w in warnings(results)] == ["table_not_stopped"]
     assert failures(results) == []                 # never blocks ingestion
     assert "table_recently_modified" not in [r.name for r in results]  # no age check then
@@ -218,5 +221,53 @@ def test_stopped_table_is_a_warning_not_an_error():
     ("Onregelmatig", "2010-01-01T00:00:00", False),  # unknown frequency: no age check
 ])
 def test_stale_table_warning(frequency, modified, stale):
-    results = check_table_lifecycle(table_info(frequency, modified), NOW)
+    results = check_table_lifecycle(table_info(frequency, modified), LIMITS, NOW)
     assert ("table_recently_modified" in [w.name for w in warnings(results)]) == stale
+
+
+def test_the_real_config_has_both_limits():
+    """The two warnings have their own settings: the update interval is shorter than the
+    data age, because the data age also contains CBS's publication delay."""
+    from pipeline.common.config import settings
+    cbs = settings["cbs"]
+    assert cbs["max_update_interval_days"] == LIMITS
+    for period, frequency in (("KW", "Perkwartaal"), ("JJ", "Perjaar")):
+        assert cbs["max_data_age_months"][period] * 30.44 > cbs["max_update_interval_days"][frequency]
+
+
+# =========================================================================== CBS data age
+FRESH = {"KW": 6, "JJ": 18}                             # as in config.yaml
+
+
+def test_80072ned_just_before_cbs_publishes_a_quarter_is_not_stale():
+    """The real case of 2026-11-13: CBS published 2026 Q2 on 18 August and Q3 comes
+    around 18 November, so the newest quarter ended 4.5 months ago. Normal, not stale
+    (the earlier limit of 4 months warned here every quarter)."""
+    from datetime import date
+
+    from checks.freshness import check_cbs_freshness
+    (r,) = check_cbs_freshness({"80072NED": "2026KW02"}, set(), FRESH, date(2026, 11, 13))
+    assert r.passed, r.detail
+    # a whole quarter missed: the newest quarter ended over 6 months ago
+    (r,) = check_cbs_freshness({"80072NED": "2026KW02"}, set(), FRESH, date(2027, 1, 15))
+    assert not r.passed and r.severity == "warning"
+
+
+def test_86009ned_just_before_cbs_publishes_a_year_is_not_stale():
+    """86009NED publishes a year ~3.5 months after it ends (2025: on 15 April 2026)."""
+    from datetime import date
+
+    from checks.freshness import check_cbs_freshness
+    (r,) = check_cbs_freshness({"86009NED": "2025JJ00"}, set(), FRESH, date(2027, 4, 10))
+    assert r.passed, r.detail
+    (r,) = check_cbs_freshness({"86009NED": "2025JJ00"}, set(), FRESH, date(2027, 7, 15))
+    assert not r.passed
+
+
+def test_stopped_tables_and_unknown_period_types_are_not_checked():
+    from datetime import date
+
+    from checks.freshness import check_cbs_freshness
+    assert check_cbs_freshness({"83130NED": "2023JJ00"}, {"83130NED"}, FRESH,
+                               date(2026, 11, 13)) == []
+    assert check_cbs_freshness({"X": "2020MM01"}, set(), FRESH, date(2026, 11, 13)) == []

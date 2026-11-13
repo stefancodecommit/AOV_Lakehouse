@@ -27,8 +27,8 @@ same on any machine, and tested on every push by GitHub Actions.
   typed as confirmation.
 - **Times and periods are settings:** the schedules, the retention of logs and runs, and
   the number of backups kept are in [`config.yaml`](../config.yaml) (`schedules`,
-  `retention`, `backup`); the CBS freshness limits are in
-  [`checks/freshness.py`](../checks/freshness.py).
+  `retention`, `backup`), and so are the freshness limits (`cbs.max_data_age_months`,
+  `cbs.max_update_interval_days`, `kvk.max_snapshot_age_days`).
 - **One writer at a time** ([`dagster.yaml`](dagster.yaml)): runs that write to the
   lakehouse never overlap.
 - **Maintenance** on the 15th, one step after the other (a step waits for the previous
@@ -45,7 +45,7 @@ same on any machine, and tested on every push by GitHub Actions.
 | What | Where |
 |---|---|
 | Failed runs and failed checks | the Dagster UI (no email or chat alerts yet: requirement FR-19) |
-| Stale or stopped sources | freshness checks on the 1st, 09:00 (CBS quarterly > 4 months, yearly > 15 months, KVK > 45 days) and CBS's table status on every run |
+| Stale or stopped sources | freshness checks on the 1st, 09:00 (limits in [`config.yaml`](../config.yaml): `cbs.max_data_age_months`, `kvk.max_snapshot_age_days`) and CBS's table status on every run |
 | Every silver and gold run: when, which code version, which input versions, success or failure | `lakehouse/_run_log`; each row of silver and gold carries its `run_id` |
 | One-screen overview: rows, periods, freshness, problems (exit code 1 on problems) | `python -m tools.inspect_lakehouse` |
 | Any table, any version, with data-quality statistics | `python -m tools.lakehouse_viewer` (http://localhost:8502) |

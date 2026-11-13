@@ -136,9 +136,20 @@ Still open (not done yet; in order of value):
         they are explained, now with their source: `config.yaml`, `orchestration/dagster.yaml`
         or `checks/freshness.py`. Measured results (1.9M companies, 90%, 440 backtest
         cases) are the project's findings and are repeated on purpose
-- [ ] Optional: the CBS freshness limits are written twice in the code: `MAX_MONTHS` in
-      `checks/freshness.py` (4 and 15 months) and `MAX_AGE` in `checks/cbs.py` (122 and
-      456 days, the same rule for a different date). One could be derived from the other
+- [x] **CBS freshness limits: a false warning every quarter** (2026-11-13). Found while
+      looking at the limits written twice in the code (`MAX_MONTHS` in
+      `checks/freshness.py`, 4 and 15 months; `MAX_AGE` in `checks/cbs.py`, 122 and 456
+      days). On the real data, Dagster's freshness check failed for 80072NED: its newest
+      quarter (2026 Q2) ended 4.5 months ago, because CBS publishes a quarter ~7 weeks
+      after it ends (Q2 on 18 August, Q3 expected ~18 November). The two limits were
+      not one rule: the lifecycle check measures CBS's last update (interval + slack:
+      122/456 days, correct); the freshness check measures the data's age, which also
+      contains the publication delay (needs ~6 and ~18 months). Merging them would have
+      made the mistake permanent. Fix: both limits in config.yaml as separate settings
+      (`cbs.max_data_age_months`: KW 6, JJ 18; `cbs.max_update_interval_days`), with the
+      evidence in the comment; the checks take them as arguments; the unused weekly and
+      monthly limits dropped; docs point to config.yaml. Tests with the real cases
+      (80072NED on 2026-11-13, 86009NED just before its April release)
 - [ ] **Q&A: why does the KVK upload use an LLM?** docs/qa_practice.md has no question on
       the Ollama agent (a 7B model, ~5 GB memory, to help load a zip file), the most
       likely "why?" question. Answer to prepare: it shows an LLM with tool calling

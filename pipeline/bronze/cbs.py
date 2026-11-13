@@ -441,7 +441,7 @@ def ingest_table_infos(session, table_ids: list[str], already: set[str],
             log.error("TableInfos for %s is empty", table_id)
             failed += 1
             continue
-        for w in warnings(check_table_lifecycle(infos[0])):
+        for w in warnings(check_table_lifecycle(infos[0], _CFG["max_update_interval_days"])):
             log.warning("%s: %s", table_id, w.detail)
             warned += 1
         req = table_infos_request(table_id, infos[0])

@@ -20,6 +20,21 @@ cbs:
   start_year: 2020                # first year ingested for the data tables
   period_preference: [KW, JJ]     # quarters if a table has them, else years
   pause_seconds: 0.25             # pause between API requests (be polite to CBS)
+  # Two warnings with their own limits, because they measure different things:
+  # 1. Data age (checks/freshness.py, Dagster on the 1st): how long ago the newest period
+  #    in bronze ended. Limit = the period's length + CBS's publication delay + slack.
+  #    Seen in TableInfos (2026): 80072NED publishes a quarter ~7 weeks after it ends,
+  #    86009NED a year ~3.5 months after it ends. (4 and 15 months, used until 2026-11-13,
+  #    warned every quarter for a few weeks just before CBS's next release.)
+  max_data_age_months:
+    KW: 6                         # quarters: 3 + ~1.6 delay + slack
+    JJ: 18                        # years: 12 + ~3.5 delay + slack
+  # 2. Update interval (checks/cbs.py, every bronze run): how long ago CBS last modified
+  #    the table (TableInfos.Modified), by its publication frequency. Limit = the
+  #    interval between releases + about a month of slack.
+  max_update_interval_days:
+    Perkwartaal: 122              # quarterly: every ~91 days
+    Perjaar: 456                  # yearly: every ~365 days
   # Data tables: their TypedDataSet is requested one period at a time (incremental).
   tables:
     - 86009NED   # absence survey: share absent, frequency, duration, causes (yearly)
