@@ -286,7 +286,6 @@ def test_bronze_has_every_table_silver_reads():
     needed |= {(t, "TypedDataSet") for t in s.CHARACTERISTIC_DIMS}
     needed |= {(t, "DataProperties") for t in s.CHARACTERISTIC_DIMS}
     needed |= {(t, "CategoryGroups") for t in ("80072NED", *s.SURVEY_TABLES)}
-    needed |= {("81644NED", "RegioS")}
     assert needed - configured == set()
 
 

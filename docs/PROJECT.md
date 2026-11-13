@@ -196,7 +196,9 @@ lakehouse/
 | 86009NED | Absence survey: share absent, frequency, duration, complaints, work-relatedness, with 95% margins | Sector or size class | Year | Explaining differences |
 | 83130NED | Earlier absence survey (2014–2023, averages over all employees) | Sector or size class | Year | Historical comparison |
 | 81589NED | Number of businesses by size class and legal form | Sector | Quarter | Context |
-| 81644NED | Number of establishments by size class and legal form | Sector × region | Year | Not used by the main question; kept for later regional analysis |
+
+81644NED (establishments per sector and region) was loaded until 2026-11-13 "for a later
+regional analysis", but no gold table or dashboard page used it, so it was removed.
 
 Plus each table's code lists and metadata (sector and size codes, regions, margins,
 category groups, measure definitions, periods). Scope: every period from 2020 onward,
@@ -248,11 +250,11 @@ silver `map_sbi2008_sbi2025` uses the newest version only.
 Rebuilt from bronze on every run.
 
 - **Dimensions:** `dim_period`, `dim_sector` (conformed on the CBS key, with SBI code and
-  level), `dim_company_size` (bounds and a coarse band: <10, 10–99, 100+), `dim_region`,
+  level), `dim_company_size` (bounds and a coarse band: <10, 10–99, 100+),
   `dim_survey_measure`, and `map_characteristic` (what each source key is: total, sector,
   size class).
 - **Facts:** `fct_absence_rate`, `fct_absence_survey` (long format, value plus 95% bounds,
-  the two survey tables kept apart), `fct_business_count`, `fct_establishment_count`.
+  the two survey tables kept apart), `fct_business_count`.
 
 ### Silver KVK — `pipeline/silver/kvk.py` (built)
 
@@ -542,7 +544,7 @@ TODO.md                  open work
 | Data checks before ingestion (CBS) | Built (`checks/cbs.py`) |
 | Quarantine | Built for CBS, KVK and reference files; monthly cleanup in `tools/maintenance.py` |
 | Alerting, freshness checks | To do |
-| pytest | 394 tests incl. real Delta tables, the dashboard pages and Dagster; one opt-in live CBS test |
+| pytest | 381 tests incl. real Delta tables, the dashboard pages and Dagster; one opt-in live CBS test |
 | Configuration file | Built (`config.yaml` + `pipeline/common/config.py`) |
 | Gold | Built: 7 tables, including the risk index for the insurer; provisional figures marked |
 | Streamlit dashboard | Built: 6 pages incl. data dictionary; provisional marked, "final only" switch |

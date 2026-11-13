@@ -131,9 +131,9 @@ def test_silver_to_silver_steps_are_followed_back_to_bronze():
 def test_gold_is_followed_back_to_the_bronze_field_columns():
     assert L.bronze_sources("gold_absence_by_sector", "absence_pct") == {
         L.Source("80072ned_typeddataset", "Ziekteverzuimpercentage_1")}
-    # through dim_sector back to the five code lists' Title
+    # through dim_sector back to the four code lists' Title
     names = L.bronze_sources("gold_business_context", "sector_name")
-    assert {s.field for s in names} == {"Title"} and len(names) == 5
+    assert {s.field for s in names} == {"Title"} and len(names) == 4
 
 
 # =========================================================================== outputs

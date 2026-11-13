@@ -106,13 +106,6 @@ def test_snake(key, name):
     assert s.snake(key) == name
 
 
-@pytest.mark.parametrize("key, level", [
-    ("NL01", "country"), ("LD03", "landsdeel"), ("LDG4", "landsdeel"),
-    ("PV20", "province"), ("GM0014", "municipality"), ("CR01", "corop"), ("XX99", "other")])
-def test_region_level(key, level):
-    assert s.region_level(key) == level
-
-
 # =========================================================================== bronze parsing
 def test_parse_raw_trims_padded_keys_and_drops_row_id():
     df = s.parse_raw(raw([{"ID": 7, "Bedrijfskenmerken": "301000 ", "Perioden": "2024KW01 ", "v": 1.5}]))
@@ -176,21 +169,13 @@ def test_dim_company_size(silver):
     d = silver["dim_company_size"].set_index("size_key")
     assert d["size_unit"].isin(["employees", "persons_employed"]).all()
     assert d.at["WN_500_1000", "size_band"] == "100+"
-    assert pd.isna(d.at["WP_10_plus", "size_band"])                 # spans two bands
-    assert {"WP_0_1", "WP_1_2", "WP_0_50", "WN_1_5"} <= set(d.index)
-
-
-def test_dim_region(silver):
-    d = silver["dim_region"].set_index("region_key")
-    assert d.at["PV20", "region_name"] == "Groningen"               # '(PV)' suffix removed
-    assert d.at["PV20", "region_level"] == "province"
-    assert d.at["NL01", "region_level"] == "country"
+    assert pd.isna(d.at["WP_0_50", "size_band"])                    # spans two bands
+    assert {"WP_1_2", "WP_2_3", "WP_0_50", "WN_1_5"} <= set(d.index)
 
 
 def test_dim_period_covers_every_fact_period(silver):
     known = set(silver["dim_period"]["period_key"])
-    for name in ("fct_absence_rate", "fct_absence_survey", "fct_business_count",
-                 "fct_establishment_count"):
+    for name in ("fct_absence_rate", "fct_absence_survey", "fct_business_count"):
         assert set(silver[name]["period_key"]) <= known, name
 
 
@@ -267,14 +252,6 @@ def test_fct_business_count_size_rows_sum_without_aggregates(silver):
     assert base.groupby("sector_key")["size_key"].nunique().eq(6).all()
 
 
-def test_fct_establishment_count_has_regions(silver):
-    f = silver["fct_establishment_count"]
-    assert set(f["region_key"]) == {"NL01", "PV20"}
-    total_nl = f[(f.region_key == "NL01") & (f.breakdown == "total")]["count"].tolist()
-    assert total_nl == [10]
-    assert not f.duplicated(["period_key", "sector_key", "region_key", "measure_key"]).any()
-
-
 def test_fct_counts_require_dataproperties(bronze, fake_read):
     del bronze[("81589NED", "DataProperties")]
     with pytest.raises(RuntimeError, match="DataProperties"):
@@ -286,7 +263,6 @@ EXPECTED_COLUMNS = {
     "dim_period": {"period_key", "period_type", "year", "quarter", "start_date", "end_date"},
     "dim_sector": {"sector_key", "sbi_code", "sector_name", "sbi_level"},
     "dim_company_size": {"size_key", "size_unit", "lower_bound", "upper_bound_excl", "size_band"},
-    "dim_region": {"region_key", "region_name", "region_level"},
     "dim_survey_measure": {"source_table", "measure_key", "measure_name", "unit"},
     "map_characteristic": {"source_table", "characteristic_key", "member_type", "sector_key", "size_key"},
     "map_sbi2008_sbi2025": {"sbi2008_code", "sbi2025_code", "sbi2008_division", "sbi2025_division",
@@ -294,7 +270,6 @@ EXPECTED_COLUMNS = {
     "fct_absence_rate": {"period_key", "characteristic_key", "absence_pct", "period_status"},
     "fct_absence_survey": {"source_table", "measure_name", "value", "lower_95", "upper_95"},
     "fct_business_count": {"period_key", "sector_key", "breakdown", "count"},
-    "fct_establishment_count": {"period_key", "sector_key", "region_key", "breakdown", "count"},
 }
 
 
@@ -311,8 +286,7 @@ def test_fact_sector_keys_exist_in_dim_sector(silver):
         f = silver[name]
         keys = set(f.loc[f.member_type.isin(["sector", "total"]), "sector_key"])
         assert keys <= sectors, name
-    for name in ("fct_business_count", "fct_establishment_count"):
-        assert set(silver[name]["sector_key"]) <= sectors, name
+    assert set(silver["fct_business_count"]["sector_key"]) <= sectors
 
 
 def test_no_padded_keys_anywhere(silver):

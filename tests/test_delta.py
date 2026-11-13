@@ -114,7 +114,7 @@ def test_a_later_batch_cannot_change_a_column_type():
 
 
 def test_an_all_empty_field_is_text_and_a_later_number_still_fits():
-    """Like CategoryGroupID in 81644NED's RegioS: empty in every record, so its type is
+    """Like CategoryGroupID in a CBS region list: empty in every record, so its type is
     unknown. Bronze makes it text, not Arrow's null type: that would become Delta's
     "void", which isn't in the Delta protocol and other engines may refuse. A number
     that arrives later is stored as text; raw_json keeps the number."""
@@ -278,10 +278,9 @@ def test_silver_types_after_reading_back(bronze_delta, monkeypatch):
     assert period["start_date"] == pa.date32() and period["end_date"] == pa.date32()
     assert period["year"] == pa.int64() and period["quarter"] == pa.int64()
 
-    for name in ("fct_business_count", "fct_establishment_count"):
-        t = types(name)
-        assert t["count"] == pa.int64() and t["size_is_aggregate"] == pa.bool_(), name
-        assert t["ingested_at"] == utc, name
+    t = types("fct_business_count")
+    assert t["count"] == pa.int64() and t["size_is_aggregate"] == pa.bool_()
+    assert t["ingested_at"] == utc
     for name in ("fct_absence_rate", "fct_absence_survey"):
         assert types(name)["ingested_at"] == utc, name
     assert types("fct_absence_rate")["absence_pct"] == pa.float64()
@@ -408,8 +407,8 @@ def test_failed_build_leaves_live_tables_untouched(bronze_delta, monkeypatch):
 
 def test_empty_required_table_fails_before_anything_is_written(bronze_delta, monkeypatch):
     real = s.build_all
-    monkeypatch.setattr(s, "build_all", lambda **kw: {**real(**kw), "dim_region": pd.DataFrame()})
-    with pytest.raises(publish.RunFailed, match="required tables came out empty: dim_region"):
+    monkeypatch.setattr(s, "build_all", lambda **kw: {**real(**kw), "dim_company_size": pd.DataFrame()})
+    with pytest.raises(publish.RunFailed, match="required tables came out empty: dim_company_size"):
         s.run()
     assert not (s.SILVER_ROOT / "fct_absence_rate").exists()
     assert runlog.read_runs(s.RUN_LOG).iloc[0].status == "failed"

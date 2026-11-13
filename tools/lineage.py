@@ -59,16 +59,14 @@ def each(tables, *fields: str) -> tuple[Source, ...]:
 
 # --------------------------------------------------------------------------- bronze tables
 TYPED = {"80072NED": "80072ned_typeddataset", "86009NED": "86009ned_typeddataset",
-         "83130NED": "83130ned_typeddataset", "81589NED": "81589ned_typeddataset",
-         "81644NED": "81644ned_typeddataset"}
+         "83130NED": "83130ned_typeddataset", "81589NED": "81589ned_typeddataset"}
 CODE_LISTS = ["80072ned_bedrijfskenmerkensbi2008", "86009ned_bedrijfskenmerken",
-              "83130ned_bedrijfskenmerken", "81589ned_bedrijfstakkenbranchessbi2008",
-              "81644ned_bedrijfstakkenbranchessbi2008"]
+              "83130ned_bedrijfskenmerken", "81589ned_bedrijfstakkenbranchessbi2008"]
 CATEGORY_GROUPS = ["80072ned_categorygroups", "86009ned_categorygroups",
                    "83130ned_categorygroups"]
 SURVEY = ["86009ned_typeddataset", "83130ned_typeddataset"]
 SURVEY_PROPS = ["86009ned_dataproperties", "83130ned_dataproperties"]
-COUNT_PROPS = ["81589ned_dataproperties", "81644ned_dataproperties"]
+COUNT_PROPS = ["81589ned_dataproperties"]
 KVK = "kvk/basis_bedrijfsgegevens"
 KVK_LOG = "kvk/_batch_log"
 CROSSWALK = "reference/sbi2008_sbi2025"
@@ -92,8 +90,8 @@ def characteristic() -> dict[str, Column]:
     }
 
 
-def counts(table_id: str, extra: dict[str, Column] | None = None) -> dict[str, Column]:
-    """fct_business_count / fct_establishment_count (same steps, 81644 adds the region)."""
+def counts(table_id: str) -> dict[str, Column]:
+    """fct_business_count: the counts of a table, one row per measure."""
     typed, props = TYPED[table_id], f"{table_id.lower()}_dataproperties"
     return {
         "period_key": Column(src(typed, "Perioden"), "as given (padding removed)"),
@@ -101,7 +99,6 @@ def counts(table_id: str, extra: dict[str, Column] | None = None) -> dict[str, C
                              "as given (padding removed); joins to dim_sector"),
         "member_type": Column(src(MAP, "member_type"),
                               "looked up by sector_key: sector or total"),
-        **(extra or {}),
         "breakdown": Column(src(props, "ParentID", "Title"),
                             "the measure's topic group in DataProperties: 'total' (none), "
                             "'size' (…grootte) or 'legal_form' (Rechtsvorm)"),
@@ -194,15 +191,6 @@ SILVER_LINEAGE: dict[str, dict[str, Column]] = {
                                "readable label: 2026 Q2, 2025"),
         "run_id": RUN_ID,
     },
-    "dim_region": {
-        "region_key": Column(src("81644ned_regios", "Key"), "as given (padding removed)"),
-        "region_name": Column(src("81644ned_regios", "Title"),
-                              "the title without its level suffix: 'Groningen (PV)' -> Groningen"),
-        "region_level": Column(src("81644ned_regios", "Key"), "from the key's prefix: NL "
-                               "country, LD landsdeel, PV province, CR corop, GM municipality"),
-        "description": Column(src("81644ned_regios", "Description"), "as given"),
-        "run_id": RUN_ID,
-    },
     "dim_survey_measure": {
         "source_table": Column(each(SURVEY_PROPS, "_table_id"), "the survey table"),
         "measure_key": Column(each(SURVEY_PROPS, "Key", "Type"),
@@ -276,9 +264,6 @@ SILVER_LINEAGE: dict[str, dict[str, Column]] = {
         "run_id": RUN_ID,
     },
     "fct_business_count": counts("81589NED"),
-    "fct_establishment_count": counts("81644NED", extra={
-        "region_key": Column(src(TYPED["81644NED"], "RegioS"),
-                             "as given (padding removed); joins to dim_region")}),
     "kvk_company": {
         "snapshot_date": Column(src(KVK_LOG, "file_date") + src(KVK, "_batch_id", "_ingested_at"),
                                 "KVK's export date of the file (batch log, from the zip); "
@@ -609,14 +594,13 @@ def bronze_sources(table: str, column: str, _seen=None) -> set[Source]:
 
 # --------------------------------------------------------------------------- diagrams
 # Mermaid flowcharts (text that GitHub and the HTML page draw as diagrams). Where several
-# bronze tables feed a column through the same field (e.g. the five code lists' Title),
+# bronze tables feed a column through the same field (e.g. the four code lists' Title),
 # they are drawn as one box, named after the group, so the diagrams stay readable.
 GROUPS = {
-    frozenset(CODE_LISTS): "5 code lists of sectors and size classes",
-    frozenset(TYPED.values()): "the 5 data tables (TypedDataSet)",
+    frozenset(CODE_LISTS): "4 code lists of sectors and size classes",
+    frozenset(TYPED.values()): "the 4 data tables (TypedDataSet)",
     frozenset(SURVEY): "survey data: 86009NED + 83130NED",
     frozenset(SURVEY_PROPS): "survey DataProperties: 86009NED + 83130NED",
-    frozenset(COUNT_PROPS): "DataProperties of 81589NED + 81644NED",
     frozenset(CATEGORY_GROUPS): "3 category-group lists",
 }
 

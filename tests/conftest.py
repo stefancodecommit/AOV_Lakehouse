@@ -203,15 +203,6 @@ DP_81589 = dataprops(
     + [(14, None, "TopicGroup", None, "Rechtsvorm", None),
        (15, 14, "Topic", "NatuurlijkePersonen_12", "Natuurlijke personen", "aantal"),
        (16, 14, "Topic", "Rechtspersonen_13", "Rechtspersonen", "aantal")])
-DP_81644 = dataprops([
-    (3, None, "Topic", "Vestigingen_1", "Vestigingen", "aantal"),
-    (4, None, "TopicGroup", None, "Vestigingsgrootte", None),
-    (5, 4, "Topic", "k_0WerkzamePersonen_2", "0 werkzame personen", "aantal"),
-    (6, 4, "Topic", "k_1WerkzamePersoon_3", "1 werkzame persoon", "aantal"),
-    (7, 4, "Topic", "k_2Tot10WerkzamePersonen_4", "2 tot 10 werkzame personen", "aantal"),
-    (8, 4, "Topic", "k_10OfMeerWerkzamePersonen_5", "10 of meer werkzame personen", "aantal"),
-    (9, None, "TopicGroup", None, "Rechtsvorm", None),
-    (12, 9, "Topic", "NVSEnBVS_8", "NV's en BV's", "aantal")])
 
 
 def topic_keys(dp):
@@ -240,10 +231,6 @@ def sample_bronze():
     business = [{"ID": i, "BedrijfstakkenBranchesSBI2008": k.ljust(7), "Perioden": "2025KW03",
                  **{key: 1000 * (i + 1) + j for j, key in enumerate(topic_keys(DP_81589))}}
                 for i, k in enumerate(["T001081", "301000", "301402"])]
-    establishments = [{"ID": i, "BedrijfstakkenBranchesSBI2008": "T001081", "RegioS": r,
-                       "Perioden": "2025JJ00",
-                       **{key: 10 * (i + 1) + j for j, key in enumerate(topic_keys(DP_81644))}}
-                      for i, r in enumerate(["NL01  ", "PV20  "])]
     return {
         ("80072NED", "BedrijfskenmerkenSBI2008"): raw(code_list(SECTORS_80072, {"WP19078": 5})),
         ("80072NED", "CategoryGroups"): raw([
@@ -262,13 +249,6 @@ def sample_bronze():
         ("81589NED", "BedrijfstakkenBranchesSBI2008"): raw(code_list(SECTORS_81589)),
         ("81589NED", "DataProperties"): raw(DP_81589),
         ("81589NED", "TypedDataSet"): raw(business, "Voorlopig"),
-        ("81644NED", "BedrijfstakkenBranchesSBI2008"): raw(code_list(SECTORS_81589[:3])),
-        ("81644NED", "RegioS"): raw([
-            {"Key": "NL01  ", "Title": "Nederland", "Description": None, "CategoryGroupID": None},
-            {"Key": "PV20  ", "Title": "Groningen (PV)", "Description": "Provincie", "CategoryGroupID": None},
-            {"Key": "GM0014", "Title": "Groningen", "Description": None, "CategoryGroupID": None}]),
-        ("81644NED", "DataProperties"): raw(DP_81644),
-        ("81644NED", "TypedDataSet"): raw(establishments, "Voorlopig"),
     }
 
 

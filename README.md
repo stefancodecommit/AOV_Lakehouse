@@ -31,7 +31,7 @@ Four things, about 20 minutes, in this order:
    *lower* verdict held a year later in all 440 cases; the trend describes, it doesn't
    predict).
 3. **Proof that it works**: [the six phases, each with its README](#the-six-phases-each-with-its-readme),
-   [`tests/README.md`](tests/README.md) (394 tests, run by GitHub Actions on every push,
+   [`tests/README.md`](tests/README.md) (381 tests, run by GitHub Actions on every push,
    plus a weekly vulnerability scan) and [`docs/requirements.md`](docs/requirements.md)
    (every requirement with its status and the test that verifies it).
 4. **How GenAI was used**: [`docs/genai_use.md`](docs/genai_use.md): which decisions were
@@ -133,8 +133,8 @@ How data moves through the scripts:
  (outside)                as received              cleaned, typed            dashboard-ready
 
  CBS OData API ─────► bronze/cbs.py ───────┐
- (5 tables +              lakehouse/bronze/  ├──► silver/cbs.py ─────────┐
-  code lists)                                │    11 tables (dims,       │
+ (4 tables +              lakehouse/bronze/  ├──► silver/cbs.py ─────────┐
+  code lists)                                │    9 tables (dims,        │
  CBS crosswalk xlsx ─► bronze/reference.py ─┘    facts, SBI crosswalk)  ├──► gold/build.py ──► dashboard/
  (SBI 2008 -> 2025)       bronze/reference/            │                 │    7 tables          (Streamlit)
                                                        │ crosswalk       │
@@ -367,7 +367,7 @@ Every script starts with a docstring that explains it in more detail; this is th
 
 ### Bronze
 
-**`pipeline/bronze/cbs.py`** — reads the CBS OData API (v3) for the five tables in `config.yaml`:
+**`pipeline/bronze/cbs.py`** — reads the CBS OData API (v3) for the four tables in `config.yaml`:
 the data itself (`TypedDataSet`) and the code lists that explain it.
 - *Incremental:* data is requested one period at a time. A log table
   (`bronze/_ingestion_log`) records every request already loaded, so a second run only
@@ -398,9 +398,8 @@ every description starts with *From …*; Dagster's column-lineage graph itself 
 paid Dagster+).
 
 **`pipeline/silver/cbs.py`** — turns the raw CBS records into dimension tables (`dim_period`,
-`dim_sector`, `dim_company_size`, `dim_region`, `dim_survey_measure`), fact tables
-(`fct_absence_rate`, `fct_absence_survey`, `fct_business_count`,
-`fct_establishment_count`), and mapping tables (`map_characteristic`,
+`dim_sector`, `dim_company_size`, `dim_survey_measure`), fact tables
+(`fct_absence_rate`, `fct_absence_survey`, `fct_business_count`), and mapping tables (`map_characteristic`,
 `map_sbi2008_sbi2025`). Rebuilt completely on every run (the data is small).
 
 **`pipeline/silver/kvk.py`** — builds `kvk_company`: one typed row per company in the newest KVK upload, with
@@ -474,7 +473,7 @@ lakehouse/                              (not in git; rebuilt from the sources)
   bronze/kvk/basis_bedrijfsgegevens/    KVK rows, one batch per uploaded file
   bronze/kvk/_batch_log/                which KVK files are loaded (by SHA-256), with KVK's file date
   bronze/reference/...                  the SBI crosswalk and its batch log
-  silver/                               11 CBS tables + kvk_company, each with run_id
+  silver/                               9 CBS tables + kvk_company, each with run_id
   gold/                                 7 dashboard tables, each with run_id
   _run_log/                             one row per silver/gold run
   quarantine/<source>/<time>_<name>/    batches that failed a check: report.json + data
@@ -513,7 +512,7 @@ A misspelled setting name stops the script with an error instead of being ignore
 ## Tests
 
 ```bash
-.venv/bin/pytest              # 394 tests, ~85 s, no internet needed
+.venv/bin/pytest              # 381 tests, ~85 s, no internet needed
 .venv/bin/pytest -m live      # one extra test against the real CBS API
 .venv/bin/ruff check .        # the linter (settings in pyproject.toml); CI runs it too
 ```
@@ -566,6 +565,6 @@ Limitations worth knowing when reading the results:
 
 ## Sources and licence
 
-- CBS StatLine tables 80072NED, 86009NED, 83130NED, 81589NED, 81644NED and the SBI 2008 –
+- CBS StatLine tables 80072NED, 86009NED, 83130NED, 81589NED and the SBI 2008 –
   SBI 2025 crosswalk: © CBS, [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
 - KVK Handelsregister Open Dataset Basis Bedrijfsgegevens: © KVK, CC BY 4.0.

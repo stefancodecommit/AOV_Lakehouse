@@ -25,7 +25,6 @@ cbs:
     - 86009NED   # absence survey: share absent, frequency, duration, causes (yearly)
     - 80072NED   # absence percentage per sector and size class (quarterly)
     - 83130NED   # earlier absence survey, 2014-2023 (stopped by CBS)
-    - 81644NED   # establishments per sector and region (yearly)
     - 81589NED   # businesses per sector, size class and legal form (quarterly)
   # Code lists and metadata: one small request each, made once.
   # To refresh one later: python -m pipeline.bronze.cbs --only <name> --force
@@ -49,10 +48,6 @@ cbs:
     - 81589NED/Perioden
     - 81589NED/BedrijfstakkenBranchesSBI2008
     - 81589NED/DataProperties
-    - 81644NED/BedrijfstakkenBranchesSBI2008
-    - 81644NED/RegioS
-    - 81644NED/DataProperties
-    - 81644NED/Perioden
 
 kvk:
   dataset_page: https://www.kvk.nl/producten-bestellen/kvk-handelsregister-open-data-set/

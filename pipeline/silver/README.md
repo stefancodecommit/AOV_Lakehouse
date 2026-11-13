@@ -5,7 +5,7 @@ meaning, every figure its type, and the sources are linked. Silver is the single
 where data is interpreted; gold and the dashboard only combine what silver provides.
 
 ```
- bronze CBS tables + crosswalk ──► cbs.py ──► 11 tables: dimensions, facts, maps
+ bronze CBS tables + crosswalk ──► cbs.py ──► 9 tables: dimensions, facts, maps
  bronze KVK + silver crosswalk ──► kvk.py ──► kvk_company (one row per company per snapshot)
 ```
 
@@ -13,12 +13,12 @@ where data is interpreted; gold and the dashboard only combine what silver provi
 
 | Table | Kind | What |
 |---|---|---|
-| `dim_period`, `dim_sector`, `dim_company_size`, `dim_region`, `dim_survey_measure` | dimensions | one row per period, SBI sector (every level), size class, region, survey measure |
+| `dim_period`, `dim_sector`, `dim_company_size`, `dim_survey_measure` | dimensions | one row per period, SBI sector (every level), size class, survey measure |
 | `map_characteristic` | map | what each CBS company-characteristic key means: a sector, a size class, the total |
 | `map_sbi2008_sbi2025` | map | the crosswalk between the two SBI versions (many-to-many) |
 | `fct_absence_rate` | fact | quarterly absence % per sector and size class (80072NED) |
 | `fct_absence_survey` | fact | yearly survey measures with 95% bounds (86009NED, 83130NED) |
-| `fct_business_count`, `fct_establishment_count` | facts | businesses per sector, size and legal form; establishments per region |
+| `fct_business_count` | fact | businesses per sector, size and legal form (81589NED) |
 | `kvk_company` | fact | KVK companies with their sector, translated to SBI 2008 |
 
 Every column, where it comes from in bronze and what happens to it on the way:
@@ -79,7 +79,7 @@ project:
 .venv/bin/pytest tests/test_silver_logic.py tests/test_kvk_silver.py
 ```
 
-Expected: all tests pass (111 at the time of writing). They cover the parsers (periods,
+Expected: all tests pass (102 at the time of writing). They cover the parsers (periods,
 size classes, sectors), every silver table and its keys, "no padded keys anywhere",
 unknown keys kept and flagged, the SBI translation per case, and silver KVK runs (only
 the newest upload is read and published; a retired upload is skipped; a failed publish

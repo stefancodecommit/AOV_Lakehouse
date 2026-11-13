@@ -17,13 +17,11 @@ SILVER_CBS_KEYS = {
     "dim_period": ["period_key"],
     "dim_sector": ["sector_key"],
     "dim_company_size": ["size_key"],
-    "dim_region": ["region_key"],
     "dim_survey_measure": ["source_table", "measure_key"],
     "map_characteristic": ["source_table", "characteristic_key"],
     "fct_absence_rate": ["period_key", "characteristic_key"],
     "fct_absence_survey": ["source_table", "period_key", "characteristic_key", "measure_key"],
     "fct_business_count": ["period_key", "sector_key", "measure_key"],
-    "fct_establishment_count": ["period_key", "sector_key", "region_key", "measure_key"],
 }
 GOLD_KEYS = {        # in the order the dashboard's data dictionary shows them
     "gold_risk_index": ["basis", "group_type", "group_key"],
@@ -82,8 +80,7 @@ def keys_in(df: pd.DataFrame, col: str, dim: pd.DataFrame, dim_col: str,
 
 def check_silver_cbs(t: dict[str, pd.DataFrame]) -> list[CheckResult]:
     results = [not_empty(t, SILVER_CBS_KEYS), one_run(t), unique_keys(t, SILVER_CBS_KEYS)]
-    for fact in ("fct_absence_rate", "fct_absence_survey", "fct_business_count",
-                 "fct_establishment_count"):
+    for fact in ("fct_absence_rate", "fct_absence_survey", "fct_business_count"):
         f = t.get(fact)
         results.append(keys_in(f, "period_key", t.get("dim_period"), "period_key",
                                f"{fact}_periods_in_dim_period"))

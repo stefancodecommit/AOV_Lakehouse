@@ -33,7 +33,7 @@ where it is implemented and how it is verified, so each claim can be checked.
 
 | Supplier | Supplies | How | Agreement |
 |---|---|---|---|
-| **CBS** (Statistics Netherlands), StatLine | Sickness absence: 80072NED (quarterly %), 86009NED and 83130NED (yearly survey, 95% intervals); businesses: 81589NED (quarterly, by size and legal form), 81644NED (establishments by region); code lists and metadata | OData API, pulled monthly | Open data, CC BY 4.0; no SLA. CBS revises provisional figures and sometimes stops a table (83130NED ended in 2023) |
+| **CBS** (Statistics Netherlands), StatLine | Sickness absence: 80072NED (quarterly %), 86009NED and 83130NED (yearly survey, 95% intervals); businesses: 81589NED (quarterly, by size and legal form); code lists and metadata | OData API, pulled monthly | Open data, CC BY 4.0; no SLA. CBS revises provisional figures and sometimes stops a table (83130NED ended in 2023) |
 | **CBS**, classifications | The SBI 2008 → SBI 2025 crosswalk (Excel) | File download, when CBS publishes a new version | Open data |
 | **KVK** (Chamber of Commerce) | Open dataset "basis bedrijfsgegevens": active companies (BV, NV only; no sole traders) with legal form, start date, main activity | Zip file, downloaded by a person and placed in `inbox/kvk/` | Open data, CC BY 4.0; terms forbid re-identifying companies or people |
 
@@ -162,7 +162,7 @@ How well the system must work, per quality attribute.
 | ID | Requirement | Prio | Status | How | Verified by |
 |---|---|---|---|---|---|
 | NFR-19 | All settings in one file; a typo is an error, not a silent default | Must | ✅ | `config.yaml`, `pipeline/common/config.py` | `test_typos_are_errors` |
-| NFR-20 | Automated tests on every change | Must | ✅ | 394 tests; GitHub Actions on every push (Python 3.12 and the Docker image) | GitHub Actions runs |
+| NFR-20 | Automated tests on every change | Must | ✅ | 381 tests; GitHub Actions on every push (Python 3.12 and the Docker image) | GitHub Actions runs |
 | NFR-21 | The same package versions everywhere (locally, CI, Docker) | Must | ✅ | exact versions in `requirements.txt` and `constraints.txt` | CI install; found and fixed a pandas 3 mismatch (2026-10-08) |
 | NFR-22 | Runs the same on any machine with one command | Should | ✅ | Docker Compose | `docker compose config`; image built in CI |
 | NFR-23 | Documentation a reviewer can follow: what, why and how to run, per phase | Must | ✅ | README, INSTRUCTIONS, PROJECT, bronze_to_silver, lineage, and a README per phase (course slide 22) with a proof of working | README → *The six phases* |

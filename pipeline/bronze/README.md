@@ -15,7 +15,7 @@ keeps the original, every later step can be rebuilt without asking a source agai
 
 | Script | Source | How it arrives | Key behaviour |
 |---|---|---|---|
-| [`cbs.py`](cbs.py) | CBS StatLine: absence (80072NED, 86009NED, 83130NED), businesses (81589NED, 81644NED), their code lists and metadata | pulled from the OData API, monthly | one request per period; only periods not yet loaded; a revised provisional period replaces its old rows |
+| [`cbs.py`](cbs.py) | CBS StatLine: absence (80072NED, 86009NED, 83130NED), businesses (81589NED), their code lists and metadata | pulled from the OData API, monthly | one request per period; only periods not yet loaded; a revised provisional period replaces its old rows |
 | [`reference.py`](reference.py) | the CBS SBI 2008 → SBI 2025 crosswalk (Excel) | downloaded when CBS publishes a new version | a file already loaded (same content) is skipped |
 | [`kvk_agent.py`](kvk_agent.py) | the KVK open dataset (zip, ~13 MB, ~1.9M companies) | placed in `inbox/kvk/` by a person | verified, then loaded only after the person confirms; never the same file twice |
 
@@ -33,7 +33,7 @@ keeps the original, every later step can be rebuilt without asking a source agai
 - **Raw and structured.** A CBS record is kept as received in `raw_json` *and* as one
   column per field (typed from the table's metadata), so bronze can be queried directly
   and still proves what was received. A field that is empty in every record (e.g. `CategoryGroupID`
-  in 81644NED's region list) has no knowable type and becomes text, not Arrow's null type:
+  in a CBS region list) has no knowable type and becomes text, not Arrow's null type:
   that would be Delta's `void`, which isn't in the Delta protocol, so other engines (Spark,
   Fabric) may refuse the table. Nothing reads that column, and `raw_json` has the original.
 - **A human confirms the KVK load.** An AI agent (a local LLM via Ollama) helps the user

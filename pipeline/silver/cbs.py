@@ -11,7 +11,6 @@ dim_period          one row per period key: type, year, quarter, start/end date,
 dim_sector          SBI 2008 sectors; CBS uses the same keys in every table (e.g. 301000 = A)
 dim_company_size    size classes parsed from titles, with lower/upper bound and a coarse
                     size_band (<10, 10-99, 100+) for comparing across tables
-dim_region          regions of 81644NED with their level (country, landsdeel, province, ...)
 dim_survey_measure  measures of the absence survey: name, CBS title, topic group, unit
 map_characteristic  every company-characteristic key per source table and what it is:
                     total, sector or size class
@@ -28,7 +27,6 @@ fct_absence_survey        86009NED + 83130NED, long format:
                           different populations, so they are kept side by side
                           (source_table) and never mixed under one measure name.
 fct_business_count        81589NED  period x sector x breakdown -> count
-fct_establishment_count   81644NED  period x sector x region x breakdown -> count
                           breakdown = total | size | legal_form. Size rows carry
                           size_key, size_band and size_is_aggregate (True when the class
                           contains other classes of the same table: exclude those when
@@ -77,7 +75,6 @@ CHARACTERISTIC_DIMS = {
     "86009NED": "Bedrijfskenmerken",
     "83130NED": "Bedrijfskenmerken",
     "81589NED": "BedrijfstakkenBranchesSBI2008",
-    "81644NED": "BedrijfstakkenBranchesSBI2008",
 }
 SURVEY_TABLES = ("86009NED", "83130NED")
 TOTAL_KEY = "T001081"  # "A-U Alle economische activiteiten"
@@ -305,13 +302,6 @@ def snake(key: str) -> str:
     return f"k_{s}" if s[:1].isdigit() else s
 
 
-def region_level(key: str) -> str:
-    """Level of a CBS region key, from its prefix: NL01 = country, PV20 = province,
-    GM0014 = municipality, ..."""
-    return {"NL": "country", "LD": "landsdeel", "PV": "province", "CR": "corop",
-            "GM": "municipality"}.get(key[:2], "other")
-
-
 # =========================================================================== metadata
 def topics(dataprops: pd.DataFrame) -> pd.DataFrame:
     """Topic (measure) rows of DataProperties with their topic-group path.
@@ -410,19 +400,6 @@ def build_dim_company_size(titles: list[str]) -> pd.DataFrame:
     df["lower_bound"] = df["lower_bound"].astype("Int64")
     df["upper_bound_excl"] = df["upper_bound_excl"].astype("Int64")
     return df.sort_values(["size_unit", "lower_bound", "upper_bound_excl"]).reset_index(drop=True)
-
-
-def build_dim_region(regions: pd.DataFrame) -> pd.DataFrame:
-    """Regions of 81644NED with their level (country, province, ...); the suffix
-    '(PV)', '(GM)' etc. is removed from the name."""
-    if regions.empty:
-        return pd.DataFrame(columns=["region_key", "region_name", "region_level", "description"])
-    return pd.DataFrame({
-        "region_key": regions["Key"],
-        "region_name": regions["Title"].str.replace(r"\s*\((LD|PV|CR|GM)\)$", "", regex=True),
-        "region_level": regions["Key"].map(region_level),
-        "description": regions.get("Description"),
-    })
 
 
 def build_dim_period(period_keys: set[str]) -> pd.DataFrame:
@@ -562,17 +539,15 @@ def build_fct_absence_survey(data: dict[str, pd.DataFrame], dim_measure: pd.Data
 
 
 def build_fct_counts(table_id: str, data: pd.DataFrame, dataprops: pd.DataFrame,
-                     mapping: pd.DataFrame, extra_dims: dict[str, str] | None = None
-                     ) -> pd.DataFrame:
-    """Long count table: one row per period x sector (x region) x measure.
+                     mapping: pd.DataFrame) -> pd.DataFrame:
+    """Long count table: one row per period x sector x measure.
 
-    Used for 81589NED (businesses) and 81644NED (establishments). Their measures are
-    a total, counts per size class and counts per legal form; DataProperties' topic
+    Used for 81589NED (businesses). Its measures are a total, counts per size class and
+    counts per legal form; DataProperties' topic
     groups say which is which ('breakdown'). Size measures get a size key, band and
     aggregate flag, so gold can add up classes without double counting."""
     if data.empty:
         return pd.DataFrame()
-    extra_dims = extra_dims or {}
     dim = CHARACTERISTIC_DIMS[table_id]
     t = topics(dataprops)
     if t.empty:
@@ -595,8 +570,8 @@ def build_fct_counts(table_id: str, data: pd.DataFrame, dataprops: pd.DataFrame,
     t.loc[size_rows, "size_is_aggregate"] = flags
     t["legal_form"] = t["title"].where(t["breakdown"] == "legal_form")
 
-    data = latest(data, [dim, "Perioden", *extra_dims])
-    id_vars = [dim, "Perioden", *extra_dims, *META_COLS]
+    data = latest(data, [dim, "Perioden"])
+    id_vars = [dim, "Perioden", *META_COLS]
     long = data.melt(id_vars=id_vars, value_vars=list(t["measure_key"]),
                      var_name="measure_key", value_name="count")
     long = long.merge(t[["measure_key", "breakdown", "size_key", "size_band",
@@ -605,7 +580,6 @@ def build_fct_counts(table_id: str, data: pd.DataFrame, dataprops: pd.DataFrame,
     out = pd.DataFrame({
         "period_key": long["Perioden"], "sector_key": long["characteristic_key"],
         "member_type": long["member_type"],
-        **{name: long[src] for src, name in extra_dims.items()},
         "breakdown": long["breakdown"], "measure_key": long["measure_key"],
         "size_key": long["size_key"], "size_band": long["size_band"],
         "size_is_aggregate": long["size_is_aggregate"], "legal_form": long["legal_form"],
@@ -613,8 +587,7 @@ def build_fct_counts(table_id: str, data: pd.DataFrame, dataprops: pd.DataFrame,
         "count": pd.to_numeric(long["count"], errors="coerce").round().astype("Int64"),
         "period_status": long["_period_status"], "ingested_at": long["_ingested_at"],
     })
-    keys = ["period_key", "sector_key", *extra_dims.values(), "measure_key"]
-    return out.sort_values(keys).reset_index(drop=True)
+    return out.sort_values(["period_key", "sector_key", "measure_key"]).reset_index(drop=True)
 
 
 # =========================================================================== mapping
@@ -662,31 +635,26 @@ def build_all(read=read_bronze, read_ref=read_reference) -> dict[str, pd.DataFra
         {t: read(t, "TypedDataSet") for t in SURVEY_TABLES}, dim_measure, mapping)
     fct_business = build_fct_counts("81589NED", read("81589NED", "TypedDataSet"),
                                     dataprops["81589NED"], mapping)
-    fct_estab = build_fct_counts("81644NED", read("81644NED", "TypedDataSet"),
-                                 dataprops["81644NED"], mapping, extra_dims={"RegioS": "region_key"})
 
-    facts = [fct_rate, fct_survey, fct_business, fct_estab]
+    facts = [fct_rate, fct_survey, fct_business]
     period_keys = set().union(*[set(f["period_key"]) for f in facts if not f.empty])
     # size classes come from two places: members of the characteristic list (absence
-    # tables) and measure titles in the count tables ('2 werkzame personen')
+    # tables) and measure titles in the count table ('2 werkzame personen')
     size_titles = list(mapping.loc[mapping["member_type"] == "size", "title"])
-    for t in ("81589NED", "81644NED"):
-        tp = topics(dataprops[t])
-        size_titles += list(tp.loc[tp["topic_group"].fillna("").str.lower()
-                                   .str.contains("grootte"), "title"])
+    tp = topics(dataprops["81589NED"])
+    size_titles += list(tp.loc[tp["topic_group"].fillna("").str.lower()
+                               .str.contains("grootte"), "title"])
 
     return {
         "dim_period": build_dim_period(period_keys),
         "dim_sector": build_dim_sector(code_lists, mapping),
         "dim_company_size": build_dim_company_size(size_titles),
-        "dim_region": build_dim_region(read("81644NED", "RegioS")),
         "dim_survey_measure": dim_measure,
         "map_characteristic": mapping,
         "map_sbi2008_sbi2025": build_map_sbi2008_sbi2025(read_ref("sbi2008_sbi2025")),
         "fct_absence_rate": fct_rate,
         "fct_absence_survey": fct_survey,
         "fct_business_count": fct_business,
-        "fct_establishment_count": fct_estab,
     }
 
 

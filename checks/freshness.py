@@ -47,7 +47,7 @@ def check_cbs_freshness(latest: dict[str, str], stopped: set[str],
             continue
         behind = months_between(end, today)
         when = (f"ended {behind:.1f} months ago" if behind >= 0
-                else "hasn't ended yet")     # e.g. 81644NED counts on 1 January
+                else "hasn't ended yet")     # e.g. a count on 1 January of next year
         results.append(CheckResult(
             f"{table_id}_fresh", behind <= limit,
             f"newest period {key} {when} (limit {limit} months)", severity="warning"))

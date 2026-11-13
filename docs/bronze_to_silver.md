@@ -22,11 +22,10 @@ the code; the last section says where each step lives in it.
 7. [Absence percentage (80072NED) → `fct_absence_rate`](#7-absence-percentage-80072ned--fct_absence_rate)
 8. [Absence survey (86009NED, 83130NED) → `dim_survey_measure`, `fct_absence_survey`](#8-absence-survey-86009ned-83130ned--dim_survey_measure-fct_absence_survey)
 9. [Business counts (81589NED) → `fct_business_count`](#9-business-counts-81589ned--fct_business_count)
-10. [Establishments (81644NED) → `fct_establishment_count`, `dim_region`](#10-establishments-81644ned--fct_establishment_count-dim_region)
-11. [SBI crosswalk → `map_sbi2008_sbi2025`](#11-sbi-crosswalk--map_sbi2008_sbi2025)
-12. [KVK companies → `kvk_company`](#12-kvk-companies--kvk_company)
-13. [Tracing a silver row back to its source](#13-tracing-a-silver-row-back-to-its-source)
-14. [Where each step lives in the code](#14-where-each-step-lives-in-the-code)
+10. [SBI crosswalk → `map_sbi2008_sbi2025`](#10-sbi-crosswalk--map_sbi2008_sbi2025)
+11. [KVK companies → `kvk_company`](#11-kvk-companies--kvk_company)
+12. [Tracing a silver row back to its source](#12-tracing-a-silver-row-back-to-its-source)
+13. [Where each step lives in the code](#13-where-each-step-lives-in-the-code)
 
 ---
 
@@ -97,15 +96,15 @@ number in the file. **The SBI crosswalk** (an Excel file from CBS) is stored the
 
 Two terms used below:
 
-- A **dimension** (`dim_…`) describes things: one row per sector, size class, period,
-  region or survey measure.
+- A **dimension** (`dim_…`) describes things: one row per sector, size class, period
+  or survey measure.
 - A **fact table** (`fct_…`) holds the numbers: one row per measured value, with keys that
   point to the dimensions. Facts are stored "long": one value per row, never many values
   side by side, so new measures don't need new columns.
 
 Silver CBS rebuilds all its tables on every run (the data is small, and a full rebuild is
 always consistent). It publishes them all at once through a staging folder, and every
-silver row carries the `run_id` of the run that made it (see section 13).
+silver row carries the `run_id` of the run that made it (see section 12).
 
 ## 3. Which bronze tables feed which silver tables
 
@@ -118,15 +117,12 @@ silver row carries the `run_id` of the run that made it (see section 13).
  86009ned_dataproperties ─┐
  83130ned_dataproperties ─┴────────────────────────► dim_survey_measure
  81589ned_typeddataset ──────── + its dataproperties ► fct_business_count
- 81644ned_typeddataset ──────── + its dataproperties ► fct_establishment_count
- 81644ned_regios ──────────────────────────────────► dim_region
 
  code lists of sectors and size classes:
    80072ned_bedrijfskenmerkensbi2008               ┐
    86009ned_bedrijfskenmerken                      │  map_characteristic
    83130ned_bedrijfskenmerken                      ├─► dim_sector
    81589ned_bedrijfstakkenbranchessbi2008          │  dim_company_size
-   81644ned_bedrijfstakkenbranchessbi2008          │
    *_categorygroups (80072NED, 86009NED, 83130NED) ┘
 
  the period keys found in all fact tables ─────────► dim_period
@@ -369,29 +365,7 @@ classes, so it must be left out when adding them up. (Adding all the non-aggrega
 gives 269,845, the total.) CBS rounds these counts to multiples of 5, so for some sectors
 the classes add up to a few businesses more or less than the total.
 
-## 10. Establishments (81644NED) → `fct_establishment_count`, `dim_region`
-
-Exactly the same steps as section 9, with one extra dimension: the **region**. An
-establishment (*vestiging*) is a location of a business, so one business can have several.
-The result has 97,020 rows (year × sector × region × measure).
-
-The regions come from the code list `81644ned_regios`. Its keys say the level, which silver
-turns into a column:
-
-| region_key | region_name | region_level |
-|---|---|---|
-| NL01 | Nederland | country |
-| LD01 | Noord-Nederland | landsdeel |
-| PV20 | Groningen | province |
-| CR01 | Oost-Groningen | corop |
-
-(`LD` = landsdeel, a group of provinces; `PV` = province; `CR` = COROP region, a group of
-municipalities. CBS writes the province as "Groningen (PV)"; silver removes the suffix,
-because the level now has its own column.) The table has 70 regions: 4 country-level
-totals, 8 landsdelen, 15 provinces (incl. totals) and 43 COROP regions. It isn't used by
-the main question yet; it is kept for regional analyses later.
-
-## 11. SBI crosswalk → `map_sbi2008_sbi2025`
+## 10. SBI crosswalk → `map_sbi2008_sbi2025`
 
 The CBS tables classify sectors with **SBI 2008**; the KVK register has largely moved to
 the newer **SBI 2025**. The crosswalk links the two. It is many-to-many: one old code can be
@@ -416,7 +390,7 @@ link, how many codes are on the other side; name the kind of link.
 | 01199 | 01120 | 5 | 1 | `split` (01199 goes to 5 new codes) |
 | 01199 | 01134 | 5 | 2 | `many-to-many` (01134 also comes from another old code) |
 
-## 12. KVK companies → `kvk_company`
+## 11. KVK companies → `kvk_company`
 
 Built by `pipeline/silver/kvk.py`, after silver CBS (it needs the crosswalk). One row per company
 in the newest upload; older uploads stay in bronze (see the docstring of
@@ -485,7 +459,7 @@ Result on the real file: 90% of the active companies get an SBI 2008 section and
 division; the other 10% are marked, not guessed. The full list of flags is in the docstring
 of `pipeline/silver/kvk.py`.
 
-## 13. Tracing a silver row back to its source
+## 12. Tracing a silver row back to its source
 
 Every silver row can be followed back to the API call or file it came from:
 
@@ -502,7 +476,7 @@ Example: the silver row *2026 Q2, Industrie, 6.2%* came from bronze table
 `80072ned_typeddataset`, request `80072NED/TypedDataSet?Perioden=2026KW02#status=Voorlopig`,
 loaded on 2026-10-05.
 
-## 14. Where each step lives in the code
+## 13. Where each step lives in the code
 
 | Silver table | Function in `pipeline/silver/cbs.py` |
 |---|---|
@@ -511,11 +485,10 @@ loaded on 2026-10-05.
 | `dim_sector` | `build_dim_sector` |
 | `dim_company_size` | `build_dim_company_size` |
 | `dim_period` | `build_dim_period` (uses `parse_period`) |
-| `dim_region` | `build_dim_region` |
 | `dim_survey_measure` | `build_dim_survey_measure` (uses `topics`, `snake`) |
 | `fct_absence_rate` | `build_fct_absence_rate` |
 | `fct_absence_survey` | `build_fct_absence_survey` |
-| `fct_business_count`, `fct_establishment_count` | `build_fct_counts` |
+| `fct_business_count` | `build_fct_counts` |
 | `map_sbi2008_sbi2025` | `build_map_sbi2008_sbi2025` (reads with `read_reference`) |
 | all of them, in order | `build_all`; publishing: `run` (via `pipeline/common/publish.py`) |
 

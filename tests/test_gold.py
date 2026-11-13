@@ -1,4 +1,4 @@
-"""Gold: comparisons, the five tables, and an end-to-end run from bronze to gold."""
+"""Gold: comparisons, the gold tables, and an end-to-end run from bronze to gold."""
 import json
 import sys
 

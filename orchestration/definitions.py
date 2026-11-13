@@ -172,7 +172,7 @@ CBS_SILVER_TABLES = set(lineage.SILVER_LINEAGE) - lineage.SILVER_KVK_TABLES
 
 
 @dg.asset(group_name="silver", deps=["cbs_bronze", "sbi_crosswalk"],
-          automation_condition=AFTER_NEW_DATA, description="pipeline/silver/cbs.py: 11 tables",
+          automation_condition=AFTER_NEW_DATA, description="pipeline/silver/cbs.py: 9 tables",
           metadata=lineage.dagster_lineage(CBS_SILVER_TABLES))
 def silver_cbs() -> dg.MaterializeResult:
     return _published(cbs_silver.run)
