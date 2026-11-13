@@ -138,8 +138,12 @@ finished by the next one.
 .venv/bin/python -m tools.backtest_risk                     # backtest of the risk index (pipeline/gold/README.md)
 ```
 
-`inspect_lakehouse` exits with code 1 when it finds problems. The viewer and the
-dashboard keep running until Ctrl+C; both can run at the same time.
+Two tools with different jobs: `inspect_lakehouse` is the **health check of the whole
+lakehouse** (is every table there, filled, from one run; anything in quarantine or a
+failed run?) and exits with code 1 when it finds problems, so scripts can use it. The
+**lakehouse viewer** is for **looking inside one table**: its rows, the data quality of
+each column, its history and older versions. The viewer and the dashboard keep running
+until Ctrl+C; both can run at the same time.
 
 What is in `lakehouse/` (not in git; everything can be rebuilt from the sources, except
 older KVK uploads, which KVK no longer serves; see section 7 for backups):

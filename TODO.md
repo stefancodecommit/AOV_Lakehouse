@@ -168,8 +168,14 @@ Still open (not done yet; in order of value):
       needed the internet to draw them; with its generator `html()` (~55 lines). The
       lineage is still shown in the explorer, lineage.md, the Dagster UI (column
       descriptions) and the dashboard (column tooltips)
-- [ ] Optional: `tools/inspect_lakehouse.py` and `tools/lakehouse_viewer.py` overlap;
-      give each one stated role (the command-line check with exit code 1; the browser)
+- [x] **Inspector and viewer** (2026-11-13): checked, both kept. They answer different
+      questions: `inspect_lakehouse` is the health check of the whole lakehouse (missing
+      or empty tables, quarantine, failed runs, tables from different runs; exit code 1,
+      used by tests and the demo checklist); `lakehouse_viewer` looks inside one table
+      (rows, data quality per column, history). The only shared code is finding the Delta
+      tables (~5 lines), not worth coupling a browser app to a terminal script. Their
+      roles are now stated in INSTRUCTIONS §4. Found on the way: `tools/__init__.py`
+      listed 4 of the 8 tools; fixed
 - [ ] Optional: `--cleanup-scope` in `pipeline/bronze/cbs.py` is rarely needed (~70
       lines and tests); it was used twice in this review, so keeping it is defensible
 
