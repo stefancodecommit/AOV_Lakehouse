@@ -176,8 +176,15 @@ Still open (not done yet; in order of value):
       tables (~5 lines), not worth coupling a browser app to a terminal script. Their
       roles are now stated in INSTRUCTIONS §4. Found on the way: `tools/__init__.py`
       listed 4 of the 8 tools; fixed
-- [ ] Optional: `--cleanup-scope` in `pipeline/bronze/cbs.py` is rarely needed (~70
-      lines and tests); it was used twice in this review, so keeping it is defensible
+- [x] **`--cleanup-scope` kept** (2026-11-13). It was needed twice in this review, to
+      remove 81644NED and 83130NED from the real lakehouse, and has a dry run and four
+      tests. Using it showed a gap: it cleans bronze only, and the silver tables of a
+      removed source (`dim_region`, `fct_establishment_count`) stayed behind unnoticed:
+      the inspector reported missing tables, not extra ones. Now
+      `tools/inspect_lakehouse.py` warns about silver and gold tables no pipeline writes
+      any more, with the folder to delete (`leftover_tables`, a warning, not a problem:
+      they do no harm, but hold stale data that looks current). Test in
+      `tests/test_delta.py`; INSTRUCTIONS §7 explains it
 
 **Before submitting** (the numbers that live in the submitted documents):
 - [ ] `pytest` passes; that includes `tests/test_doc_numbers.py`, which checks the test

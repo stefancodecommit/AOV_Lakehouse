@@ -402,7 +402,13 @@ After raising the start year, removing a table or changing the period type in
 .venv/bin/python -m pipeline.bronze.cbs --cleanup-scope --dry-run   # list what is outside the configuration
 .venv/bin/python -m pipeline.bronze.cbs --cleanup-scope             # remove it
 .venv/bin/python -m pipeline.silver.cbs && .venv/bin/python -m pipeline.gold.build
+.venv/bin/python -m tools.inspect_lakehouse                         # names silver/gold leftovers
 ```
+
+`--cleanup-scope` cleans bronze only. The silver tables of a removed source stay behind
+(silver CBS writes only the tables it builds); `inspect_lakehouse` lists them under
+*warnings* as tables no pipeline writes any more, with the folder to delete. Used on
+2026-11-13 to remove 81644NED and 83130NED.
 
 ### Other repairs
 

@@ -14,8 +14,13 @@ Problems reported:
     pipeline (a publish that stopped halfway)
   - a pipeline (silver_cbs, silver_kvk, gold) whose latest run failed
 
-Warnings (shown, but not counted as problems): CBS tables that CBS has stopped or hasn't
-modified for longer than their frequency allows, from the newest TableInfos in bronze.
+Warnings (shown, but not counted as problems):
+  - CBS tables that CBS has stopped or hasn't modified for longer than their frequency
+    allows, from the newest TableInfos in bronze
+  - leftover silver and gold tables: tables no pipeline writes any more (e.g. after a
+    source was removed from config.yaml). They do no harm, but they hold stale data that
+    looks current; delete the folder. (Bronze leftovers: pipeline/bronze/cbs.py
+    --cleanup-scope.)
 
 Usage
 -----
@@ -109,6 +114,21 @@ def expected_bronze_names() -> list[str]:
         return sorted({e.name for e in cbs_bronze.ENDPOINTS})
     except Exception:  # running outside the project folder
         return []
+
+
+def leftover_tables(root: Path, layers=("silver", "gold")) -> list[str]:
+    """Silver and gold tables that no pipeline writes any more: present in the lakehouse
+    but not in the expected tables (checks/layers.py). Folders starting with '_' (the
+    staging area) are not tables of their own."""
+    expected = {"silver": EXPECTED_SILVER, "gold": EXPECTED_GOLD}
+    out = []
+    for layer in layers:
+        for path in find_tables(root / layer):
+            name = str(path.relative_to(root / layer))
+            if not name.startswith("_") and name not in expected[layer]:
+                out.append(f"{layer}/{name}: no pipeline writes this table any more (stale "
+                           f"data); delete the folder {path}")
+    return out
 
 
 def pipeline_layer(pipeline: str) -> str:
@@ -244,11 +264,11 @@ def main() -> int:
                 print(f"  {line}")
             problems += run_problems
 
-    if not args.layer or args.layer == "bronze":
-        found = lifecycle_warnings(root / "bronze")
-        print(f"\n=== warnings ({len(found)})")
-        for w in found or ["(none)"]:
-            print(f"  {w}")
+    found = lifecycle_warnings(root / "bronze") if not args.layer or args.layer == "bronze" else []
+    found += leftover_tables(root, [layer for layer in layers if layer in ("silver", "gold")])
+    print(f"\n=== warnings ({len(found)})")
+    for w in found or ["(none)"]:
+        print(f"  {w}")
 
     print("\n=== problems")
     if problems:

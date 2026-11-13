@@ -480,3 +480,16 @@ def test_inspect_counts_every_provisional_status(tmp_path):
         "period_status": ["Definitief", "NaderVoorlopig", "Voorlopig", None]}))
     info = inspect_lakehouse.summarize(tmp_path / "t")
     assert "2 provisional rows" in info["extra"]
+
+
+def test_inspect_warns_about_leftover_silver_and_gold_tables(tmp_path):
+    """After a source is removed (e.g. 81644NED, 2026-11-13), silver CBS no longer writes
+    its tables, but the old ones stay; the inspector names them, as a warning."""
+    one_row = pd.DataFrame({"run_id": ["r1"]})
+    for rel in ("silver/dim_period", "silver/kvk_company", "silver/dim_region",
+                "silver/_staging/r1/dim_period", "gold/gold_risk_index", "gold/gold_old"):
+        publish.write_table(tmp_path / rel, one_row)
+    found = inspect_lakehouse.leftover_tables(tmp_path)
+    assert [w.split(":")[0] for w in found] == ["silver/dim_region", "gold/gold_old"]
+    assert "delete the folder" in found[0]
+    assert inspect_lakehouse.leftover_tables(tmp_path, ["gold"])[0].startswith("gold/gold_old")
