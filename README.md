@@ -122,6 +122,169 @@ cbs-kvk-lakehouse/
   to the run log (when, which code version, which inputs), and blocking checks in Dagster
   before the next layer is built.
 
+### The data model
+
+**Silver** is a star schema: CBS facts point to shared dimensions, and KVK companies get
+an SBI 2008 code through the crosswalk. The diagram shows each table's key (PK), the
+columns that point to another table (FK) and the main value; all columns are in
+[docs/lineage.md](docs/lineage.md).
+
+```mermaid
+erDiagram
+    dim_period {
+        string period_key PK
+        string period_type
+        string period_label
+    }
+    dim_sector {
+        string sector_key PK
+        string sbi_code
+        string sector_name
+        string sbi_level
+    }
+    dim_company_size {
+        string size_key PK
+        string size_range
+        string size_band
+    }
+    dim_survey_measure {
+        string source_table PK
+        string measure_key PK
+        string measure_name
+        string topic_group
+    }
+    map_characteristic {
+        string source_table PK
+        string characteristic_key PK
+        string member_type
+        string sector_key FK
+        string size_key FK
+    }
+    fct_absence_rate {
+        string period_key PK, FK
+        string characteristic_key PK, FK
+        string sector_key FK
+        string size_key FK
+        double absence_pct
+    }
+    fct_absence_survey {
+        string source_table PK, FK
+        string period_key PK, FK
+        string characteristic_key PK, FK
+        string measure_key PK, FK
+        string sector_key FK
+        string size_key FK
+        double value
+    }
+    fct_business_count {
+        string period_key PK, FK
+        string sector_key PK, FK
+        string measure_key PK
+        string size_key FK
+        long count
+    }
+    map_sbi2008_sbi2025 {
+        string sbi2008_code PK
+        string sbi2025_code PK
+        string link_type
+    }
+    kvk_company {
+        long source_row_number PK
+        string batch_id
+        string main_activity_codes
+        string sbi_mapping
+        string sbi2008_code
+        string sbi2008_section
+    }
+
+    dim_period ||--o{ fct_absence_rate : period_key
+    dim_period ||--o{ fct_absence_survey : period_key
+    dim_period ||--o{ fct_business_count : period_key
+    map_characteristic ||--o{ fct_absence_rate : characteristic_key
+    map_characteristic ||--o{ fct_absence_survey : characteristic_key
+    dim_survey_measure ||--o{ fct_absence_survey : measure_key
+    dim_sector |o--o{ fct_absence_rate : sector_key
+    dim_sector |o--o{ fct_absence_survey : sector_key
+    dim_sector ||--o{ fct_business_count : sector_key
+    dim_sector |o--o{ map_characteristic : sector_key
+    dim_company_size |o--o{ fct_absence_rate : size_key
+    dim_company_size |o--o{ fct_absence_survey : size_key
+    dim_company_size |o--o{ fct_business_count : size_key
+    dim_company_size |o--o{ map_characteristic : size_key
+    map_sbi2008_sbi2025 }o..o{ kvk_company : "SBI 2025 to 2008"
+    dim_sector |o..o{ kvk_company : "sbi_code = sbi2008_code"
+```
+
+How to read it:
+
+- A row is about a sector *or* a size class (`member_type`), so `sector_key` and `size_key`
+  are each empty in part of the rows (`|o`: zero or one).
+- `fct_absence_rate` (80072NED) has no `source_table` column. Its `characteristic_key`
+  points to the rows of `map_characteristic` with `source_table` 80072NED.
+- The dashed lines are lookups, not keys. `kvk_company` gets its `sbi2008_code`
+  through the crosswalk, when the translation is unambiguous (`sbi_mapping`). That code
+  matches a `dim_sector.sbi_code`.
+- `kvk_company` holds the newest KVK upload only, so its row number in that upload is
+  the key.
+
+Checked on the lakehouse of 19 Nov 2026: every key above points to an existing row (no
+orphans).
+
+**Gold** has no joins on purpose. Each table is one chart's data, with names and labels
+copied in, so the dashboard reads a single table. The key (PK) gives the grain: for
+example, `gold_risk_index` has one row per basis, group type and group.
+
+```mermaid
+erDiagram
+    gold_risk_index {
+        string basis PK
+        string group_type PK
+        string group_key PK
+        double relative_risk
+        string assessment
+    }
+    gold_risk_index_history {
+        string period_key PK
+        string group_type PK
+        string group_key PK
+        double relative_risk
+    }
+    gold_absence_by_sector {
+        string period_key PK
+        string sector_key PK
+        double absence_pct
+        double diff_from_national_pp
+    }
+    gold_absence_by_size {
+        string source_table PK
+        string period_key PK
+        string member_type PK
+        string size_key PK
+        double value
+    }
+    gold_absence_profile {
+        string period_key PK
+        string characteristic_key PK
+        string measure_key PK
+        double value
+        string direction
+    }
+    gold_business_context {
+        string period_key PK
+        string sector_key PK
+        string size_band PK
+        long businesses
+    }
+    gold_kvk_context {
+        string legal_form PK
+        string sbi2008_section PK
+        long active_companies
+        double median_age_years
+    }
+```
+
+`period_key` and `sector_key` in gold hold the same values as in silver's dimensions.
+
 ### The six phases, each with its README
 
 The course describes data and AI engineering as six phases. Each has a README next to its

@@ -905,6 +905,13 @@ Run: `docker compose up -d` (Dagster http://localhost:3000, dashboard :8501)
       show bronze -> silver -> gold (the explorer now opens on a gold column); the Dagster
       gold asset lists its columns with their origin; tests check that every gold column
       is documented, in order, and reads only silver
+- [x] Data model diagrams (ERD) in README.md (2026-11-19), section "The data model": silver
+      as a star schema (keys, foreign keys, main value per table; 16 relationships) and
+      gold's 7 tables with their grain (no joins, on purpose). Drawn by hand in Mermaid;
+      every relationship first checked on the real lakehouse (0 orphans; empty sector or
+      size keys are by design, `member_type`). `tests/test_readme_erd.py` (4 tests) fails
+      when a diagram names a table, column or key that doesn't exist, checked by breaking
+      the diagram three ways. 394 tests.
 
 ## Known issues
 - [x] deltalake aborts at interpreter exit ("terminate called without an active
