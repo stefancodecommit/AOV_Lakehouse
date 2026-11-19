@@ -36,19 +36,15 @@ date (2026-10-26); the author's reflection (2026-11-05); the demo launcher, the 
 (2026-11-09); the move to Ubuntu 26.04, locally and in CI (2026-11-11); a code review
 with simplifications (2026-11-11 to 11-13, section "Code review").
 
-Still open: the remaining points of the code review (section "Code review": mostly
-shorter documentation, one Q&A question); nothing else for the assignment.
+Still open: nothing for the assignment except the author's part below. The code review
+is finished (section "Code review", 2026-11-11 to 11-13; ERD added 2026-11-19).
 
-Later or optional, not needed for the assignment:
-- **Backup to another disk** (section 5): decided 2026-10-26 to keep it on this disk for
-  now (no second disk); when there is one: `backup.path` and `require_other_disk: true`
-  in config.local.yaml
-- **pandas 3** (section 7): make the code work with it, then raise the pin
-- **When CBS publishes a new SBI crosswalk version:** update
-  `reference.sbi_crosswalk_url` in config.yaml (section 1, Reference)
-- Polars for silver KVK (Silver KVK); email/Slack alerts (section 5); re-run the palette
-  validator (needs Node.js, section 4); report the deltalake exit race upstream (Known
-  issues)
+Optional work removed from this list on 2026-11-19 (the author's decision: not needed
+for the assignment): a backup on another disk, pandas 3, checking for a new SBI
+crosswalk version, Polars for silver KVK, email/Slack alerts, re-running the palette
+validator, reporting the deltalake exit race upstream, `ruff format` and mypy, and the
+privacy notice on `confirmed_by`. The report's chapter 5 keeps the ones worth naming as
+next steps.
 
 **Last: the author's part** (only the author can do this):
 1. ~~**GenAI reflection**~~ in report section 5.4 (done 2026-11-05, 237 words; the whole
@@ -462,10 +458,6 @@ Source: CBS "schakelschema SBI 2008 - SBI 2025" v2.0
       SBI 2025 codes, many-to-many (218 codes split, 277 merge). Warning (CBS quirk): in
       5 rows the SBI 2025 2-digit column was copied from the SBI 2008 side (71111 / 74)
 - [x] Silver `map_sbi2008_sbi2025` from the latest batch only (see Silver CBS)
-- [ ] Check periodically for a newer version of the file on the CBS classifications page
-      and load it with `--url`. Dagster's monthly `sbi_crosswalk` only re-downloads the
-      configured URL; a new CBS version gets a new URL, so a person must update
-      `reference.sbi_crosswalk_url` in config.yaml
 - [x] Decide how silver KVK handles SBI 2025 main codes that came from several SBI 2008
       codes: flags, derived columns only when unambiguous (see Silver KVK below)
 
@@ -619,8 +611,6 @@ rebuild every run would need ~1.2 GB more memory per month kept (~23M rows after
       isolated lakehouse; caught before anything was written, but conftest now checks
       the paths at the end of every test too, and refuses every Delta write to the real
       lakehouse or inbox for the whole test session (proven with a probe test)
-- [ ] Optional, later: Polars for silver KVK and gold's KVK table (the one place with
-      millions of rows); not needed for memory any more, a learning exercise
 - [x] **KVK's own file date** (2026-10-26; was an open question): the CSV has no date
       column and KVK's page states none, but the CSV inside the zip carries KVK's export
       time (real file: 2026-10-01 23:34; loaded 2026-10-05; newest start date
@@ -710,8 +700,6 @@ Run: `.venv/bin/streamlit run dashboard/app.py`
 - Checked on real data: every page renders in both switch states (AppTest); charts
   rendered to images and reviewed (diverging bars: colour marks the side only; single
   series without a legend; direct labels on the size lines)
-- [ ] Optional: re-run the palette validator once Node.js is available (the values are
-      the guidance's published, validated set)
 - [x] Limit the dashboard to this machine (done 2026-10-17, requirement NFR-13):
       `.streamlit/config.toml` with `address = "127.0.0.1"`. Proven: before, Streamlit
       listened on `*:8598` and answered on the network address; after, it listens on
@@ -770,7 +758,6 @@ Run: `DAGSTER_HOME=$PWD/orchestration .venv/bin/dagster dev -f orchestration/def
       --strict` on `requirements-dev.txt` and the new `requirements-docker.txt` (the
       Dockerfile's two extra packages moved there), on pin changes and weekly. Locally
       2026-10-17: no known vulnerabilities
-- [ ] Open: mention `confirmed_by` in the internal privacy notice (privacy officer)
 - [x] **Backup location** (2026-10-26): this machine has one disk and no synced folder;
       the author chose to keep the backups here for now. Guard added: a backup on the
       lakehouse's disk logs a warning (also in Dagster); with
@@ -819,7 +806,6 @@ Run: `DAGSTER_HOME=$PWD/orchestration .venv/bin/dagster dev -f orchestration/def
   folder from the import path there, so modules the scripts import late failed
   ("No module named 'publish'"); definitions.py now imports them up front, and a test
   runs the real `dagster` command to catch this
-- [ ] Optional later: email or Slack alerts (a run failure sensor)
 
 ## 6. Deployment (Docker Compose) (built 2026-10-08)
 Run: `docker compose up -d` (Dagster http://localhost:3000, dashboard :8501)
@@ -921,7 +907,6 @@ Run: `docker compose up -d` (Dagster http://localhost:3000, dashboard :8501)
       that exit right after a read crash (9-14 of 20 runs), scripts that do more work
       afterwards rarely do. Mitigated: pipeline/common/config.py (imported by every script) pauses 0.1 s
       at exit; measured 0 of 30 with even 0.02 s. Test: tests/test_config.py
-- [ ] Optional: report the race upstream (delta-rs) and remove the pause once fixed
 
 ## 7. Tests and CI
 
@@ -979,8 +964,6 @@ Later, as each part is built:
       two mutable-default counters, two lambdas, mid-file imports. GitHub Actions runs
       `ruff check .` before the tests. Checked: 402 tests, Dagster validate, lineage
       docs unchanged, every module imports
-- [ ] Later: `ruff format` (would rewrite 53 of 66 files: after the deadline), the
-      line-length rule (133 long lines), and a type checker (mypy)
 
 - [x] **Context on hover** (2026-11-11, dashboard layout unchanged): tooltips say what a
       value means ("How to read" per chart; risk index: stability band, trend "no
@@ -991,8 +974,8 @@ Later, as each part is built:
       `trend` now says "no forecast". Tests: every table column on every page has an
       explanation (fails when one is missing), and the tooltips carry the meaning
 
-### pandas 3 (to do)
-- [ ] Make the code work with pandas 3 (text columns are Arrow strings by default), then
+### pandas 3 (not supported; dropped from the open work 2026-11-19)
+- What it would take: make the code work with pandas 3 (text columns are Arrow strings by default), then
       raise the pin in requirements.txt and regenerate constraints.txt. Known so far, in
       the clean 3.12 run: `build_dim_survey_measure` (pipeline/silver/cbs.py) adds a text
       column to one with empty values when it suffixes measure names with their era
