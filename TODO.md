@@ -43,9 +43,7 @@ Still open: nothing for the assignment except the author's part below. The code 
 is finished (section "Code review", 2026-11-11 to 11-13; ERD added 2026-11-19). The second
 review (2026-11-20) found nine nice-to-have items (three of them nits), listed in that
 section under "Nice to have"; all nine are done (the same day). Because of that review,
-before submitting: slide 9 must say 407 tests (on 2026-11-20 the slide said 394, its
-notes 404),
-and the Word report must be exported again
+before submitting: the Word report must be exported again
 (`rapport.md` changed: test count and lineage columns).
 
 Optional work removed from this list on 2026-11-19 (the author's decision: not needed
@@ -270,8 +268,9 @@ has a test that fails on the old code (checked):
       count in the report, Q&A, GenAI section, requirements and tests/README.md, and the
       report's number of lineage columns
 - [ ] The slides (docs/presentatie.pptx), slide 9: the number and the speaker notes state
-      the test count that pytest reports (not checked automatically; the notes still said
-      404 on 2026-11-13; since 2026-11-20 pytest reports 407)
+      the test count that pytest reports (not checked automatically). Last set on
+      2026-11-20: slide and notes say 407 (were 394 and 404). Open until submitting,
+      because any later test changes the number again
 - [ ] If the data or the code changed since: the measured results quoted in the report and
       the Q&A (silver KVK's memory, 1.9M companies, 90% with a sector, 440 backtest cases)
       still match docs/requirements.md (NFR-7) and gold's README ("Backtest")
