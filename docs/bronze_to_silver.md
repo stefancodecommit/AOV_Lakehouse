@@ -56,6 +56,8 @@ A real bronze row (table `80072ned_typeddataset`):
 
 ```
 _request_key   80072NED/TypedDataSet?Perioden=2026KW02#status=Voorlopig
+               (since 2026-11-20 a provisional key also ends in
+               #modified=<TableInfos.Modified>, so a new CBS release fetches it again)
 _period        2026KW02
 _period_status Voorlopig                       (= provisional)
 _source_url    https://opendata.cbs.nl/ODataApi/odata/80072NED/TypedDataSet?$filter=Perioden eq '2026KW02'

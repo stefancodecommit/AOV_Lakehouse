@@ -13,7 +13,8 @@ Assets (each one a dataset Dagster keeps up to date)
 ------
 cbs_bronze      cbs_bronze.run(): monthly. Materialises only when CBS had new data
                 (or a changed TableInfos); otherwise it is skipped and nothing
-                downstream runs.
+                downstream runs. A batch that failed its checks (quarantine) fails the
+                run, after the good data of the same run was recorded.
 sbi_crosswalk   reference_bronze: the SBI 2008 -> 2025 file, monthly. Materialises
                 only when a new version of the file was loaded.
 kvk_bronze      kvk_bronze_agent: started by a person in the UI ("Materialize", with
@@ -116,8 +117,15 @@ def cbs_bronze_asset(context: dg.AssetExecutionContext):
                          "they are retried next run.", metadata=summary)
     if summary["fetched"] or summary["tableinfos_changed"]:
         yield dg.MaterializeResult(asset_key="cbs_bronze", metadata=summary)
-    else:
+    elif not summary["quarantined"]:
         context.log.info("No new CBS data: nothing downstream needs to run. %s", summary)
+    if summary["quarantined"]:
+        # a batch that failed its checks must show as a failed run, not as "nothing new".
+        # The good data of this run is recorded above first, so silver is still rebuilt
+        # from it; the quarantined batch is retried next run.
+        raise dg.Failure(f"{summary['quarantined']} CBS batch(es) failed their checks and are "
+                         "in lakehouse/quarantine/cbs/ (see the run log for which checks)",
+                         metadata=summary)
 
 
 @dg.multi_asset(specs=[dg.AssetSpec(

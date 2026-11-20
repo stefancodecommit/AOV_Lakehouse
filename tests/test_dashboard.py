@@ -57,6 +57,15 @@ def test_interval_flag_and_rises_with_size():
     assert data.rises_with_size(sizes) == (1, 2)
 
 
+def test_how_many_differences_chance_alone_would_give():
+    # 40 measures, one without an interval: 39 comparisons, about 2 by chance at 95%
+    df = pd.DataFrame({"lower_95": [1.0] * 39 + [None], "upper_95": [2.0] * 40,
+                       "national_value": [1.5] * 40})
+    compared, by_chance = data.chance_differences(df)
+    assert compared == 39 and round(by_chance) == 2
+    assert data.chance_differences(df.iloc[0:0]) == (0, 0)
+
+
 # =========================================================================== pages
 @pytest.fixture
 def gold_lakehouse(bronze_delta, monkeypatch):   # noqa: F811

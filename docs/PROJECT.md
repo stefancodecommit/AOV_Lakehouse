@@ -229,7 +229,9 @@ silver `map_sbi2008_sbi2025` uses the newest version only.
   fixed key; keys already in `_ingestion_log` are skipped.
 - TypedDataSets are requested one period at a time, so a run only fetches new periods.
 - The period's CBS status (provisional/final) is part of the key, so a revised period is
-  fetched again and replaces its old rows instead of duplicating them.
+  fetched again and replaces its old rows instead of duplicating them. For a provisional
+  period the key also holds the table's last modification date (`TableInfos.Modified`),
+  so a revision without a status change is fetched after the next CBS release too.
 - Follows pagination to the last page; a request is logged only after its data is written,
   so failures are retried on the next run.
 - Stores each record as received twice: as text (`raw_json`) and as one column per CBS

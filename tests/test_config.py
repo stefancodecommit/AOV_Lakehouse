@@ -1,4 +1,6 @@
 """pipeline/common/config.py: config.yaml < config.local.yaml < LAKEHOUSE__* environment variables."""
+from pathlib import Path
+
 import pytest
 
 from pipeline.bronze import cbs as b
@@ -103,3 +105,26 @@ def test_exit_pause_prevents_the_deltalake_crash_at_exit(tmp_path):
     codes = [subprocess.run([sys.executable, "-c", script], capture_output=True).returncode
              for _ in range(10)]
     assert codes == [0] * 10, codes
+
+
+def test_docker_images_are_pinned_and_local_config_stays_out_of_the_image():
+    """Like the Python packages, every image is an exact version: a moving tag (latest,
+    3.12-slim, 16-alpine) gives a different image under the same name later. And the
+    machine-specific config.local.yaml is never copied into the image."""
+    import re
+
+    import yaml
+    root = Path(__file__).resolve().parents[1]
+    compose = yaml.safe_load((root / "docker-compose.yml").read_text())
+    images = [s["image"] for s in compose["services"].values()
+              if "image" in s and "build" not in s]           # our own image is built here
+    images += re.findall(r"^FROM (\S+)", (root / "Dockerfile").read_text(), re.M)
+    assert images
+    for image in images:
+        tag = image.rsplit(":", 1)[1] if ":" in image else "latest"
+        # an exact version has every part: 3.12.15 (3.12 is a moving tag), but for
+        # Postgres two parts are exact (16.15; 16 alone moves)
+        parts = 2 if image.startswith("postgres:") else 3
+        assert re.match(rf"\d+(\.\d+){{{parts - 1}}}(-|$)", tag), f"{image}: not an exact version"
+    ignored = (root / ".dockerignore").read_text().splitlines()
+    assert "config.local.yaml" in ignored

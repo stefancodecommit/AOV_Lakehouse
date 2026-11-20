@@ -23,8 +23,12 @@ keeps the original, every later step can be rebuilt without asking a source agai
 
 - **Ask only once (idempotent).** Every CBS request has a key that includes the period
   and its CBS status. A key in the ingestion log (`bronze/_ingestion_log`) is never
-  requested again; when CBS revises a period, the status and therefore the key change,
-  so only that period is fetched again, and its rows are replaced, not added.
+  requested again; when CBS makes a period final, the status and therefore the key
+  change, so only that period is fetched again, and its rows are replaced, not added.
+  CBS can also revise a provisional period without changing its status, so a
+  provisional period's key also holds the date CBS last modified the table
+  (`TableInfos.Modified`): after each CBS release the few provisional periods are fetched
+  again; final periods are still asked only once (since 2026-11-20).
 - **Check before writing.** Every CBS batch is checked against the table's own metadata
   (columns, the requested period, numeric measures, unique keys, not empty)
   ([`checks/cbs.py`](../../checks/cbs.py)). A batch that fails is not written; it goes to

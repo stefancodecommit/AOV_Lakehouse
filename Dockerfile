@@ -1,7 +1,11 @@
 # One image for all Python services: Dagster (webserver + daemon), the Streamlit
 # dashboard and the KVK agent. The data is not in the image: lakehouse/ and inbox/ are
 # mounted from the project folder (see docker-compose.yml).
-FROM python:3.12-slim
+# The base image at an exact version, like the Python packages: a moving tag (3.12-slim)
+# gives a different image later under the same name. Python 3.12.15 = the local .venv.
+# To upgrade: a tag that is a few weeks old (as for Trivy in .github/workflows/audit.yml),
+# and change the Python version locally too.
+FROM python:3.12.15-slim-trixie
 
 # Debian's security updates, applied at build time: the official base image is rebuilt
 # only now and then, and the image scan (.github/workflows/audit.yml) fails on a fixed

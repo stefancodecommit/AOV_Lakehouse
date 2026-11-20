@@ -65,6 +65,16 @@ def test_status_change_gives_a_new_request_key(monkeypatch):
     assert provisional != final
 
 
+def test_only_provisional_keys_carry_the_table_modified_date():
+    ep = Endpoint("80072NED", "TypedDataSet", split_by_period=True)
+    assert b.period_key(ep, "2026KW01", "Voorlopig", "2026-11-17T02:00:00") == (
+        "80072NED/TypedDataSet?Perioden=2026KW01#status=Voorlopig#modified=2026-11-17T02:00:00")
+    assert b.period_key(ep, "2025KW04", "Definitief", "2026-11-17T02:00:00") == (
+        "80072NED/TypedDataSet?Perioden=2025KW04#status=Definitief")   # asked only once
+    assert b.period_key(ep, "2026KW01", "Voorlopig") == (                # TableInfos unknown
+        "80072NED/TypedDataSet?Perioden=2026KW01#status=Voorlopig")
+
+
 def test_non_split_request_key_and_params():
     (req,) = b.plan_requests(None, Endpoint("86009NED", "Bedrijfskenmerken"))
     assert req.key == "86009NED/Bedrijfskenmerken"

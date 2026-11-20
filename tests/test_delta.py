@@ -204,6 +204,26 @@ def test_run_twice_then_revision(cbs_api):
     assert len(data_keys) == 3                     # old provisional key stays in the log
 
 
+def test_a_provisional_period_revised_without_a_status_change_is_fetched_again(
+        cbs_api, monkeypatch):
+    info = {"value": table_info()}
+    real_fetch = b.fetch_all
+    monkeypatch.setattr(b, "fetch_all", lambda s, url, params: (
+        ([info["value"]], 1) if url.endswith("/TableInfos") else real_fetch(s, url, params)))
+    b.run(None, False, False)
+    assert cbs_api["data_calls"] == 2
+
+    # a new CBS release: 2026KW01 revised from 6.0 to 6.4, still "Voorlopig"
+    info["value"] = table_info(modified="2026-11-17T02:00:00")
+    cbs_api["value"] = 6.4
+    b.run(None, False, False)
+    assert cbs_api["data_calls"] == 3              # only the provisional period, not 2025KW04
+    df = bronze_rows()
+    assert [json.loads(r)["Ziekteverzuimpercentage_1"] for r in df.raw_json] == [6.0, 6.4]
+    b.run(None, False, False)                      # same release again: nothing to fetch
+    assert cbs_api["data_calls"] == 3
+
+
 # =========================================================================== TableInfos
 def test_table_infos_snapshot_only_when_cbs_changes_it(cbs_api, monkeypatch, caplog):
     info = {"value": table_info()}

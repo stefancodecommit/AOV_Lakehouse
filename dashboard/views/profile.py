@@ -62,6 +62,7 @@ if rows.empty:
 
 # --- what differs from the national value, in one list
 differs = rows[rows["differs_from_national"].astype(bool)]
+compared, by_chance = data.chance_differences(rows)
 if differs.empty:
     st.success(f"For {pick} in {year}, no survey measure differs from the national value "
                "beyond the margin of error.")
@@ -79,6 +80,12 @@ else:
         f"\n- {r.measure_title} ({TOPICS.get(r.topic_group, r.topic_group)}): "
         f"{r.value:.1f} vs {r.national_value:.1f}" for r in below.itertuples()) if not below.empty
         else "**Lower than national**\n\n- none")
+if compared:
+    st.caption(f"{compared} measures were compared with the national value. Even if this "
+               f"group were exactly like the country, about {by_chance:.0f} of them would "
+               "fall outside their 95% interval by chance alone, so treat a single "
+               "difference with care; several pointing the same way (e.g. longer absences "
+               "and more work-related absence) are stronger evidence.")
 
 # --- one topic at a time, each measure with its interval
 st.subheader("Per topic")

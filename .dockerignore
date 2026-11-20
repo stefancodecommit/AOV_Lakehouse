@@ -18,3 +18,6 @@ orchestration/.telemetry
 .tmp_dagster_home_*
 *.zip
 .env
+# local overrides of config.yaml (paths, a USB backup disk): they belong to one machine and
+# would otherwise be baked into the image and apply silently in every container
+config.local.yaml

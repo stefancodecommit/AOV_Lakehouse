@@ -36,13 +36,15 @@ date (2026-10-26); the author's reflection (2026-11-05); the demo launcher, the 
 (2026-11-09); the move to Ubuntu 26.04, locally and in CI (2026-11-11); a code review
 with simplifications (2026-11-11 to 11-13, section "Code review"); a second review
 (2026-11-20, same section): small KVK groups can no longer be worked out by subtraction,
-and silver KVK takes the newest file date instead of the last file loaded (398 tests).
+and silver KVK takes the newest file date instead of the last file loaded; then five of
+its nice-to-have items (403 tests).
 
 Still open: nothing for the assignment except the author's part below. The code review
 is finished (section "Code review", 2026-11-11 to 11-13; ERD added 2026-11-19). The second
-review (2026-11-20) left nine nice-to-have items (three of them nits), listed in that section under
-"Nice to have"; none is needed for the assignment. Because of that review, before
-submitting: slide 9 must say 398 tests, and the Word report must be exported again
+review (2026-11-20) found nine nice-to-have items (three of them nits), listed in that
+section under "Nice to have"; the first five are done, four are left; none is needed for
+the assignment. Because of that review, before submitting: slide 9 must say 403 tests,
+and the Word report must be exported again
 (`rapport.md` changed: test count and lineage columns).
 
 Optional work removed from this list on 2026-11-19 (the author's decision: not needed
@@ -207,32 +209,42 @@ copy of the real lakehouse first (the other six gold tables identical), then on 
       upload day) through one helper, `kvk_agent.by_snapshot_date`; verifying a file
       older than the newest snapshot gives a warning (it is still kept as history)
 
-**Nice to have** (found in the second review, 2026-11-20; not fixed, not needed for the
-assignment; most valuable first):
-- [ ] **A quarantined CBS batch looks like "nothing new" in Dagster.**
-      `orchestration/definitions.py` (`cbs_bronze_asset`) ignores `summary["quarantined"]`:
-      when every new period fails its checks, the run is green and logs "No new CBS
-      data". The failure is only in the log and in `lakehouse/quarantine/`. Fix: raise
-      `dg.Failure` (or materialize with a failing check) when `quarantined > 0`
-- [ ] **CBS revisions are only fetched when a period's status changes.** The request key
-      is period + status (`pipeline/bronze/cbs.py`, `plan_requests`). If CBS revises a
-      provisional quarter and it stays "Voorlopig", or corrects a final one, bronze never
-      fetches it again. Checked 2026-11-20: 2026 Q1 of 80072NED was not revised in the
-      17 November release, so nothing is stale now. Fix: re-fetch the provisional periods
-      when `TableInfos.Modified` changed (bronze already stores it), or document the
-      assumption
-- [ ] **Profile page: 39 comparisons per group, no correction for multiple testing.**
-      Per sector or size class and year, 39 survey measures are compared with the
-      national value; at 95% about 2 look different by chance alone (the real data
-      flags a median of 11, so most are real). "N measures differ beyond the margin of
-      error" overstates the certainty. Fix: a sentence on the page (`dashboard/views/
-      profile.py`), or a stricter level (e.g. Bonferroni)
-- [ ] **`config.local.yaml` is not in `.dockerignore`** (it is in `.gitignore`). `COPY . .`
-      would bake a developer's local overrides (e.g. a USB `backup.path`) into the
-      image, where they apply silently in the containers. Fix: one line in `.dockerignore`
-- [ ] **Docker images with moving tags.** `ollama/ollama:latest`, `postgres:16-alpine` and
-      `python:3.12-slim` change under the same name, while the Python packages and Trivy
-      are pinned exactly. Fix: pin a version (or a digest) like the rest
+**Nice to have** (found in the second review, 2026-11-20; not needed for the
+assignment; most valuable first). Items 1-5 done the same day, at the author's request
+("fix items 1-5, or else it might be too much at once"); the rest is still open:
+- [x] **A quarantined CBS batch looked like "nothing new" in Dagster.**
+      `orchestration/definitions.py` (`cbs_bronze_asset`) ignored `summary["quarantined"]`:
+      when every new period failed its checks, the run was green and logged "No new CBS
+      data"; the failure was only in the log and in `lakehouse/quarantine/`. Done: a
+      quarantined batch now fails the run (`dg.Failure`, red in the UI). The good data of
+      the same run is recorded first, so silver is still rebuilt from it (a test checks
+      both, including that the automation then requests silver_cbs)
+- [x] **CBS revisions were only fetched when a period's status changed.** The request key
+      was period + status (`pipeline/bronze/cbs.py`). If CBS revised a provisional quarter
+      and it stayed "Voorlopig", bronze never fetched it again (checked 2026-11-20: 2026 Q1
+      of 80072NED was not revised in the 17 November release, so nothing was stale). Done:
+      the key of a provisional period also holds `TableInfos.Modified` (`period_key`), so
+      after each CBS release the few provisional periods are fetched again; final periods
+      are still asked only once (a correction of a final figure needs `--force`). On the
+      next real run every provisional period is fetched once more, because its key format
+      changed; that is expected
+- [x] **Profile page: 39 comparisons per group, no correction for multiple testing.**
+      At 95%, about 2 of 39 measures look different by chance alone (the real data flags
+      a median of 11, so most are real), and "N measures differ beyond the margin of
+      error" overstated the certainty. Done: the page says how many measures were
+      compared and how many would differ by chance alone (`data.chance_differences`,
+      computed, not a fixed 39), and that several differences pointing the same way are
+      stronger evidence than one. No stricter level (Bonferroni): it would hide real
+      differences in a descriptive page
+- [x] **`config.local.yaml` was not in `.dockerignore`** (only in `.gitignore`), so
+      `COPY . .` would bake a developer's local overrides into the image. Done: added
+- [x] **Docker images had moving tags** (`ollama/ollama:latest`, `postgres:16-alpine`,
+      `python:3.12-slim`), while the Python packages and Trivy are pinned exactly. Done:
+      `python:3.12.15-slim-trixie` (= the local .venv), `postgres:16.15-alpine3.24`,
+      `ollama/ollama:0.40.14`: tags a few weeks old, the rule already used for Trivy.
+      `tests/test_config.py` fails on a moving tag and on a missing `.dockerignore` line.
+      Not built locally (Docker wasn't running): GitHub's docker-build job checks the
+      image on the next push
 - [ ] **The 'final' risk index uses provisional business counts.** Its basis ends at the
       latest final quarter (2025 Q4), but `_business_counts` (`pipeline/gold/build.py`)
       takes the newest 81589NED quarter (2026 Q4, Voorlopig). The explanation names the
@@ -253,7 +265,7 @@ assignment; most valuable first):
       report's number of lineage columns
 - [ ] The slides (docs/presentatie.pptx), slide 9: the number and the speaker notes state
       the test count that pytest reports (not checked automatically; the notes still said
-      404 on 2026-11-13; since 2026-11-20 pytest reports 398)
+      404 on 2026-11-13; since 2026-11-20 pytest reports 403)
 - [ ] If the data or the code changed since: the measured results quoted in the report and
       the Q&A (silver KVK's memory, 1.9M companies, 90% with a sector, 440 backtest cases)
       still match docs/requirements.md (NFR-7) and gold's README ("Backtest")

@@ -11,8 +11,13 @@ How "ask only once" works
   The script first reads the small `Perioden` list, then only requests the periods
   that are not in the log yet. New quarters/years are picked up automatically.
 * The period's CBS status (Voorlopig / Nader voorlopig / Definitief) is part of the
-  request key. When CBS revises a provisional period, the key changes, that one
+  request key. When CBS makes a provisional period final, the key changes, that one
   period is fetched again, and its old rows are replaced (not duplicated).
+* CBS can also revise a provisional period without changing its status. So for a
+  provisional period the key also holds the date CBS last modified the table
+  (TableInfos.Modified): after each new CBS release, the provisional periods (a few per
+  table) are fetched again; final periods are still asked only once. A correction of a
+  final figure (rare; CBS announces it) needs --force.
 * Pagination inside a request is followed until the last page (odata.nextLink,
   or $skip when a page comes back full without a nextLink).
 * Before writing, the records are checked (checks/cbs.py): data requests against the
@@ -191,13 +196,29 @@ def select_periods(periods: list[dict], start_year: int,
     return [p for p in periods if ptype(p) == chosen and year(p) >= start_year]
 
 
-def plan_requests(session: requests.Session, ep: Endpoint) -> list[Request]:
+FINAL_STATUS = "Definitief"
+
+
+def period_key(ep: Endpoint, period: str, status: str, modified: str | None = None) -> str:
+    """Request key of one period: '80072NED/TypedDataSet?Perioden=2026KW01#status=Voorlopig',
+    plus '#modified=<TableInfos.Modified>' for a provisional period, so a new CBS release
+    (which may revise it without changing its status) makes the key new."""
+    key = f"{ep.table_id}/{ep.entity}?Perioden={period}#status={status}"
+    if status != FINAL_STATUS and modified:
+        key += f"#modified={modified}"
+    return key
+
+
+def plan_requests(session: requests.Session, ep: Endpoint,
+                  modified: str | None = None) -> list[Request]:
     """The requests needed for one endpoint, each with its request key.
 
     For a data table (split_by_period) this first asks CBS which periods exist, keeps
     the configured ones, and makes one request per period. The period's status is in
     the key: when CBS revises 'Voorlopig' to 'Definitief' the key changes, so run()
-    fetches that period again. Other endpoints are one request with a fixed key."""
+    fetches that period again. `modified` (the table's TableInfos.Modified) is in the key
+    of provisional periods, so they are fetched again after each CBS release (period_key).
+    Other endpoints are one request with a fixed key."""
     if ep.split_by_period:
         periods, _ = fetch_all(session, f"{BASE_URL}/{ep.table_id}/Perioden", {})
         reqs = []
@@ -210,7 +231,7 @@ def plan_requests(session: requests.Session, ep: Endpoint) -> list[Request]:
             key_val, status = p["Key"].strip(), (p.get("Status") or "").strip()
             reqs.append(Request(
                 endpoint=ep,
-                key=f"{ep.table_id}/{ep.entity}?Perioden={key_val}#status={status}",
+                key=period_key(ep, key_val, status, modified),
                 params={"$filter": f"Perioden eq '{key_val}'"},
                 period=key_val,
                 period_status=status,
@@ -424,9 +445,10 @@ def table_infos_request(table_id: str, info: dict) -> Request:
 
 
 def ingest_table_infos(session, table_ids: list[str], already: set[str],
-                       dry_run: bool) -> tuple[int, int, int]:
+                       dry_run: bool, modified: dict | None = None) -> tuple[int, int, int]:
     """Lifecycle warnings per table, and a bronze snapshot when TableInfos changed.
-    Returns (snapshots written, warnings, failed requests)."""
+    Fills `modified` (table_id -> TableInfos.Modified, for plan_requests). Returns
+    (snapshots written, warnings, failed requests)."""
     from checks import warnings
     from checks.cbs import check_table_lifecycle
     written = warned = failed = 0
@@ -441,6 +463,8 @@ def ingest_table_infos(session, table_ids: list[str], already: set[str],
             log.error("TableInfos for %s is empty", table_id)
             failed += 1
             continue
+        if modified is not None:
+            modified[table_id] = infos[0].get("Modified")
         for w in warnings(check_table_lifecycle(infos[0], _CFG["max_update_interval_days"])):
             log.warning("%s: %s", table_id, w.detail)
             warned += 1
@@ -558,11 +582,14 @@ def run(only: str | None, force: bool, dry_run: bool) -> dict:
     dataprops_cache: dict[str, list[dict]] = {}
 
     # 1. lifecycle: warn about stopped or stale tables, store changed TableInfos
+    # TableInfos.Modified goes into the request keys of provisional periods (period_key);
+    # --only by table (e.g. 80072) includes the table's TableInfos
     data_tables = list(dict.fromkeys(e.table_id for e in ENDPOINTS if e.split_by_period))
     data_tables = [t for t in data_tables
                    if not only or only.lower() in f"{t}_tableinfos".lower()]
+    modified: dict[str, str | None] = {}
     infos_written, warned, infos_failed = ingest_table_infos(session, data_tables, already,
-                                                             dry_run)
+                                                             dry_run, modified)
     failed += infos_failed
 
     # 2. data and code lists, one request at a time
@@ -570,7 +597,7 @@ def run(only: str | None, force: bool, dry_run: bool) -> dict:
         if only and only.lower() not in ep.name:
             continue
         try:
-            requests_ = plan_requests(session, ep)
+            requests_ = plan_requests(session, ep, modified.get(ep.table_id))
         except requests.RequestException as e:
             log.error("Could not plan %s: %s", ep.name, e)
             failed += 1

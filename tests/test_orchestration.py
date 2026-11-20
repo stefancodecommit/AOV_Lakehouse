@@ -84,6 +84,28 @@ def test_cbs_bronze_materialises_only_when_something_is_new(fake_cbs):
     assert second.success and keys(second) == []
 
 
+def test_a_quarantined_cbs_batch_fails_the_run_but_keeps_the_good_data(fake_cbs, monkeypatch):
+    good = b.fetch_all
+
+    def fetch_all(session, url, params):      # 2026KW02 answers with 2026KW01's record
+        if "2026KW02" in params.get("$filter", ""):
+            return [business_record("2026KW01")], 1
+        return good(session, url, params)
+
+    monkeypatch.setattr(b, "fetch_all", fetch_all)
+    instance = dg.DagsterInstance.ephemeral()
+    d.register_existing_data.execute_in_process(instance=instance)
+    instance.report_runless_asset_event(dg.AssetMaterialization("sbi_crosswalk"))
+    before = evaluate(instance)
+    first = dg.materialize([d.cbs_bronze_asset], instance=instance, raise_on_error=False)
+    assert not first.success                                 # red in Dagster, not "skipped"
+    assert keys(first) == ["cbs_bronze"]                     # 2026KW01 still recorded...
+    after = evaluate(instance, before.cursor)                # ...so silver is rebuilt from it
+    assert after.get_num_requested(dg.AssetKey("silver_cbs")) == 1
+    second = dg.materialize([d.cbs_bronze_asset], instance=instance, raise_on_error=False)
+    assert not second.success and keys(second) == []         # still failing, nothing new
+
+
 def test_kvk_bronze_needs_the_file_name_typed_as_confirmation(tmp_path):
     from test_kvk_logic import inbox_zip
     inbox_zip("kvk.zip")

@@ -28,7 +28,7 @@ x-app: &app                      # shared settings of the Python services
 
 services:
   postgres:                      # Dagster's run history (not the data itself)
-    image: postgres:16-alpine
+    image: postgres:16.15-alpine3.24   # exact version (not 16-alpine), see the Dockerfile
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-dagster}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dagster}
@@ -85,7 +85,7 @@ services:
 
   # --- optional: the KVK chat agent (docker compose --profile agent ...) -------------
   ollama:                        # model server for the agent
-    image: ollama/ollama:latest
+    image: ollama/ollama:0.40.14   # exact version, not latest (see the Dockerfile)
     profiles: ["agent"]
     volumes:
       # a Docker volume: the model is downloaded once (~4.7 GB). To reuse a model already
@@ -96,7 +96,7 @@ services:
     restart: unless-stopped
 
   ollama-pull:                   # one-off: downloads the model on first start
-    image: ollama/ollama:latest
+    image: ollama/ollama:0.40.14
     profiles: ["agent"]
     environment:
       OLLAMA_HOST: http://ollama:11434

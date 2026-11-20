@@ -133,6 +133,16 @@ def with_interval_flag(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
+def chance_differences(df: pd.DataFrame, level: float = 0.95) -> tuple[int, float]:
+    """(measures compared, how many would differ by chance alone): every measure with a
+    95% interval and a national value is one comparison, and at 95% about 1 in 20
+    comparisons falls outside the interval even when there is no real difference
+    (multiple testing). Shown next to the list of differences on the Profile page."""
+    compared = int((df["lower_95"].notna() & df["upper_95"].notna()
+                    & df["national_value"].notna()).sum()) if not df.empty else 0
+    return compared, compared * (1 - level)
+
+
 def rises_with_size(df: pd.DataFrame) -> tuple[int, int]:
     """In how many periods absence strictly rises from the smallest to the largest size
     class (non-aggregate classes, ordered by lower bound): (periods where it does, periods)."""

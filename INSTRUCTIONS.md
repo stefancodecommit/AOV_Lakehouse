@@ -385,9 +385,11 @@ trivy image --scanners vuln --ignore-unfixed --severity CRITICAL,HIGH cbs-kvk-la
 
 A fixable finding in a Debian package disappears by rebuilding the image: the Dockerfile
 applies Debian's security updates at build time (`apt-get upgrade`), so a fix Debian has
-released is in the next build even before the official `python:3.12-slim` has it
+released is in the next build even before the official Python base image has it
 (`docker compose build --pull`; GitHub rebuilds on every run). A finding in a Python
-package needs its pin raised, as above.
+package needs its pin raised, as above. The images themselves are pinned to exact
+versions too (`python:3.12.15-slim-trixie` in the Dockerfile; Postgres and Ollama in
+docker-compose.yml, since 2026-11-20): raise those by hand, to a tag a few weeks old.
 
 So far: 2026-10-26, pillow 12.3 → 13.0, filelock 4.0 → 4.2.1 and certifi (streamlit
 1.65 → 1.66.1, because 1.65 doesn't allow pillow 13); 2026-11-09, zlib in the Debian base
