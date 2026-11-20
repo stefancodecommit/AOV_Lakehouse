@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pandas as pd
 import pytest
+from deltalake import DeltaTable
 from streamlit.testing.v1 import AppTest
 
 from conftest import dashboard_data as data
@@ -98,6 +99,18 @@ def test_overview_shows_the_latest_quarter(gold_lakehouse):
     at = run_page("overview")
     assert at.metric[0].label.startswith("National absence, 2025 Q1")
     assert any(c.value.startswith("Latest period: **2025 Q1** (provisional)") for c in at.caption)
+
+
+def test_overview_without_last_years_figure_shows_no_change(gold_lakehouse):
+    """A missing change vs last year is NaN or NA after loading, never None: the headline
+    must then leave the change out, not show '<NA> pp' or '+nan pp'."""
+    path = g.GOLD_ROOT / "gold_absence_by_sector"
+    df = DeltaTable(str(path)).to_pandas()
+    df.loc[df["sbi_level"] == "total", "change_vs_last_year_pp"] = float("nan")
+    publish.write_table(path, df)
+    at = run_page("overview")
+    assert at.metric[0].label.startswith("National absence")
+    assert not at.metric[0].delta              # the old code showed '<NA> pp vs a year earlier'
 
 
 def test_final_only_explains_an_empty_page(gold_lakehouse):

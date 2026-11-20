@@ -473,13 +473,16 @@ def build_risk_index_history(t: dict) -> pd.DataFrame:
             .sort_values(["group_type", "group_key", "period_key"]).reset_index(drop=True))
 
 
-def _business_counts(t: dict) -> pd.DataFrame:
-    """Per sector_key, from CBS 81589NED's latest quarter: all businesses, those run by
+def _business_counts(t: dict, final_only: bool = False) -> pd.DataFrame:
+    """Per sector_key, from CBS 81589NED's latest quarter (`final_only`: the latest final
+    quarter, for the risk index's 'final' basis): all businesses, those run by
     natural persons (sole traders, partnerships: the self-employed), and those with one
     person employed. The KVK open data has no sole traders, so these come from CBS.
     Keyed by sector_key, which the CBS tables share (silver dim_sector), not by SBI code:
     aggregates such as "B-N excl. K" have no SBI code, and one SBI code can have two keys."""
     b = t["fct_business_count"]
+    if final_only and not b.empty:
+        b = b[b["period_status"] == FINAL]
     if b.empty:
         return pd.DataFrame(columns=["sector_key", "businesses", "businesses_natural_persons",
                                      "businesses_one_person", "businesses_period"])
@@ -530,7 +533,6 @@ def build_risk_index(t: dict, settings_: dict | None = None) -> pd.DataFrame:
     s = settings_ or RISK
     window, minimum, rising = int(s["window_quarters"]), int(s["min_quarters"]), float(s["rising_per_year"])
     history = _relative_risk(t)
-    counts = _business_counts(t)
     rows = []
     for basis, part in (("all", history), ("final", history[~history["is_provisional"]])):
         if part.empty:
@@ -568,8 +570,12 @@ def build_risk_index(t: dict, settings_: dict | None = None) -> pd.DataFrame:
     if df.empty:
         return df
     # sector rows only: a size class's key is no sector_key (and its units differ)
+    # per basis: 'final' takes the latest final count quarter too, so it holds no
+    # provisional figure at all (until 2026-11-20 both used the newest, provisional one)
+    counts = pd.concat([_business_counts(t, final_only=basis == "final").assign(basis=basis)
+                        for basis in ("all", "final")], ignore_index=True)
     counts = counts.rename(columns={"sector_key": "group_key"}).assign(group_type="sector")
-    df = df.merge(counts, on=["group_type", "group_key"], how="left")
+    df = df.merge(counts, on=["basis", "group_type", "group_key"], how="left")
     for c in ("businesses", "businesses_natural_persons", "businesses_one_person"):
         df[c] = df[c].astype("Int64")
     df["explanation"] = [_explain(r) for r in df.itertuples()]

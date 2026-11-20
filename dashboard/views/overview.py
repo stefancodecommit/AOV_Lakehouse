@@ -2,6 +2,7 @@
 
 Answers sub-questions 1-3 at a glance; the other pages go into detail.
 """
+import pandas as pd
 import streamlit as st
 
 import charts
@@ -31,7 +32,7 @@ q_size = size[(size["source_table"] == "80072NED") & (size["period_key"] == peri
 label = national["period_label"] + (" (provisional)" if national["is_provisional"] else "")
 cols = st.columns(4)
 cols[0].metric(f"National absence, {label}", f"{national['absence_pct']:.1f}%",
-               delta=(None if national["change_vs_last_year_pp"] is None
+               delta=(None if pd.isna(national["change_vs_last_year_pp"])   # NaN or NA, never None
                       else f"{national['change_vs_last_year_pp']:+.1f} pp vs a year earlier"),
                delta_color="inverse",   # more absence is worse, so up is red
                help="Compared with the same quarter one year earlier, because absence is "

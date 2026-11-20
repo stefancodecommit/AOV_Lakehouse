@@ -248,12 +248,13 @@ def risk_inputs(series: dict[str, list], statuses=None, start=(2024, 1), counts=
                             "start_date": pd.Timestamp(r.year, 3 * r.quarter - 2, 1)})
     sectors = [k for k in series if k != "total" and not k.startswith("WP_")]
     business = pd.DataFrame([
-        {"period_key": "2026KW03", "sector_key": k, "breakdown": b, "legal_form": lf,
-         "size_key": sk, "count": n}
+        {"period_key": "2026KW03", "period_status": F, "sector_key": k, "breakdown": b,
+         "legal_form": lf, "size_key": sk, "count": n}
         for k in sectors for b, lf, sk, n in [("total", None, None, 1000),
                                                ("legal_form", "Natuurlijke personen", None, 800),
                                                ("size", None, "WP_1_2", 600)]]) if counts else \
-        pd.DataFrame(columns=["period_key", "sector_key", "breakdown", "legal_form", "size_key", "count"])
+        pd.DataFrame(columns=["period_key", "period_status", "sector_key", "breakdown",
+                              "legal_form", "size_key", "count"])
     return {"fct_absence_rate": pd.DataFrame(rows),
             "dim_period": pd.DataFrame(periods).drop_duplicates("period_key"),
             "dim_sector": pd.DataFrame({"sector_key": sectors, "sbi_code": sectors,
@@ -319,6 +320,17 @@ def test_business_counts_and_explanation():
     assert size.group_type == "size" and pd.isna(size.businesses)   # size units differ: no count
     assert size.explanation.startswith("Size 1-9 persons employed: 50% less absence")
     assert risk({"total": [5.0] * 8, "A": [7.0] * 8}, counts=False).businesses.isna().all()
+
+
+def test_final_basis_takes_the_latest_final_business_counts():
+    t = risk_inputs({"total": [5.0] * 8, "A": [7.0] * 8})
+    final = t["fct_business_count"]
+    newer = final.assign(period_key="2026KW04", period_status=V, count=final["count"] + 5)
+    t["fct_business_count"] = pd.concat([final, newer], ignore_index=True)
+    df = g.build_risk_index(t, SETTINGS).set_index("basis")
+    assert (df.loc["all", "businesses"], df.loc["all", "businesses_period"]) == (1005, "2026KW04")
+    assert (df.loc["final", "businesses"], df.loc["final", "businesses_period"]) == (1000, "2026KW03")
+    assert "(CBS 2026KW03)" in df.loc["final", "explanation"]
 
 
 def test_business_counts_follow_the_sector_key_not_the_sbi_code():

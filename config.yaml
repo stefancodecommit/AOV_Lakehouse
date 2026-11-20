@@ -134,7 +134,7 @@ backup:
   # archive (risk R14). Relative to this file's folder; for a real backup, point it at
   # another disk, e.g. in config.local.yaml.
   path: backups
-  keep: 3                         # newest archives kept; older ones are removed
+  keep: 3                         # newest archives kept (at least 1); older ones are removed
   # true: refuse to back up when backup.path is on the same disk as the lakehouse (e.g.
   # a USB drive that isn't plugged in, so its folder would land on the internal disk).
   # false: back up anyway, with a warning (the default while there is no second disk)

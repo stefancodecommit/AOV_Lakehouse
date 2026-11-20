@@ -1296,6 +1296,7 @@ flowchart LR
   n_src_silver_fct_business_count_count["fct_business_count<br/>count"]:::silverref
   n_src_silver_fct_business_count_legal_form["fct_business_count<br/>legal_form"]:::silverref
   n_src_silver_fct_business_count_period_key["fct_business_count<br/>period_key"]:::silverref
+  n_src_silver_fct_business_count_period_status["fct_business_count<br/>period_status"]:::silverref
   n_src_silver_fct_business_count_sector_key["fct_business_count<br/>sector_key"]:::silverref
   n_src_silver_fct_business_count_size_key["fct_business_count<br/>size_key"]:::silverref
   run(["the gold run (pipeline/common/publish.py)"]):::run
@@ -1356,6 +1357,7 @@ flowchart LR
   n_src_silver_fct_business_count_count --> n_col_businesses
   n_src_silver_fct_business_count_breakdown --> n_col_businesses
   n_src_silver_fct_business_count_sector_key --> n_col_businesses
+  n_src_silver_fct_business_count_period_status --> n_col_businesses
   n_src_silver_fct_business_count_count --> n_col_businesses_natural_persons
   n_src_silver_fct_business_count_breakdown --> n_col_businesses_natural_persons
   n_src_silver_fct_business_count_legal_form --> n_col_businesses_natural_persons
@@ -1365,6 +1367,7 @@ flowchart LR
   n_src_silver_fct_business_count_size_key --> n_col_businesses_one_person
   n_src_silver_fct_business_count_sector_key --> n_col_businesses_one_person
   n_src_silver_fct_business_count_period_key --> n_col_businesses_period
+  n_src_silver_fct_business_count_period_status --> n_col_businesses_period
   n_src_silver_fct_absence_rate_absence_pct --> n_col_explanation
   n_src_silver_dim_sector_sector_name --> n_col_explanation
   n_src_silver_fct_business_count_count --> n_col_explanation
@@ -1397,10 +1400,10 @@ flowchart LR
 | `assessment` | `silver:fct_absence_rate.absence_pct`<br>`silver:fct_absence_rate.member_type` | higher (band wholly above 1), lower (wholly below), around national, or too few quarters |
 | `trend_per_year` | `silver:fct_absence_rate.absence_pct`<br>`silver:fct_absence_rate.member_type` | slope of a straight line through the window's quarterly relative risks, per year |
 | `trend` | `silver:fct_absence_rate.absence_pct`<br>`silver:fct_absence_rate.member_type` | rising / falling beyond ±0.05 per year (config.yaml), else stable; it describes the last 8 quarters, it is no forecast |
-| `businesses` | `silver:fct_business_count.count`<br>`silver:fct_business_count.breakdown`<br>`silver:fct_business_count.sector_key` | all businesses in the sector, CBS's latest quarter (sectors only; joined on sector_key) |
+| `businesses` | `silver:fct_business_count.count`<br>`silver:fct_business_count.breakdown`<br>`silver:fct_business_count.sector_key`<br>`silver:fct_business_count.period_status` | all businesses in the sector, CBS's latest quarter; for basis 'final' the latest final quarter (sectors only; joined on sector_key) |
 | `businesses_natural_persons` | `silver:fct_business_count.count`<br>`silver:fct_business_count.breakdown`<br>`silver:fct_business_count.legal_form`<br>`silver:fct_business_count.sector_key` | businesses run by natural persons (self-employed) |
 | `businesses_one_person` | `silver:fct_business_count.count`<br>`silver:fct_business_count.breakdown`<br>`silver:fct_business_count.size_key`<br>`silver:fct_business_count.sector_key` | businesses with one person employed |
-| `businesses_period` | `silver:fct_business_count.period_key` | the quarter of the counts |
+| `businesses_period` | `silver:fct_business_count.period_key`<br>`silver:fct_business_count.period_status` | the quarter of the counts (final for basis 'final') |
 | `explanation` | `silver:fct_absence_rate.absence_pct`<br>`silver:dim_sector.sector_name`<br>`silver:fct_business_count.count` | one sentence that puts the row's numbers in words |
 | `data_as_of` | `silver:fct_absence_rate.ingested_at` | the newest ingest time in the window |
 | `run_id` | *(the run)* | added when the run publishes the table: the gold run that made the row; joins to lakehouse/_run_log (which silver run_ids were read) |

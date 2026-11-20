@@ -36,14 +36,15 @@ date (2026-10-26); the author's reflection (2026-11-05); the demo launcher, the 
 (2026-11-09); the move to Ubuntu 26.04, locally and in CI (2026-11-11); a code review
 with simplifications (2026-11-11 to 11-13, section "Code review"); a second review
 (2026-11-20, same section): small KVK groups can no longer be worked out by subtraction,
-and silver KVK takes the newest file date instead of the last file loaded; then five of
-its nice-to-have items (403 tests).
+and silver KVK takes the newest file date instead of the last file loaded; then all nine
+of its nice-to-have items (407 tests).
 
 Still open: nothing for the assignment except the author's part below. The code review
 is finished (section "Code review", 2026-11-11 to 11-13; ERD added 2026-11-19). The second
 review (2026-11-20) found nine nice-to-have items (three of them nits), listed in that
-section under "Nice to have"; the first five are done, four are left; none is needed for
-the assignment. Because of that review, before submitting: slide 9 must say 403 tests,
+section under "Nice to have"; all nine are done (the same day). Because of that review,
+before submitting: slide 9 must say 407 tests (on 2026-11-20 the slide said 394, its
+notes 404),
 and the Word report must be exported again
 (`rapport.md` changed: test count and lineage columns).
 
@@ -210,8 +211,9 @@ copy of the real lakehouse first (the other six gold tables identical), then on 
       older than the newest snapshot gives a warning (it is still kept as history)
 
 **Nice to have** (found in the second review, 2026-11-20; not needed for the
-assignment; most valuable first). Items 1-5 done the same day, at the author's request
-("fix items 1-5, or else it might be too much at once"); the rest is still open:
+assignment; most valuable first). All done the same day, at the author's request, in
+two rounds: items 1-5 first ("or else it might be too much at once"), then 6-9. Each fix
+has a test that fails on the old code (checked):
 - [x] **A quarantined CBS batch looked like "nothing new" in Dagster.**
       `orchestration/definitions.py` (`cbs_bronze_asset`) ignored `summary["quarantined"]`:
       when every new period failed its checks, the run was green and logged "No new CBS
@@ -245,19 +247,23 @@ assignment; most valuable first). Items 1-5 done the same day, at the author's r
       `tests/test_config.py` fails on a moving tag and on a missing `.dockerignore` line.
       Not built locally (Docker wasn't running): GitHub's docker-build job checks the
       image on the next push
-- [ ] **The 'final' risk index uses provisional business counts.** Its basis ends at the
+- [x] **The 'final' risk index used provisional business counts.** Its basis ends at the
       latest final quarter (2025 Q4), but `_business_counts` (`pipeline/gold/build.py`)
-      takes the newest 81589NED quarter (2026 Q4, Voorlopig). The explanation names the
-      quarter, so it is transparent, but inconsistent. Fix: take the latest final quarter
-      for basis 'final'
-- [ ] Nit: `dashboard/views/overview.py` checks `change_vs_last_year_pp is None`, but the
-      column holds NaN, never None; a missing value would show as "+nan pp". Fix:
-      `pd.isna(...)`
-- [ ] Nit: `backup.keep: 0` would delete the backup that was just made
-      (`tools/backup.py`, `backups()[keep:]` includes it). Fix: refuse `keep < 1`
-- [ ] Nit: `write_bronze` (`pipeline/bronze/cbs.py`) deletes a period's old rows and
-      appends the new ones in two commits; a reader in between sees the period missing.
-      Low risk: Dagster runs silver after bronze, never at the same time
+      took the newest 81589NED quarter (2026 Q4, Voorlopig). Done: basis 'final' takes
+      the latest *final* count quarter. On the real data that is 2024 Q4 (CBS finalises
+      81589NED late), so the final view's counts are two years old; the explanation names
+      the quarter. Real gold rebuilt: only the 32 'final' sector rows of gold_risk_index
+      changed (counts, their quarter, the explanation); the other six tables identical
+- [x] Nit: `dashboard/views/overview.py` checked `change_vs_last_year_pp is None`, but a
+      missing value arrives as NaN/NA, never None. The test showed what the page would
+      then say: "<NA> pp vs a year earlier" (not "+nan" as guessed). Done: `pd.isna(...)`
+- [x] Nit: `backup.keep: 0` would delete the backup that was just made
+      (`tools/backup.py`, `backups()[keep:]` includes it). Done: refused (`keep` must be
+      at least 1), before anything is written
+- [x] Nit: `write_bronze` (`pipeline/bronze/cbs.py`) deleted a period's old rows and
+      appended the new ones in two commits, so a reader in between saw the period missing.
+      Done: one commit, an overwrite limited to the period by a predicate (deltalake
+      supports it together with new columns, `schema_mode="merge"`, tried first)
 
 **Before submitting** (the numbers that live in the submitted documents):
 - [ ] `pytest` passes; that includes `tests/test_doc_numbers.py`, which checks the test
@@ -265,7 +271,7 @@ assignment; most valuable first). Items 1-5 done the same day, at the author's r
       report's number of lineage columns
 - [ ] The slides (docs/presentatie.pptx), slide 9: the number and the speaker notes state
       the test count that pytest reports (not checked automatically; the notes still said
-      404 on 2026-11-13; since 2026-11-20 pytest reports 403)
+      404 on 2026-11-13; since 2026-11-20 pytest reports 407)
 - [ ] If the data or the code changed since: the measured results quoted in the report and
       the Q&A (silver KVK's memory, 1.9M companies, 90% with a sector, 440 backtest cases)
       still match docs/requirements.md (NFR-7) and gold's README ("Backtest")

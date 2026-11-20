@@ -50,6 +50,16 @@ def test_revised_period_replaces_its_rows_and_keeps_other_periods():
     assert [json.loads(r)["Ziekteverzuimpercentage_1"] for r in df.raw_json] == [5.6, 6.2]
 
 
+def test_a_revision_is_one_commit_so_no_reader_sees_the_period_missing():
+    b.write_bronze(period_request("2026KW01", "Voorlopig"), records("2026KW01", 6.0))
+    path = str(b.BRONZE_ROOT / ABSENCE.name)
+    before = DeltaTable(path).version()
+    b.write_bronze(period_request("2026KW01", "Definitief"), records("2026KW01", 6.2))
+    assert DeltaTable(path).version() == before + 1           # not a delete, then an append
+    for version in range(before + 2):                         # every version has the period
+        assert set(DeltaTable(path, version=version).to_pandas()["_period"]) == {"2026KW01"}
+
+
 def test_writing_the_same_request_twice_gives_no_duplicates():
     """A crash between write_bronze and log_success means the next run writes again."""
     req = period_request("2026KW01", "Voorlopig")

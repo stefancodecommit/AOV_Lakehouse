@@ -537,16 +537,18 @@ GOLD_LINEAGE: dict[str, dict[str, Column]] = {
         "trend": Column(sv(RATE, "absence_pct", "member_type"),
                         "rising / falling beyond ±0.05 per year (config.yaml), else stable; it "
                         "describes the last 8 quarters, it is no forecast"),
-        "businesses": Column(sv(COUNT_FCT, "count", "breakdown", "sector_key"),
-                             "all businesses in the sector, CBS's latest quarter (sectors only; "
-                             "joined on sector_key)"),
+        "businesses": Column(sv(COUNT_FCT, "count", "breakdown", "sector_key", "period_status"),
+                             "all businesses in the sector, CBS's latest quarter; for basis "
+                             "'final' the latest final quarter (sectors only; joined on "
+                             "sector_key)"),
         "businesses_natural_persons": Column(sv(COUNT_FCT, "count", "breakdown", "legal_form",
                                                 "sector_key"),
                                              "businesses run by natural persons (self-employed)"),
         "businesses_one_person": Column(sv(COUNT_FCT, "count", "breakdown", "size_key",
                                            "sector_key"),
                                         "businesses with one person employed"),
-        "businesses_period": Column(sv(COUNT_FCT, "period_key"), "the quarter of the counts"),
+        "businesses_period": Column(sv(COUNT_FCT, "period_key", "period_status"),
+                                    "the quarter of the counts (final for basis 'final')"),
         "explanation": Column(sv(RATE, "absence_pct") + sv("dim_sector", "sector_name")
                               + sv(COUNT_FCT, "count"),
                               "one sentence that puts the row's numbers in words"),

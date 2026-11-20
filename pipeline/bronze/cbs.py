@@ -381,27 +381,30 @@ def _fit_to_table(path: Path, table):
 def write_bronze(req: Request, records: list[dict], dataprops: list[dict] | None = None) -> None:
     """Write the records of one request to its bronze table.
 
-    First deletes earlier rows of the same period (or the same request key), then
-    appends. That makes the write repeatable: a revised period replaces its old rows,
-    and a retry after a crash can't create duplicates. `dataprops` (the table's
-    DataProperties) gives the fields their types; without it they are inferred."""
+    Replaces earlier rows of the same period (or the same request key) in ONE Delta
+    commit (an overwrite limited to those rows by a predicate): a revised period replaces
+    its old rows, a retry after a crash can't create duplicates, and a reader never sees
+    the period missing in between (until 2026-11-20 this was a delete and an append, two
+    commits). `dataprops` (the table's DataProperties) gives the fields their types;
+    without it they are inferred."""
     from deltalake import DeltaTable, write_deltalake
     ep = req.endpoint
     path = BRONZE_ROOT / ep.name
     now = datetime.now(timezone.utc)
+    exists = (path / "_delta_log").exists()
+    pred = (f"_period = '{req.period}'" if req.period
+            else f"_request_key = '{req.key.replace(chr(39), chr(39) * 2)}'")
 
-    # Replace earlier rows for the same period/request (revisions or --force), so a
-    # crash between "write data" and "write log" can never create duplicates.
-    if (path / "_delta_log").exists():
-        pred = (f"_period = '{req.period}'" if req.period
-                else f"_request_key = '{req.key.replace(chr(39), chr(39) * 2)}'")
-        DeltaTable(str(path)).delete(pred)
-
-    if not records:
+    if not records:                  # nothing to write: only remove the old rows
+        if exists:
+            DeltaTable(str(path)).delete(pred)
         return
     table = _fit_to_table(path, bronze_table(req, records, now, dataprops))
     # merge: a field CBS adds later becomes a new column (older rows: empty)
-    write_deltalake(str(path), table, mode="append", schema_mode="merge")
+    if exists:
+        write_deltalake(str(path), table, mode="overwrite", predicate=pred, schema_mode="merge")
+    else:
+        write_deltalake(str(path), table, mode="append", schema_mode="merge")
 
 
 def log_success(req: Request, row_count: int, pages: int) -> None:

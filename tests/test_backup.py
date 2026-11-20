@@ -69,6 +69,16 @@ def test_only_the_newest_backups_are_kept():
     assert [p.name for p in bk.backups()] == [new.name, "backup_20260301T000000Z.tar.gz"]
 
 
+def test_keep_zero_is_refused_before_anything_is_written():
+    """keep: 0 would delete the new archive along with the old ones: no backup at all."""
+    some_data()
+    bk.BACKUP_DIR.mkdir()
+    (bk.BACKUP_DIR / "backup_20260301T000000Z.tar.gz").write_bytes(b"old")
+    with pytest.raises(ValueError, match="at least 1"):
+        bk.create(keep=0)
+    assert [p.name for p in bk.backups()] == ["backup_20260301T000000Z.tar.gz"]
+
+
 def test_restore_into_an_empty_folder_only(tmp_path_factory):
     some_data()
     archive = bk.create()

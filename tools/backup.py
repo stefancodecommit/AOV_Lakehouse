@@ -101,6 +101,8 @@ def create(backup_dir: Path | None = None, keep: int | None = None,
     Returns the new archive's path. On the lakehouse's own disk: a warning, or with
     `require_other_disk` an error before anything is written."""
     backup_dir, keep = backup_dir or BACKUP_DIR, KEEP if keep is None else keep
+    if keep < 1:      # 0 would remove the archive just made, together with the old ones
+        raise ValueError(f"backup.keep must be at least 1 (is {keep}); nothing written")
     strict = REQUIRE_OTHER_DISK if require_other_disk is None else require_other_disk
     if same_disk(backup_dir, LAKEHOUSE):
         if strict:
