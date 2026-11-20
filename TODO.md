@@ -5,7 +5,7 @@ Open work, in the order of `docs/PROJECT.md`. Each phase builds on the one befor
 Rule for every phase: run each new layer on real data and check it before building the
 next layer on top of it.
 
-## Where to continue (status 2026-11-13)
+## Where to continue (status 2026-11-20)
 
 Built and run on real data: bronze (CBS, KVK, SBI crosswalk) with checks and quarantine
 (CBS bronze with a column per field next to `raw_json`),
@@ -34,10 +34,16 @@ per phase, Azure design, GDPR and risks, GenAI section, report and presentation
 Python 3.12 (2026-10-17 to 10-26); the review follow-up with the backtest, KVK's own file
 date (2026-10-26); the author's reflection (2026-11-05); the demo launcher, the linter
 (2026-11-09); the move to Ubuntu 26.04, locally and in CI (2026-11-11); a code review
-with simplifications (2026-11-11 to 11-13, section "Code review").
+with simplifications (2026-11-11 to 11-13, section "Code review"); a second review
+(2026-11-20, same section): small KVK groups can no longer be worked out by subtraction,
+and silver KVK takes the newest file date instead of the last file loaded (398 tests).
 
 Still open: nothing for the assignment except the author's part below. The code review
-is finished (section "Code review", 2026-11-11 to 11-13; ERD added 2026-11-19).
+is finished (section "Code review", 2026-11-11 to 11-13; ERD added 2026-11-19). The second
+review (2026-11-20) left nine nice-to-have items (three of them nits), listed in that section under
+"Nice to have"; none is needed for the assignment. Because of that review, before
+submitting: slide 9 must say 398 tests, and the Word report must be exported again
+(`rapport.md` changed: test count and lineage columns).
 
 Optional work removed from this list on 2026-11-19 (the author's decision: not needed
 for the assignment): a backup on another disk, pandas 3, checking for a new SBI
@@ -200,12 +206,46 @@ copy of the real lakehouse first (the other six gold tables identical), then on 
       gold and the freshness check. Now all three order by KVK's file date (else the
       upload day) through one helper, `kvk_agent.by_snapshot_date`; verifying a file
       older than the newest snapshot gives a warning (it is still kept as history)
-- Not fixed (smaller; the author can pick them up): a quarantined CBS batch shows as a
-  green "skipped" run in Dagster; CBS revisions are only fetched when a period's status
-  changes (checked: 2026 Q1 was not revised in the 17 Nov release); the Profile page's
-  39 comparisons per group are not corrected for multiple testing; `config.local.yaml`
-  is not in `.dockerignore`; Docker base images use moving tags; the 'final' risk index
-  uses provisional business counts
+
+**Nice to have** (found in the second review, 2026-11-20; not fixed, not needed for the
+assignment; most valuable first):
+- [ ] **A quarantined CBS batch looks like "nothing new" in Dagster.**
+      `orchestration/definitions.py` (`cbs_bronze_asset`) ignores `summary["quarantined"]`:
+      when every new period fails its checks, the run is green and logs "No new CBS
+      data". The failure is only in the log and in `lakehouse/quarantine/`. Fix: raise
+      `dg.Failure` (or materialize with a failing check) when `quarantined > 0`
+- [ ] **CBS revisions are only fetched when a period's status changes.** The request key
+      is period + status (`pipeline/bronze/cbs.py`, `plan_requests`). If CBS revises a
+      provisional quarter and it stays "Voorlopig", or corrects a final one, bronze never
+      fetches it again. Checked 2026-11-20: 2026 Q1 of 80072NED was not revised in the
+      17 November release, so nothing is stale now. Fix: re-fetch the provisional periods
+      when `TableInfos.Modified` changed (bronze already stores it), or document the
+      assumption
+- [ ] **Profile page: 39 comparisons per group, no correction for multiple testing.**
+      Per sector or size class and year, 39 survey measures are compared with the
+      national value; at 95% about 2 look different by chance alone (the real data
+      flags a median of 11, so most are real). "N measures differ beyond the margin of
+      error" overstates the certainty. Fix: a sentence on the page (`dashboard/views/
+      profile.py`), or a stricter level (e.g. Bonferroni)
+- [ ] **`config.local.yaml` is not in `.dockerignore`** (it is in `.gitignore`). `COPY . .`
+      would bake a developer's local overrides (e.g. a USB `backup.path`) into the
+      image, where they apply silently in the containers. Fix: one line in `.dockerignore`
+- [ ] **Docker images with moving tags.** `ollama/ollama:latest`, `postgres:16-alpine` and
+      `python:3.12-slim` change under the same name, while the Python packages and Trivy
+      are pinned exactly. Fix: pin a version (or a digest) like the rest
+- [ ] **The 'final' risk index uses provisional business counts.** Its basis ends at the
+      latest final quarter (2025 Q4), but `_business_counts` (`pipeline/gold/build.py`)
+      takes the newest 81589NED quarter (2026 Q4, Voorlopig). The explanation names the
+      quarter, so it is transparent, but inconsistent. Fix: take the latest final quarter
+      for basis 'final'
+- [ ] Nit: `dashboard/views/overview.py` checks `change_vs_last_year_pp is None`, but the
+      column holds NaN, never None; a missing value would show as "+nan pp". Fix:
+      `pd.isna(...)`
+- [ ] Nit: `backup.keep: 0` would delete the backup that was just made
+      (`tools/backup.py`, `backups()[keep:]` includes it). Fix: refuse `keep < 1`
+- [ ] Nit: `write_bronze` (`pipeline/bronze/cbs.py`) deletes a period's old rows and
+      appends the new ones in two commits; a reader in between sees the period missing.
+      Low risk: Dagster runs silver after bronze, never at the same time
 
 **Before submitting** (the numbers that live in the submitted documents):
 - [ ] `pytest` passes; that includes `tests/test_doc_numbers.py`, which checks the test
@@ -213,7 +253,7 @@ copy of the real lakehouse first (the other six gold tables identical), then on 
       report's number of lineage columns
 - [ ] The slides (docs/presentatie.pptx), slide 9: the number and the speaker notes state
       the test count that pytest reports (not checked automatically; the notes still said
-      404 on 2026-11-13)
+      404 on 2026-11-13; since 2026-11-20 pytest reports 398)
 - [ ] If the data or the code changed since: the measured results quoted in the report and
       the Q&A (silver KVK's memory, 1.9M companies, 90% with a sector, 440 backtest cases)
       still match docs/requirements.md (NFR-7) and gold's README ("Backtest")
