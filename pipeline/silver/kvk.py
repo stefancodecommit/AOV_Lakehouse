@@ -47,8 +47,8 @@ the open dataset has no company number, so snapshots can't be linked company by
 company, and gold uses the newest one only. (Until 2026-11 silver kept every bronze
 snapshot and updated them one by one; nothing used that history, so it was simplified.)
 
-Each run rebuilds kvk_company from the newest successful batch in bronze/kvk/_batch_log
-and publishes it like silver CBS (pipeline/common/publish.py): staged first, then
+Each run rebuilds kvk_company from the successful batch in bronze/kvk/_batch_log with
+the newest snapshot date (KVK's file date; not the last one loaded) and publishes it like silver CBS (pipeline/common/publish.py): staged first, then
 replaced in one commit, with a run_id and a row in lakehouse/_run_log. Memory: one
 snapshot, however many uploads bronze keeps.
 
@@ -268,13 +268,17 @@ TABLE = "kvk_company"
 
 
 def newest_batch(versions: dict | None = None) -> str | None:
-    """The newest successful KVK batch in bronze (by load time), or None."""
+    """The successful KVK batch with the newest snapshot (KVK's file date, else the upload
+    day; pipeline/bronze/kvk_agent.by_snapshot_date), or None. Not the last one loaded:
+    an older file loaded later must not replace a newer snapshot."""
     from deltalake import DeltaTable
+
+    from pipeline.bronze.kvk_agent import by_snapshot_date
     batch_log = KVK_BRONZE / "_batch_log"
     if not (batch_log / "_delta_log").exists():
         return None
-    log_df = DeltaTable(str(batch_log)).to_pandas(columns=["batch_id", "ingested_at", "status"])
-    ok = log_df[log_df["status"] == "success"].sort_values("ingested_at")
+    log_df = DeltaTable(str(batch_log)).to_pandas()
+    ok = by_snapshot_date(log_df[log_df["status"] == "success"])
     newest = ok["batch_id"].iloc[-1] if not ok.empty else None
     if versions is not None and newest is not None:
         versions["bronze/kvk/_batch_log#batch_id"] = newest

@@ -145,9 +145,38 @@ def test_kvk_context(silver_tables):
     assert df.loc[("all", "A"), "active_companies"] == 11
     assert df.loc[("all", "A"), "median_age_years"] == 10.0
     assert not df.loc[("all", "A"), "is_small_group"]
-    assert df.loc[("all", "unknown"), "active_companies"] == 1      # inactive rows excluded
-    assert df.loc[("all", "unknown"), "is_small_group"]
+    assert df.loc[("all", "unknown"), "is_small_group"]             # 1 company (inactive excluded)
+    assert pd.isna(df.loc[("all", "unknown"), "active_companies"])   # small: no numbers in gold
+    assert df.loc[("all", "unknown"), "is_suppressed"]
     assert df.loc[("all", "A"), "sector_name"] == "Landbouw, bosbouw en visserij"
+
+
+def test_kvk_context_hides_what_subtraction_would_reveal(silver_tables):
+    # section A: 20 BV + 5 NV. Hiding only NV would leave all (25) - BV (20) = NV (5),
+    # so BV is hidden too. Section C: 30 BV + 12 NV, nothing small, nothing hidden.
+    # Section B: 15 BV, of which 3 with a start date: count shown, median age not.
+    rows = [("A", "BV")] * 20 + [("A", "NV")] * 5 + [("C", "BV")] * 30 + [("C", "NV")] * 12 \
+        + [("B", "BV")] * 15
+    kvk = pd.DataFrame({
+        "is_active": True, "snapshot_date": pd.Timestamp("2026-10-01").date(), "batch_id": "b",
+        "start_date": [pd.Timestamp("2016-10-01").date()] * 70 + [None] * 12,
+        "legal_form": [f for _, f in rows], "sbi2008_section": [s for s, _ in rows]})
+    df = g.build_kvk_context({**silver_tables, "kvk_company": kvk}).set_index(
+        ["legal_form", "sbi2008_section"])
+    assert df.loc[("NV", "A"), "is_small_group"] and df.loc[("NV", "A"), "is_suppressed"]
+    assert not df.loc[("BV", "A"), "is_small_group"] and df.loc[("BV", "A"), "is_suppressed"]
+    assert pd.isna(df.loc[("BV", "A"), "active_companies"])
+    assert df.loc[("all", "A"), "active_companies"] == 25                # the total stays
+    assert not df.loc[("all", "A"), "is_suppressed"]
+    assert not df.xs("C", level="sbi2008_section")["is_suppressed"].any()
+    assert df.loc[("all", "B"), "active_companies"] == 15
+    assert df.loc[("all", "B"), "companies_with_age"] == 3
+    assert pd.isna(df.loc[("all", "B"), "median_age_years"])             # median of 3 ages
+    # whatever is shown, no hidden count can be worked out as 'all' minus the rest
+    for _, part in df.reset_index().groupby("sbi2008_section"):
+        forms = part[part["legal_form"] != "all"]
+        assert forms["is_suppressed"].sum() != 1 or part.loc[
+            part["legal_form"] == "all", "is_suppressed"].all()
 
 
 def test_kvk_context_empty_without_silver_kvk(silver_tables):

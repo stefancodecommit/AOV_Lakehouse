@@ -120,8 +120,9 @@ def test_quarantined_period_is_cleaned_up_after_cbs_fixes_it(monkeypatch):
 
 
 # =========================================================================== KVK retention
-def kvk_batches(days):
-    """KVK bronze with one tiny batch per ingest day, all logged as success."""
+def kvk_batches(days, file_dates=None):
+    """KVK bronze with one tiny batch per ingest day, all logged as success; `file_dates`
+    (optional): KVK's export date per batch."""
     import pyarrow as pa
     from deltalake import write_deltalake
     for i, day in enumerate(days):
@@ -131,7 +132,9 @@ def kvk_batches(days):
             "_ingested_at": pa.array([ts] * 2, pa.timestamp("us", tz="UTC"))}), mode="append")
         write_deltalake(str(m.KVK_ROOT / "_batch_log"), pa.table({
             "batch_id": [f"b{i}"], "status": ["success"], "file_sha256": [f"sha{i}"],
-            "ingested_at": pa.array([ts], pa.timestamp("us", tz="UTC"))}), mode="append")
+            "ingested_at": pa.array([ts], pa.timestamp("us", tz="UTC")),
+            "file_date": pa.array([file_dates[i] if file_dates else None], pa.date32())}),
+            mode="append", schema_mode="merge")
 
 
 def test_kvk_retention_keeps_newest_and_first_of_each_month():
@@ -151,6 +154,16 @@ def test_kvk_retention_keeps_newest_and_first_of_each_month():
 def test_kvk_retention_keeps_the_newest_even_when_it_is_not_first_in_its_month():
     kvk_batches(["2026-10-01", "2026-10-20"])
     assert m.kvk_retention(dry_run=True) == []
+
+
+def test_kvk_retention_goes_by_file_date_like_silver():
+    from datetime import date
+    # load order: Nov 12, Oct 1, Nov 19, Nov 5 (file dates). By file date the newest is
+    # Nov 19 (b2), although Nov 5 (b3) was loaded last; the first of each month is Oct 1
+    # (b1) and Nov 5 (b3). So only Nov 12 (b0) is retired.
+    kvk_batches(["2026-11-13", "2026-11-20", "2026-11-21", "2026-11-22"],
+                [date(2026, 11, 12), date(2026, 10, 1), date(2026, 11, 19), date(2026, 11, 5)])
+    assert m.kvk_retention(dry_run=True) == ["b0"]
 
 
 def test_kvk_retention_without_kvk_data():

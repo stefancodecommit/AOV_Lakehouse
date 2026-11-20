@@ -13,7 +13,8 @@ Removes quarantine entries that are no longer needed:
 KVK retention
 -------------
 Each KVK upload is a full snapshot (~22 MB). Kept: the newest snapshot, plus the first
-snapshot of every calendar month (so trends over time stay possible). The rows of other
+snapshot of every calendar month (so trends over time stay possible). "Newest" and the
+month go by KVK's file date (else the upload day), as in silver, not by load order. The rows of other
 batches are deleted from bronze; their batch-log entry stays, marked "retired", so the
 history of what was loaded remains. Silver is not affected: it holds only the newest
 upload, which is always kept. Bronze keeps the history because KVK serves only its
@@ -115,10 +116,14 @@ def kvk_retention(dry_run: bool = False, path: Path | None = None) -> list[str]:
     data, batch_log = root / "basis_bedrijfsgegevens", root / "_batch_log"
     if not (batch_log / "_delta_log").exists():
         return []
-    batches = _read_log(batch_log).sort_values("ingested_at")
+    from pipeline.bronze.kvk_agent import by_snapshot_date
+    batches = _read_log(batch_log)
     if batches.empty:
         return []
-    month = batches["ingested_at"].dt.strftime("%Y-%m")
+    # by snapshot date, like silver (pipeline/silver/kvk.py): the newest kept here is
+    # always the one silver uses, also when an older file was loaded later
+    batches = by_snapshot_date(batches)
+    month = batches["snapshot_day"].dt.strftime("%Y-%m")
     keep = set(batches.groupby(month)["batch_id"].first()) | {batches["batch_id"].iloc[-1]}
     retire = [b for b in batches["batch_id"] if b not in keep]
     if retire and not dry_run:

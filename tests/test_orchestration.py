@@ -272,3 +272,10 @@ def test_kvk_freshness_uses_the_file_date_when_known():
         "batch_id": ["b1"], "ingested_at": ts, "status": ["success"],
         "file_date": pa.array([date(2026, 10, 1)], pa.date32())}))
     assert d.latest_kvk_snapshot() == date(2026, 10, 1)     # the data's age, not the upload's
+    # an older file loaded later doesn't make the data look older
+    write_deltalake(str(kvk_agent.LOG_TABLE), pa.table({
+        "batch_id": ["b0"], "status": ["success"],
+        "ingested_at": pa.array([__import__("pandas").Timestamp("2026-10-20", tz="UTC")],
+                                pa.timestamp("us", tz="UTC")),
+        "file_date": pa.array([date(2026, 9, 1)], pa.date32())}), mode="append")
+    assert d.latest_kvk_snapshot() == date(2026, 10, 1)

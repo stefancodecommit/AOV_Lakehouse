@@ -296,7 +296,8 @@ Built around the main question (column details in the `pipeline/gold/build.py` d
 - **`gold_business_context`** (quarterly, 81589NED): number of businesses per sector and
   size band. Answers question 6.
 - **`gold_kvk_context`** (latest KVK snapshot): active companies and median company age
-  per SBI 2008 section and legal form; groups under 10 companies flagged. Answers
+  per SBI 2008 section and legal form; groups under 10 companies (and groups that would
+  reveal them by subtraction) have empty numbers. Answers
   question 6.
 - **`gold_risk_index`** (built 2026-10-15, for the insurer's data analyst): per sector
   (every SBI level) and size class, the **relative risk** = 4-quarter average absence ÷ the
@@ -447,7 +448,8 @@ then runs locally, in Docker, or on another machine with only the configuration 
 - **No re-identification:** KVK's terms forbid using the data to trace individual
   companies or people. Postcode region, start date and a detailed SBI code together can
   narrow down to a single company, so gold only contains aggregates, and groups with fewer
-  than 10 companies are hidden.
+  than 10 companies have no numbers in gold; nor have groups that would give one away by
+  subtraction (secondary suppression).
 - **No secrets needed:** all sources are open data without API keys.
 
 ## Orchestration — Dagster (`orchestration/`, built)

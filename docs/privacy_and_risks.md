@@ -31,7 +31,7 @@ by the monthly maintenance), and the git history
   shows the author's name and email (by the author's choice).
 - **The main privacy risk is re-identification of companies,** not people: 851,804 of the
   1.92 million KVK companies are unique on postcode region, SBI code and start date. The
-  dashboard only shows aggregates with groups under 10 hidden; the row-level tables must
+  dashboard only shows aggregates, and gold has no numbers for groups under 10 (nor for groups that would reveal them by subtraction); the row-level tables must
   stay restricted to the data team.
 - **The main future risk is linking these figures to claims data.** That would be health
   data (GDPR art. 9) and requires a DPIA before anything is built.
@@ -50,7 +50,7 @@ lakehouse on 2026-10-17.
 | CBS absence and business statistics | bronze, silver, gold (`80072ned_*`, `86009ned_*`, `81589ned_*`, …) | aggregated figures per sector, size class, region and period | **No:** aggregates published by CBS, which applies its own disclosure control | public |
 | SBI crosswalk | `bronze/reference/`, `silver/map_sbi2008_sbi2025` | code-to-code mapping | No | public |
 | KVK companies | `bronze/kvk/`, `silver/kvk_company` | per company: start date, active, insolvency code, legal form (BV 1,916,604; NV 5,307), 2-digit postcode region, SBI codes. No names, addresses or KVK numbers | **Not in itself:** data about legal entities. **But** a one-person BV is closely tied to its director, and 851,804 companies are unique on (postcode region, SBI code, start date), so linking with other sources could identify a company and through it a person | public source, but treat the row-level tables as **internal** |
-| KVK aggregates | `gold/gold_kvk_context` | counts and median age per section and legal form; groups under 10 flagged (10 of 64) and hidden by default | No | public |
+| KVK aggregates | `gold/gold_kvk_context` | counts and median age per section and legal form; groups under 10 (10 of 64) and the groups that would reveal them by subtraction (6 more) have empty numbers (2026-11-20) | No | public |
 | KVK upload log | `bronze/kvk/_batch_log` | per upload: file, hash, row count, verification report, **`confirmed_by`** (the operating-system user, e.g. `stefan`), replaced by `removed` after 365 days; the report holds the file name only (until 2026-10-17 the full path, with the home folder; shortened by the maintenance) | **Yes, minimal:** identifies the employee who confirmed a load | internal |
 | Run log | `lakehouse/_run_log` | per run: pipeline, times, status, input versions, code version | No | internal |
 | Quarantine | `lakehouse/quarantine/` | failed batches with a report | No (same data as above) | internal |
@@ -96,7 +96,7 @@ them, nothing is sent. The optional LLM (Ollama) runs on the machine itself.
 
 | Rule | Applies how | Status |
 |---|---|---|
-| **KVK open data terms** | Using the data to trace individual companies or people is not allowed | Gold aggregates only, small groups hidden; row-level tables internal |
+| **KVK open data terms** | Using the data to trace individual companies or people is not allowed | Gold aggregates only, small groups (and groups that would reveal them) without numbers; row-level tables internal |
 | **CC BY 4.0** (CBS, KVK) | Credit the source | On every dashboard page (tested) |
 | **EU AI Act** | The risk index is fixed arithmetic set by people, with no learning or inference, so it is unlikely to count as an *AI system*. The KVK intake agent does use an LLM, but only to guide a person, who confirms every load. Note: AI used for risk assessment and pricing of **natural persons** in life and health insurance is a high-risk use (Annex III). If the insurer ever adds machine learning that scores individuals, that assessment changes | To be confirmed by compliance; no high-risk use now |
 | **Equal treatment in insurance** | Pricing may not use gender (EU case law, *Test-Achats*). Sector is allowed, but sectors differ strongly in their workforce (e.g. healthcare employs mostly women), so pricing by sector could indirectly disadvantage a protected group | **For compliance to assess** before the risk index feeds into premiums |
@@ -122,7 +122,7 @@ already in place.
 
 | ID | Risk | Likelihood | Impact | Measures in place | Residual | Next step |
 |---|---|---|---|---|---|---|
-| R7 | A company (and through it, its director) is re-identified from row-level KVK data | low | medium | dashboard shows aggregates only; groups under 10 hidden; only columns needed are kept in silver | low | keep `silver/kvk_company` and bronze KVK restricted to the data team (cloud design: roles) |
+| R7 | A company (and through it, its director) is re-identified from row-level KVK data | low | medium | dashboard shows aggregates only; groups under 10, and groups that would reveal them by subtraction, have no numbers in gold; only columns needed are kept in silver | low | keep `silver/kvk_company` and bronze KVK restricted to the data team (cloud design: roles) |
 | R8 | The figures are linked to claims or health data without a legal basis | low now | high | out of scope; stated as a condition for use (OR-5) | low | DPIA and the privacy officer's approval before any such link |
 | R9 | Pricing by sector indirectly disadvantages a protected group | medium (if used in pricing) | high | figures are a benchmark, decisions are human | medium | compliance review before use in premiums |
 | R10 | Personal data in logs (username in the KVK upload log, paths in reports, Dagster history) kept indefinitely | high (it is there) | low | minimal data; internal only; **retention** (2026-10-17): the monthly maintenance removes `confirmed_by` after 365 days, stores file names instead of full paths, deletes Dagster runs older than 180 days (with their logs) and the daemon purges ticks after 90 days; quarantine reports go after 90 days | low | mention `confirmed_by` in the internal privacy notice |

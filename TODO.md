@@ -182,6 +182,31 @@ Still open (not done yet; in order of value):
       they do no harm, but hold stale data that looks current). Test in
       `tests/test_delta.py`; INSTRUCTIONS §7 explains it
 
+Second review (2026-11-20, with Claude, at the author's request: *"be critical"*, after
+the review above was applied). Two findings fixed, at the author's choice; checked on a
+copy of the real lakehouse first (the other six gold tables identical), then on the real one:
+- [x] **Small KVK groups could be worked out by subtraction** (privacy, R7 / NFR-11).
+      `gold_kvk_context` has BV, NV and 'all' per section; with 'all' and BV shown, a
+      hidden NV is all − BV (6 of the 8 hidden cells on the real data, e.g. B: 778 − 773
+      = 5). And the page's table view showed every row whatever the toggle said. Now gold
+      itself has no numbers for small groups, and hides the smallest other legal form
+      when exactly one is small ("secondary suppression"); new column `is_suppressed`
+      (16 of 64 rows: 10 small, 6 to protect them). A median age of fewer than 10
+      companies is empty too. The toggle is gone: there is nothing left to show
+- [x] **Silver KVK took the last file loaded, not the newest** (`newest_batch`; also the
+      freshness check and KVK retention). KVK always serves the same file name, so a
+      second download becomes "... (1).zip"; `--inbox` loads the newest first, and the
+      next run then loads the older one, which silently became "the newest" in silver,
+      gold and the freshness check. Now all three order by KVK's file date (else the
+      upload day) through one helper, `kvk_agent.by_snapshot_date`; verifying a file
+      older than the newest snapshot gives a warning (it is still kept as history)
+- Not fixed (smaller; the author can pick them up): a quarantined CBS batch shows as a
+  green "skipped" run in Dagster; CBS revisions are only fetched when a period's status
+  changes (checked: 2026 Q1 was not revised in the 17 Nov release); the Profile page's
+  39 comparisons per group are not corrected for multiple testing; `config.local.yaml`
+  is not in `.dockerignore`; Docker base images use moving tags; the 'final' risk index
+  uses provisional business counts
+
 **Before submitting** (the numbers that live in the submitted documents):
 - [ ] `pytest` passes; that includes `tests/test_doc_numbers.py`, which checks the test
       count in the report, Q&A, GenAI section, requirements and tests/README.md, and the

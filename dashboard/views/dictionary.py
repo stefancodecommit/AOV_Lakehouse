@@ -39,7 +39,9 @@ COMMON = {
     "run_id": "The gold run that built the row (see lakehouse/_run_log)",
     "yoy_mixes_status": "The year-on-year comparison combines provisional and final figures",
     "rolling_4q_has_provisional": "The 4-quarter average includes a provisional quarter",
-    "is_small_group": "Fewer than 10 companies (KVK rule): hidden by default",
+    "is_small_group": "Fewer than 10 companies (KVK rule): its numbers are empty",
+    "is_suppressed": "Numbers empty: a small group, or one that would reveal a small group "
+                     "by subtraction (e.g. NV = all - BV)",
 }
 
 st.title("Data dictionary")

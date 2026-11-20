@@ -127,6 +127,32 @@ def inbox_files() -> list[dict]:
     return out
 
 
+def by_snapshot_date(batches):
+    """Batch-log rows sorted oldest snapshot first, with a `snapshot_day` column: KVK's file
+    date where known, else the upload day. The newest snapshot is the last row.
+
+    Not by load time: an older file found later in the inbox (KVK always uses the same
+    file name, so a second download becomes '... (1).zip') would otherwise become
+    "the newest" and silver, gold and the freshness check would go back in time. Ties
+    (the same file date) go to the later load."""
+    import pandas as pd
+    df = batches.copy()
+    loaded = pd.to_datetime(df["ingested_at"], utc=True).dt.date
+    file_day = df["file_date"] if "file_date" in df else pd.Series(None, index=df.index)
+    df["snapshot_day"] = file_day.where(file_day.notna(), loaded).map(pd.Timestamp)
+    return df.sort_values(["snapshot_day", "ingested_at"]).reset_index(drop=True)
+
+
+def newest_snapshot_date() -> date | None:
+    """KVK file date (or upload day) of the newest snapshot in bronze, or None."""
+    if not (LOG_TABLE / "_delta_log").exists():
+        return None
+    from deltalake import DeltaTable
+    log = DeltaTable(str(LOG_TABLE)).to_pandas()
+    log = log[log["status"] == "success"]
+    return None if log.empty else by_snapshot_date(log)["snapshot_day"].iloc[-1].date()
+
+
 def ingested_hashes() -> dict[str, str]:
     """file_sha256 -> batch_id of every successful batch."""
     if not (LOG_TABLE / "_delta_log").exists():
@@ -193,6 +219,12 @@ def verify_dataset(file_path: str) -> str:
     path = _resolve(file_path)
     check = check_file(path, REQUIRED_COLUMNS, OPTIONAL_COLUMNS, MAX_MALFORMED_SHARE,
                        ingested=ingested_hashes())
+    newest = newest_snapshot_date() if check.passed else None
+    if newest and check.file_date and check.file_date < newest:
+        # allowed (bronze keeps history), but it won't change silver: say so
+        check.warnings.append(f"this file ({check.file_date}) is older than the newest "
+                              f"snapshot in bronze ({newest}): it is kept as history, but "
+                              "silver and the dashboard keep using the newest one")
     report = check.report()
     if not check.passed and path.is_file() and "already_ingested" not in check.details:
         # a rejected file is kept with its report; a file that is already in bronze isn't

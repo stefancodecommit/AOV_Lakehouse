@@ -59,7 +59,6 @@ import sys
 from pathlib import Path
 
 import dagster as dg
-import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))   # the project's modules
 
@@ -276,15 +275,10 @@ def bronze_cbs_state() -> tuple[dict[str, str], set[str]]:
 
 
 def latest_kvk_snapshot():
-    """Date of the newest successful KVK batch, or None: KVK's own file date where the
-    batch log has it (how old the data is), otherwise the day it was loaded."""
-    log = maintenance._read_log(kvk_bronze_agent.LOG_TABLE)
-    if log.empty:
-        return None
-    newest = log.sort_values("ingested_at").iloc[-1]
-    file_date = newest.get("file_date")
-    return file_date if file_date is not None and not pd.isna(file_date) \
-        else newest["ingested_at"].date()
+    """Date of the newest KVK snapshot, or None: KVK's own file date where the batch log
+    has it (how old the data is), otherwise the day it was loaded. The newest by that
+    date, not the last one loaded (kvk_agent.by_snapshot_date)."""
+    return kvk_bronze_agent.newest_snapshot_date()
 
 
 # =========================================================================== maintenance

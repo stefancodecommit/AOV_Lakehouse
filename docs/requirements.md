@@ -143,7 +143,7 @@ How well the system must work, per quality attribute.
 | ID | Requirement | Prio | Status | How | Verified by |
 |---|---|---|---|---|---|
 | NFR-10 | No personal data is stored or shown: only public, aggregated statistics and the KVK dataset of legal entities | Must | ✅ | source choice; KVK open data has no sole traders | source documentation; [PROJECT.md](PROJECT.md#scope-and-boundaries) |
-| NFR-11 | No re-identification: KVK groups under 10 companies are hidden by default | Must | ✅ | `is_small_group` in `gold_kvk_context` | `test_kvk_context` |
+| NFR-11 | No re-identification: KVK groups under 10 companies have no numbers, nor groups that would reveal them by subtraction | Must | ✅ | `is_small_group`, `is_suppressed` in `gold_kvk_context` | `test_kvk_context`, `test_kvk_context_hides_what_subtraction_would_reveal` |
 | NFR-12 | No secrets in the code or the repository | Must | ✅ | open data needs no API keys; `.env` is not in git | git history checked before publishing (2026-10-15) |
 | NFR-13 | Services are reachable from this machine only | Must | ✅ | Docker: ports published on 127.0.0.1 only. Locally: `.streamlit/config.toml` makes the dashboard listen on 127.0.0.1 (Streamlit's default is every network interface); the lakehouse viewer and Dagster listen on 127.0.0.1 too | `test_dashboard_is_reachable_from_this_machine_only`; checked 2026-10-17: before the fix the dashboard answered on the network address, after it the connection is refused |
 | NFR-14 | Containers run without root rights | Should | ✅ | `user: HOST_UID:HOST_GID` | `docker-compose.yml` |
@@ -162,7 +162,7 @@ How well the system must work, per quality attribute.
 | ID | Requirement | Prio | Status | How | Verified by |
 |---|---|---|---|---|---|
 | NFR-19 | All settings in one file; a typo is an error, not a silent default | Must | ✅ | `config.yaml`, `pipeline/common/config.py` | `test_typos_are_errors` |
-| NFR-20 | Automated tests on every change | Must | ✅ | 394 tests; GitHub Actions on every push (Python 3.12 and the Docker image) | GitHub Actions runs |
+| NFR-20 | Automated tests on every change | Must | ✅ | 398 tests; GitHub Actions on every push (Python 3.12 and the Docker image) | GitHub Actions runs |
 | NFR-21 | The same package versions everywhere (locally, CI, Docker) | Must | ✅ | exact versions in `requirements.txt` and `constraints.txt` | CI install; found and fixed a pandas 3 mismatch (2026-10-08) |
 | NFR-22 | Runs the same on any machine with one command | Should | ✅ | Docker Compose | `docker compose config`; image built in CI |
 | NFR-23 | Documentation a reviewer can follow: what, why and how to run, per phase | Must | ✅ | README, INSTRUCTIONS, PROJECT, bronze_to_silver, lineage, and a README per phase (course slide 22) with a proof of working | README → *The six phases* |

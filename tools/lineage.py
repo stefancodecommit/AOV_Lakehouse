@@ -494,9 +494,15 @@ GOLD_LINEAGE: dict[str, dict[str, Column]] = {
         "companies_with_age": Column(sv("kvk_company", "start_date"),
                                      "how many of them have a valid start date"),
         "median_age_years": Column(sv("kvk_company", "start_date", "snapshot_date"),
-                                   "median of (snapshot date - start date), in years"),
+                                   "median of (snapshot date - start date), in years; "
+                                   "empty for fewer than 10 ages"),
         "is_small_group": Column(sv("kvk_company", "is_active"),
-                                 "true under 10 companies (KVK re-identification rule)"),
+                                 "true under 10 companies (KVK re-identification rule); "
+                                 "the numbers are then empty"),
+        "is_suppressed": Column(sv("kvk_company", "is_active"),
+                                "true when the numbers are empty: a small group, or the "
+                                "smallest other legal form of its section when exactly one "
+                                "is small (else 'all' minus the rest would reveal it)"),
         "run_id": GOLD_RUN_ID,
     },
     "gold_risk_index": {

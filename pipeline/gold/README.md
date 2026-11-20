@@ -18,7 +18,7 @@ insurer's data analyst.
 | `gold_absence_by_size` | Absence per size class, quarterly (80072NED) and from the yearly survey (86009NED), side by side |
 | `gold_absence_profile` | What lies behind absence: frequency, duration, work-related causes, with 95% intervals and whether a value differs from national |
 | `gold_business_context` | Businesses per sector and size band |
-| `gold_kvk_context` | Active companies and median company age per sector (latest KVK snapshot); groups under 10 hidden |
+| `gold_kvk_context` | Active companies and median company age per sector (latest KVK snapshot); groups under 10, and groups that would reveal them by subtraction, have no numbers |
 
 Every row says whether its period is provisional and when the data behind it was loaded
 (`data_as_of`). Gold publishes like silver: all tables or none, each with its `run_id`,

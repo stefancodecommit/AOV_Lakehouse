@@ -197,6 +197,14 @@ def test_a_start_date_after_the_file_date_makes_it_doubtful(tmp_path):
     assert any("start dates after the file date" in w for w in report["warnings"])
 
 
+def test_a_file_older_than_the_newest_snapshot_gets_a_warning():
+    dated_zip(k.INBOX / "nov.zip", when=(2026, 11, 12, 0, 0, 0))
+    assert k.ingest_confirmed_file("nov.zip", "nov.zip", confirmed_by="t")["status"] == "INGESTED"
+    report = json.loads(k.verify_dataset(str(dated_zip(k.INBOX / "oct.zip", rows=REAL_ROWS[:2]))))
+    assert report["status"] == "PASSED"                    # bronze keeps it as history
+    assert any("older than the newest snapshot" in w for w in report["warnings"])
+
+
 def test_the_batch_log_records_the_file_date():
     from deltalake import DeltaTable
     dated_zip(k.INBOX / "kvk.zip")

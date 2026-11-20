@@ -22,7 +22,8 @@ gold_business_context    quarterly, 81589NED: number of businesses per sector an
                          so the bands can differ from the total by a few businesses (up to
                          15 in the data); a band is null when one of its classes is missing
 gold_kvk_context         latest KVK snapshot: active companies per SBI 2008 section and
-                         legal form, median company age; groups under 10 companies flagged
+                         legal form, median company age; groups under 10 companies, and
+                         groups that would reveal them by subtraction, have empty numbers
 gold_risk_index          for the insurer's data analyst: per sector and size class, the
                          relative absence risk (4-quarter average ÷ national), a band
                          (lowest–highest quarter of the last 8), an assessment (higher /
@@ -355,13 +356,44 @@ def build_business_context(t: dict) -> pd.DataFrame:
     return df[cols].sort_values(["period_key", "sector_key", "size_band"]).reset_index(drop=True)
 
 
+SUPPRESSED_COLUMNS = ["active_companies", "companies_with_age", "median_age_years"]
+
+
+def suppress_small_groups(df: pd.DataFrame) -> pd.DataFrame:
+    """Empty the numbers of small groups, and of the groups that would reveal them.
+
+    Hiding only the small groups is not enough: per section, 'all' is the sum of the
+    legal forms, so with 'all' and BV shown, a hidden NV is 'all' - BV (found 2026-11-20
+    in 6 of the 8 hidden cells). So when exactly one legal form of a section is hidden
+    and 'all' is shown, the smallest other legal form is hidden too ("secondary
+    suppression", as statistical offices do). When 'all' itself is under 10, every legal
+    form in it is too, so nothing can be worked out. is_suppressed says which rows have
+    empty numbers; is_small_group says which of them are small themselves."""
+    df = df.copy()
+    hide = df["is_small_group"].astype(bool).copy()
+    for _, g in df.groupby("section"):
+        parts = g[g["legal_form"] != "all"]
+        if hide[g.index[g["legal_form"] == "all"]].any() or hide[parts.index].sum() != 1:
+            continue
+        shown = parts[~hide[parts.index]]
+        if not shown.empty:
+            hide[shown["active_companies"].idxmin()] = True
+    df["is_suppressed"] = hide
+    for c in ("active_companies", "companies_with_age"):
+        df[c] = df[c].astype("Int64")
+    df.loc[hide, SUPPRESSED_COLUMNS] = pd.NA
+    return df
+
+
 def build_kvk_context(t: dict) -> pd.DataFrame:
     """gold_kvk_context: from the KVK snapshot in silver (the newest upload), active companies per SBI 2008
     section and legal form ('all' = BV and NV together), with median company age.
 
     Companies whose section couldn't be determined are kept as section 'unknown', so the
     totals still add up. is_small_group marks groups under 10 companies (the KVK
-    re-identification rule); the dashboard hides them by default."""
+    re-identification rule); their numbers are left empty here, in gold, and so are those
+    of the groups that would give them away (suppress_small_groups). A median age of
+    fewer than 10 companies is left empty as well."""
     k = t.get("kvk_company", pd.DataFrame())
     if k.empty:
         return pd.DataFrame()
@@ -384,11 +416,15 @@ def build_kvk_context(t: dict) -> pd.DataFrame:
     df = df.merge(names, left_on="section", right_on="sbi_code", how="left").drop(columns="sbi_code")
     df.loc[df["section"] == "unknown", "sector_name"] = "Sector not determined (see sbi_mapping)"
     df["median_age_years"] = df["median_age_years"].round(1)
+    # a median of fewer than 10 ages is (nearly) one company's age
+    df.loc[df["companies_with_age"] < SMALL_GROUP, "median_age_years"] = np.nan
     df["is_small_group"] = df["active_companies"] < SMALL_GROUP
+    df = suppress_small_groups(df)
     df["snapshot_date"] = k["snapshot_date"].iloc[0]
     df["batch_id"] = k["batch_id"].iloc[0]
     cols = ["snapshot_date", "batch_id", "section", "sector_name", "legal_form",
-            "active_companies", "companies_with_age", "median_age_years", "is_small_group"]
+            "active_companies", "companies_with_age", "median_age_years", "is_small_group",
+            "is_suppressed"]
     return (df[cols].rename(columns={"section": "sbi2008_section"})
             .sort_values(["legal_form", "sbi2008_section"]).reset_index(drop=True))
 

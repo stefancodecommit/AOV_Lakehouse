@@ -166,15 +166,15 @@ def test_categories_are_written_as_plain_text():
 
 
 # =========================================================================== only the newest upload
-def upload(batch_id, day, rows=ROWS):
-    """A KVK upload as the bronze agent writes it: rows plus a success entry in the log."""
+def upload(batch_id, day, rows=ROWS, file_date=None):
+    """A KVK upload as the bronze agent writes it: rows plus a success entry in the log.
+    `file_date`: KVK's export date; None = no file date (the upload day is used)."""
     df = bronze(((batch_id, day),), rows)
     write_deltalake(str(k.KVK_BRONZE / "basis_bedrijfsgegevens"), pa.Table.from_pandas(df), mode="append")
     write_deltalake(str(k.KVK_BRONZE / "_batch_log"), pa.table({
         "batch_id": [batch_id], "status": ["success"],
         "ingested_at": pa.array([pd.Timestamp(day, tz="UTC")], pa.timestamp("us", tz="UTC")),
-        "file_date": pa.array([None], pa.date32())}),         # no file date: upload date used
-        mode="append")
+        "file_date": pa.array([file_date], pa.date32())}), mode="append")
 
 
 def silver_kvk():
@@ -210,6 +210,14 @@ def test_a_new_upload_replaces_the_snapshot(crosswalk):
     second = k.run()
     df = silver_kvk()
     assert set(df.batch_id) == {"kvk_2026_10"} and set(df.run_id) == {second}
+
+
+def test_an_older_file_loaded_later_does_not_replace_the_newest_snapshot(crosswalk):
+    # November's file is loaded first; October's, found later in the inbox, after it
+    upload("kvk_nov", "2026-11-13", rows=ROWS[:2], file_date=date(2026, 11, 12))
+    upload("kvk_oct", "2026-11-20", file_date=date(2026, 10, 1))
+    k.run()
+    assert set(silver_kvk().batch_id) == {"kvk_nov"}
 
 
 def test_batches_that_did_not_succeed_are_not_used(crosswalk):

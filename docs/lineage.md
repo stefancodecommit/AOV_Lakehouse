@@ -1238,6 +1238,7 @@ flowchart LR
     n_col_companies_with_age["companies_with_age"]:::gold
     n_col_median_age_years["median_age_years"]:::gold
     n_col_is_small_group["is_small_group"]:::gold
+    n_col_is_suppressed["is_suppressed"]:::gold
     n_col_run_id["run_id"]:::gold
   end
   n_src_silver_kvk_company_snapshot_date --> n_col_snapshot_date
@@ -1250,6 +1251,7 @@ flowchart LR
   n_src_silver_kvk_company_start_date --> n_col_median_age_years
   n_src_silver_kvk_company_snapshot_date --> n_col_median_age_years
   n_src_silver_kvk_company_is_active --> n_col_is_small_group
+  n_src_silver_kvk_company_is_active --> n_col_is_suppressed
   run --> n_col_run_id
   classDef bronze fill:#f3e3c9,stroke:#a8743a,color:#1d1d1d
   classDef silver fill:#e4e7ec,stroke:#6b7480,color:#1d1d1d
@@ -1267,8 +1269,9 @@ flowchart LR
 | `legal_form` | `silver:kvk_company.legal_form` | as in silver; 'all' for every legal form together |
 | `active_companies` | `silver:kvk_company.is_active` | number of active companies in the newest upload |
 | `companies_with_age` | `silver:kvk_company.start_date` | how many of them have a valid start date |
-| `median_age_years` | `silver:kvk_company.start_date`<br>`silver:kvk_company.snapshot_date` | median of (snapshot date - start date), in years |
-| `is_small_group` | `silver:kvk_company.is_active` | true under 10 companies (KVK re-identification rule) |
+| `median_age_years` | `silver:kvk_company.start_date`<br>`silver:kvk_company.snapshot_date` | median of (snapshot date - start date), in years; empty for fewer than 10 ages |
+| `is_small_group` | `silver:kvk_company.is_active` | true under 10 companies (KVK re-identification rule); the numbers are then empty |
+| `is_suppressed` | `silver:kvk_company.is_active` | true when the numbers are empty: a small group, or the smallest other legal form of its section when exactly one is small (else 'all' minus the rest would reveal it) |
 | `run_id` | *(the run)* | added when the run publishes the table: the gold run that made the row; joins to lakehouse/_run_log (which silver run_ids were read) |
 
 ## gold_risk_index

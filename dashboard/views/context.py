@@ -47,11 +47,9 @@ if kvk.empty:
 else:
     st.caption(f"KVK snapshot of {kvk['snapshot_date'].iloc[0]} · Source: KVK Handelsregister "
                "Open Dataset. Sector from the company's main activity, translated to SBI 2008.")
-    hide = st.toggle("Hide groups of fewer than 10 companies", value=True,
-                     help="KVK's rule against recognising individual companies in small groups.")
     k = kvk[kvk["legal_form"] == "all"]
-    if hide:
-        k = k[~k["is_small_group"].astype(bool)]
+    hidden = k[k["is_suppressed"].astype(bool)]
+    k = k[~k["is_suppressed"].astype(bool)]
     known = k[k["sbi2008_section"] != "unknown"]
     known = known.assign(sector=known["sbi2008_section"] + " " + known["sector_name"].fillna(""))
     unknown = k[k["sbi2008_section"] == "unknown"]["active_companies"].sum()
@@ -72,5 +70,10 @@ else:
                "single SBI 2008 sector (several main activities, or codes that can't be "
                "translated unambiguously); they are not in the charts. Many companies in "
                "K (financial services) are holding companies.")
+    st.caption("Groups of fewer than 10 companies have no numbers (KVK's rule against "
+               "recognising individual companies), and neither has a group that would give "
+               "one away by subtraction (e.g. NV = all − BV). Sections not shown: "
+               + (", ".join(hidden["sbi2008_section"]) if not hidden.empty else "none")
+               + ". A median age of fewer than 10 companies is left out too.")
     common.table_view(kvk.sort_values(["legal_form", "active_companies"],
                                       ascending=[True, False]), "gold_kvk_context")
