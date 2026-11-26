@@ -36,6 +36,8 @@ SBI_SECTIONS = set("ABCDEFGHIJKLMNOPQRSTU") | {"unknown"}
 
 
 def not_empty(tables: dict[str, pd.DataFrame], required) -> CheckResult:
+    """Every table in `required` exists and has rows (a table missing from `tables`
+    counts as empty)."""
     empty = sorted(n for n in required if tables.get(n) is None or tables[n].empty)
     return CheckResult("tables_not_empty", not empty,
                        f"empty or missing: {', '.join(empty)}" if empty
@@ -54,6 +56,8 @@ def one_run(tables: dict[str, pd.DataFrame]) -> CheckResult:
 
 
 def unique_keys(tables: dict[str, pd.DataFrame], keys: dict[str, list[str]]) -> CheckResult:
+    """No two rows of a table share their key columns (`keys`: table -> columns). Empty
+    tables, and tables without all key columns, are skipped: not_empty reports those."""
     dups = {}
     for name, cols in keys.items():
         df = tables.get(name)
@@ -79,6 +83,9 @@ def keys_in(df: pd.DataFrame, col: str, dim: pd.DataFrame, dim_col: str,
 
 
 def check_silver_cbs(t: dict[str, pd.DataFrame]) -> list[CheckResult]:
+    """All checks on silver CBS (`t`: table name -> DataFrame): tables filled, one run_id,
+    unique keys, every key of a fact table present in its dimension, and a warning for
+    fact rows whose characteristic isn't in a CBS code list (member_type 'unknown')."""
     results = [not_empty(t, SILVER_CBS_KEYS), one_run(t), unique_keys(t, SILVER_CBS_KEYS)]
     for fact in ("fct_absence_rate", "fct_absence_survey", "fct_business_count"):
         f = t.get(fact)
@@ -108,6 +115,9 @@ def one_snapshot(df: pd.DataFrame) -> CheckResult:
 
 
 def check_silver_kvk(df: pd.DataFrame) -> list[CheckResult]:
+    """All checks on silver kvk_company: filled, one run_id, one snapshot, and only valid
+    SBI section letters (A-U, or 'unknown'). The other checks need rows, so an empty
+    table stops after the first."""
     t = {"kvk_company": df}
     results = [not_empty(t, ["kvk_company"])]
     if df.empty:
@@ -121,5 +131,7 @@ def check_silver_kvk(df: pd.DataFrame) -> list[CheckResult]:
 
 
 def check_gold(t: dict[str, pd.DataFrame], optional=("gold_kvk_context",)) -> list[CheckResult]:
+    """All checks on gold: tables filled, one run_id, unique keys. Tables in `optional`
+    may be empty: gold_kvk_context stays empty until a KVK file has been loaded."""
     required = [n for n in GOLD_KEYS if n not in optional]
     return [not_empty(t, required), one_run(t), unique_keys(t, GOLD_KEYS)]

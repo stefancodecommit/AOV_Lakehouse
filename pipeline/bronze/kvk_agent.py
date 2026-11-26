@@ -83,6 +83,8 @@ OLLAMA_MODEL = settings["ollama"]["model"]
 # --------------------------------------------------------------------------- state
 @dataclass
 class Verification:
+    """The result of verifying a KVK file, kept in VERIFIED until it is loaded. A load
+    is refused when the file's SHA-256 no longer matches: it changed after the check."""
     path: str
     sha256: str
     passed: bool

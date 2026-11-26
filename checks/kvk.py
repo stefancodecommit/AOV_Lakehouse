@@ -33,6 +33,8 @@ DATE_RE = re.compile(r"\d{8}|\d{4}-\d{2}-\d{2}|\d{2}-\d{2}-\d{4}")
 
 @dataclass
 class FileCheck:
+    """What check_file found in a KVK zip: where the CSV is, how it reads, its header and
+    row count, and any errors (which block the file) or warnings (which don't)."""
     path: Path
     sha256: str
     csv_member: str | None = None

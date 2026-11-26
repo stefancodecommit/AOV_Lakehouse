@@ -67,6 +67,7 @@ def _files(root: Path) -> list[Path]:
 
 
 def _delta_tables(root: Path) -> list[Path]:
+    """Every Delta table under root (a folder with a _delta_log), staging excluded."""
     return sorted(p.parent for p in root.rglob("_delta_log")
                   if p.is_dir() and "_staging" not in p.parts)
 

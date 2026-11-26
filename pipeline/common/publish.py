@@ -23,7 +23,8 @@ log = logging.getLogger("publish")
 
 
 class RunFailed(RuntimeError):
-    pass
+    """A silver or gold run that must stop: its input is missing or inconsistent, or the
+    publish could not finish. run_pipeline records it in the run log as failed."""
 
 
 def to_arrow(df: pd.DataFrame):

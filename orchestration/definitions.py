@@ -201,6 +201,8 @@ def gold() -> dg.MaterializeResult:
 
 # =========================================================================== checks
 def _read(root: Path, names) -> dict:
+    """The tables `names` under `root` as DataFrames; a table that doesn't exist yet comes
+    back empty, so the not-empty check reports it instead of the read failing."""
     import pandas as pd
     from deltalake import DeltaTable
     return {n: (DeltaTable(str(root / n)).to_pandas() if (root / n / "_delta_log").exists()
@@ -211,6 +213,9 @@ def _read(root: Path, names) -> dict:
                              for n in ["tables_not_empty", "one_run_id", "unique_keys",
                                        "keys_in_dimensions", "no_unknown_characteristics"]])
 def silver_cbs_checks():
+    """Dagster wants every check name declared up front, but check_silver_cbs makes one
+    key check per fact table and dimension. Those are merged here into one result,
+    keys_in_dimensions. no_unknown_characteristics is a warning, so it doesn't block."""
     from checks.layers import SILVER_CBS_KEYS, check_silver_cbs
     results = check_silver_cbs(_read(cbs_silver.SILVER_ROOT, SILVER_CBS_KEYS))
     keys = [r for r in results if r.name.endswith(("_in_dim_period", "_in_dim_sector",

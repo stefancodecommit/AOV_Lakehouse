@@ -49,10 +49,12 @@ class Column:
 
 
 def src(table: str, *fields: str) -> tuple[Source, ...]:
+    """Sources for one table: src("t", "a", "b") -> t.a, t.b."""
     return tuple(Source(table, f) for f in fields)
 
 
 def each(tables, *fields: str) -> tuple[Source, ...]:
+    """The same fields in several tables, e.g. the Key field of every CBS code list."""
     return tuple(Source(t, f) for t in tables for f in fields)
 
 
@@ -325,6 +327,7 @@ SILVER_KVK_TABLES = {"kvk_company"}
 # others (a difference, a rank, last year's value) lists the silver columns it is computed
 # from; the "how" says what is done. A fixed value set by gold has no source.
 def sv(table: str, *columns: str) -> tuple[Source, ...]:
+    """Sources in a silver table (for gold columns): sv("dim_period", "year")."""
     return src(f"silver:{table}", *columns)
 
 
@@ -812,6 +815,7 @@ EXPLORER_START = "gold:gold_absence_by_sector.absence_pct"   # bronze -> silver 
 
 
 def _bronze_how(s: Source) -> str:
+    """What a bronze field is, in plain words (the bronze level has no transformation)."""
     if s.table.startswith("kvk/"):
         return "a column of the KVK file, stored as text"
     if s.table.startswith("reference/"):

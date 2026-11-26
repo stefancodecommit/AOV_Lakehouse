@@ -98,6 +98,8 @@ PERIOD_PREFERENCE = tuple(_CFG["period_preference"])      # e.g. quarters, else 
 
 @dataclass(frozen=True)
 class Endpoint:
+    """One CBS OData endpoint to load: a table and one of its entity sets (TypedDataSet,
+    DataProperties, a code list, ...). ENDPOINTS lists the ones the pipeline loads."""
     table_id: str                    # e.g. "86009NED"
     entity: str = ""                 # "" = service root (list of entity sets)
     split_by_period: bool = False    # one request per period -> incremental
@@ -168,6 +170,8 @@ def log_schema():
 # --------------------------------------------------------------------------- planning
 @dataclass(frozen=True)
 class Request:
+    """One fetch from CBS: a whole endpoint, or one period of it. `key` identifies the
+    data it returns (see period_key); a key already in bronze/_ingestion_log is skipped."""
     endpoint: Endpoint
     key: str
     params: dict
@@ -311,6 +315,7 @@ def field_types(dataprops: list[dict] | None) -> dict[str, str]:
 
 
 def _infer_type(values: list) -> str:
+    """Column type for the values of one CBS field, from the Python types JSON gave."""
     kinds = {type(v) for v in values if v is not None}
     if not kinds or kinds == {str}:
         return "string"

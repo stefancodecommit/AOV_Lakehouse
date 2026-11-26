@@ -34,7 +34,7 @@ atexit.register(time.sleep, EXIT_PAUSE_SECONDS)
 
 
 class ConfigError(ValueError):
-    pass
+    """config.yaml (or an override file) has an unknown setting or a wrong shape."""
 
 
 def _merge(base: dict, override: Mapping, source: str, trail: str = "") -> dict:

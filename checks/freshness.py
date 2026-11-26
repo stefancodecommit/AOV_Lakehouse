@@ -33,6 +33,7 @@ def period_end(key: str) -> date | None:
 
 
 def months_between(a: date, b: date) -> float:
+    """Months from a to b, as a decimal (30.44 days: the average length of a month)."""
     return (b - a).days / 30.44
 
 
@@ -60,6 +61,8 @@ def check_cbs_freshness(latest: dict[str, str], stopped: set[str], max_months: d
 
 def check_kvk_freshness(latest_snapshot: date | None, max_days: int,
                         today: date | None = None) -> CheckResult:
+    """The newest KVK snapshot is at most `max_days` old (`kvk.max_snapshot_age_days`).
+    No snapshot at all also fails, as a warning."""
     today = today or date.today()
     if latest_snapshot is None:
         return CheckResult("kvk_fresh", False, "no KVK snapshot loaded yet", severity="warning")
