@@ -362,13 +362,15 @@ the first:
       report's number of lineage columns
 - [ ] The slides (docs/presentatie.pptx), slide 9: the number and the speaker notes state
       the test count that pytest reports (not checked automatically). Last set on
-      2026-11-20: slide and notes say 407 (were 394 and 404). Open until submitting,
-      because any later test changes the number again
+      2026-11-26: slide and notes say 420 (were 394, 404 and 407; checked with a render
+      of the slide). Open until submitting, because any later test changes the number again
 - [ ] If the data or the code changed since: the measured results quoted in the report and
       the Q&A (silver KVK's memory, 1.9M companies, 90% with a sector, 440 backtest cases)
       still match docs/requirements.md (NFR-7) and gold's README ("Backtest")
 - [ ] Export the report again (`python -m tools.export_report`) and check the word count
-      (≤5000) in the Word document
+      (≤5000) in the Word document. Last exported 2026-11-26, after the third review
+      (420 tests, 1.5 GB): ~4,938 words (counted from the .docx text, not by Word); open
+      until submitting, because any later change to `rapport.md` needs a new export
 
 ## First real run (done 2026-10-05)
 
