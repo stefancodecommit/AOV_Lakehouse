@@ -344,12 +344,17 @@ the first:
       item 5 below. The test of the partial read now also checks the rows (a missing
       `is_active` counts as not active, as before), the categories and the run_id check;
       it fails on the old code
-- [ ] **Item 5 (found while measuring item 4): `gold_business_context` takes 11 of gold's
+- [x] **Item 5 (found while measuring item 4): `gold_business_context` takes 11 of gold's
       ~14 s.** `build_business_context` (`pipeline/gold/build.py`) counts missing values
       with a Python `lambda` in `groupby().agg`, called once per group (~166,000 groups);
       the other aggregations run in pandas' compiled code. Measured on the real data
       (scratch script, no code changed): the lambda 8.1 s, a vectorised count (a column
-      `count.isna()`, summed) 0.08 s, the same result. Not done yet: the author decides
+      `count.isna()`, summed) 0.08 s, the same result.
+      Done (2026-11-26, at the author's request): a column `_missing` summed like the
+      other aggregations. Real data, gold built read-only: 13.3 s -> 2.5 s, peak the same
+      (~1.0 GB); all seven gold tables identical. Covered by the existing
+      `test_business_context_bands_and_missing_classes` (a band with a missing class
+      stays empty, not undercounted)
 
 **Before submitting** (the numbers that live in the submitted documents):
 - [ ] `pytest` passes; that includes `tests/test_doc_numbers.py`, which checks the test

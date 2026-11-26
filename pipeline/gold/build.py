@@ -342,12 +342,14 @@ def build_business_context(t: dict) -> pd.DataFrame:
     Bands are sums of the detailed size classes; aggregate classes (0-50, 0-250) are
     left out so no business is counted twice. If one class of a band is missing the
     band is left empty rather than undercounted."""
-    b = t["fct_business_count"]
+    # empty counts per group, summed like the others: a Python function per group
+    # (c.isna().sum(), ~166,000 groups) took 8 of gold's ~14 s until 2026-11-26
+    b = t["fct_business_count"].assign(_missing=lambda d: d["count"].isna())
     total = b[b["breakdown"] == "total"].assign(size_band="all")
     sized = b[(b["breakdown"] == "size") & (b["size_is_aggregate"] == False)]  # noqa: E712
     keys = ["period_key", "sector_key", "size_band"]
     agg = {"businesses": ("count", "sum"), "period_status": ("period_status", "first"),
-           "data_as_of": ("ingested_at", "max"), "missing_counts": ("count", lambda c: c.isna().sum())}
+           "data_as_of": ("ingested_at", "max"), "missing_counts": ("_missing", "sum")}
     df = pd.concat([total.groupby(keys).agg(**agg), sized.groupby(keys).agg(**agg)]).reset_index()
     df["businesses"] = df["businesses"].where(df["missing_counts"] == 0).astype("Int64")
     df = df.merge(t["dim_sector"][["sector_key", "sbi_code", "sbi_level", "sector_name"]],
