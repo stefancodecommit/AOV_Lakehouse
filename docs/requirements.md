@@ -134,7 +134,7 @@ How well the system must work, per quality attribute.
 | ID | Requirement | Prio | Status | How | Verified by |
 |---|---|---|---|---|---|
 | NFR-6 | The whole pipeline runs on one ordinary machine | Must | ✅ | Delta Lake with delta-rs, no Spark or database server | measured: silver CBS ~3 s, gold ~17 s, silver KVK ~9–12 s (2026-10) |
-| NFR-7 | Silver KVK's memory does not grow with the number of KVK uploads kept in bronze (latest + 1 per month) | Must | ✅ | silver reads only the newest upload; the staged table is streamed into the live one | measured on the real data (2026-11-11): 1.74 GB peak; `test_a_run_builds_only_the_newest_upload` (only one upload is read) |
+| NFR-7 | Silver KVK's memory does not grow with the number of KVK uploads kept in bronze (latest + 1 per month) | Must | ✅ | silver reads only the newest upload; the staged table is streamed into the live one | measured on the real data (2026-11-26): 1.5 GB peak (1.74 GB on 2026-11-11; text columns kept as categories since); `test_a_run_builds_only_the_newest_upload` (only one upload is read) |
 | NFR-8 | Docker needs at most ~3 GB of memory for the pipeline | Should | ✅ | one writing run at a time | measured (INSTRUCTIONS.md, section 6, *Minimum machine*) |
 | NFR-9 | Storage stays small: old file versions removed after 7 days, small files compacted monthly | Should | ✅ | `tools/maintenance.py` (optimize, vacuum) | `test_optimize_and_vacuum_removes_files_old_versions_no_longer_need` |
 
@@ -162,7 +162,7 @@ How well the system must work, per quality attribute.
 | ID | Requirement | Prio | Status | How | Verified by |
 |---|---|---|---|---|---|
 | NFR-19 | All settings in one file; a typo is an error, not a silent default | Must | ✅ | `config.yaml`, `pipeline/common/config.py` | `test_typos_are_errors` |
-| NFR-20 | Automated tests on every change | Must | ✅ | 417 tests; GitHub Actions on every push (Python 3.12 and the Docker image) | GitHub Actions runs |
+| NFR-20 | Automated tests on every change | Must | ✅ | 420 tests; GitHub Actions on every push (Python 3.12 and the Docker image) | GitHub Actions runs |
 | NFR-21 | The same package versions everywhere (locally, CI, Docker) | Must | ✅ | exact versions in `requirements.txt` and `constraints.txt` | CI install; found and fixed a pandas 3 mismatch (2026-10-08) |
 | NFR-22 | Runs the same on any machine with one command | Should | ✅ | Docker Compose | `docker compose config`; image built in CI |
 | NFR-23 | Documentation a reviewer can follow: what, why and how to run, per phase | Must | ✅ | README, INSTRUCTIONS, PROJECT, bronze_to_silver, lineage, and a README per phase (course slide 22) with a proof of working | README → *The six phases* |

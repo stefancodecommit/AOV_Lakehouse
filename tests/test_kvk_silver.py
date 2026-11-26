@@ -353,3 +353,30 @@ def test_snapshot_date_is_kvks_file_date_with_its_source():
     assert df.loc["kvk_b2", "snapshot_date_source"] == "upload"
     # bronze rows without the column at all: the upload day everywhere
     assert set(k.build_kvk_company(bronze(), CROSSWALK)["snapshot_date_source"]) == {"upload"}
+
+
+# =========================================================================== memory: categories
+def test_categories_from_bronze_give_the_same_table_as_plain_text():
+    """read_kvk_bronze reads text as categories (memory); the result must not depend on it."""
+    plain = bronze()
+    as_read = plain.astype({c: "category" for c in COLUMNS})
+    a = publish.to_arrow(k.build_kvk_company(plain, CROSSWALK))
+    b = publish.to_arrow(k.build_kvk_company(as_read, CROSSWALK))
+    assert a.equals(b)
+
+
+def test_text_columns_stay_categories():
+    """One value per distinct value, not per row: the cleaned columns and the SBI columns
+    of 1.9M companies have 1 to ~8,400 distinct values each (memory, NFR-7)."""
+    df = k.build_kvk_company(bronze(), CROSSWALK)
+    for c in ("legal_form", "postcode_region", "insolvency_code", "main_activity_codes",
+              "sbi_mapping", "sbi_version", "sbi2008_code", "sbi2008_section"):
+        assert str(df[c].dtype) == "category", c
+
+
+def test_a_file_without_main_activities_marks_every_company_as_without_one():
+    """The main-activity column is optional (config.yaml); without it there is nothing
+    to classify. Until 2026-11-26 this stopped the run (an empty classification)."""
+    df = k.build_kvk_company(bronze().drop(columns="Hoofdactiviteiten"), CROSSWALK)
+    assert df["has_no_main_activity"].all() and set(df["sbi_mapping"]) == {"none"}
+    assert (df["main_activity_count"] == 0).all() and df["sbi2008_section"].isna().all()

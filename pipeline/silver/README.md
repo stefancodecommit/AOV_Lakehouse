@@ -86,7 +86,7 @@ project:
 .venv/bin/pytest tests/test_silver_logic.py tests/test_kvk_silver.py
 ```
 
-Expected: all tests pass (111 at the time of writing). They cover the parsers (periods,
+Expected: all tests pass (114 at the time of writing). They cover the parsers (periods,
 size classes, sectors), every silver table and its keys, "no padded keys anywhere",
 unknown keys kept and flagged, the SBI translation per case, and silver KVK runs (only
 the newest upload is read and published; a retired upload is skipped; a failed publish

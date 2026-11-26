@@ -402,7 +402,11 @@ def build_kvk_context(t: dict) -> pd.DataFrame:
     start = pd.to_datetime(k["start_date"])
     # age on the snapshot day; companies without a valid start date get no age
     k["age_years"] = ((snap - start).dt.days / 365.25).where(start.notna())
-    k["section"] = k["sbi2008_section"].fillna("unknown")
+    # plain text, also when silver's columns arrive as categories (pipeline/silver/kvk.py):
+    # grouping by a category lists every category, also one without companies, which
+    # would add rows of 0 companies and change the small-group suppression below
+    k["section"] = k["sbi2008_section"].astype(object).fillna("unknown")
+    k["legal_form"] = k["legal_form"].astype(object)
     rows = []
     for legal_form, g in [("all", k), *k.groupby("legal_form")]:
         stats = g.groupby("section").agg(

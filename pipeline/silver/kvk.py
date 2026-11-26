@@ -97,6 +97,10 @@ DIVISION_SECTION = {f"{d:02d}": s for s, lo, hi in _SECTION_RANGES for d in rang
 
 # worst first: the mapping of several codes is the worst of theirs
 MAPPING_ORDER = ["none", "unknown_code", "ambiguous_version", "merge", "1:1", "sbi2008"]
+# what classify_main_activities gives per distinct main-activity value
+SBI_COLUMNS = ["main_activity_codes", "main_activity_count", "has_multiple_main_activities",
+               "has_no_main_activity", "is_kvk_subcode", "sbi_version", "sbi_mapping",
+               "sbi2008_candidates", "sbi2008_code", "sbi2008_division", "sbi2008_section"]
 
 
 # =========================================================================== reading
@@ -120,6 +124,7 @@ def read_kvk_bronze(versions: dict | None = None, batches: list[str] | None = No
     # long lineage texts _source_file/_source_sha256 or SBI_activiteiten), and keep
     # repeated text as pandas categories (each distinct value stored once). This took
     # silver KVK's peak memory from ~2.3 GB to ~1.3 GB; Docker's memory is limited.
+    # build_kvk_company keeps its text columns as categories too (2026-11-26).
     names = data_dt.schema().to_arrow().names
     found, _ = match_columns(names, REQUIRED_COLUMNS, OPTIONAL_COLUMNS)
     keep = [names[i] for k, i in found.items() if k != "sbi"]
@@ -220,14 +225,23 @@ def classify_main_activities(values, crosswalk: pd.DataFrame) -> pd.DataFrame:
             "sbi2008_division": division,
             "sbi2008_section": DIVISION_SECTION.get(division) if division else None,
         })
-    return pd.DataFrame(rows)
+    # the columns also without values (no company has a main activity)
+    return pd.DataFrame(rows, columns=SBI_COLUMNS)
 
 
 # =========================================================================== build
 def _blank_to_null(s: pd.Series) -> pd.Series:
-    """Text column with surrounding spaces removed and empty strings as null."""
-    s = s.astype("string").str.strip()
-    return s.mask(s == "")
+    """Text column with surrounding spaces removed and empty strings as null, as a
+    category column (stored as plain text: publish.to_arrow).
+
+    Memory: the cleaning runs once per distinct value (legal_form has 2, postcode_region
+    91), not once per row; until 2026-11-26 the column became 1.9M separate strings."""
+    s = s.astype("category")                 # no copy when bronze was read as categories
+    clean = s.cat.categories.astype("string").str.strip()
+    clean = clean.where(clean != "", None).astype(object)
+    # one entry per distinct value; each row takes its value's entry (missing: -1 -> null)
+    return pd.Series(pd.Categorical(clean).take(s.cat.codes.to_numpy(), allow_fill=True),
+                     index=s.index)
 
 
 def build_kvk_company(bronze: pd.DataFrame, crosswalk: pd.DataFrame) -> pd.DataFrame:
@@ -273,20 +287,21 @@ def build_kvk_company(bronze: pd.DataFrame, crosswalk: pd.DataFrame) -> pd.DataF
         "main_activity_codes": (_blank_to_null(bronze[col["main_activity"]])
                                 if "main_activity" in col else pd.NA),
     })
-    # SBI logic once per distinct value, then looked up per row. A lookup (map) per
-    # column instead of a merge: a merge would copy the whole 1.9M-row table at once.
-    codes = out["main_activity_codes"]
-    sbi = classify_main_activities(codes.dropna().unique(), crosswalk).set_index(
-        "main_activity_codes")
-    # companies without any main activity aren't in `sbi` (nothing to classify)
+    # SBI logic once per distinct value, then looked up per row through the category
+    # codes (a merge would copy the whole 1.9M-row table at once). The text columns stay
+    # categories: one value per distinct value, not per row.
+    codes = out["main_activity_codes"].astype("category")
+    sbi = classify_main_activities(list(codes.cat.categories), crosswalk)
+    # companies without any main activity (code -1) aren't classified: they get one
+    # extra row after the classified values
     no_codes = {"main_activity_count": 0, "has_multiple_main_activities": False,
                 "has_no_main_activity": True, "is_kvk_subcode": False,
                 "sbi_mapping": "none", "sbi2008_candidates": 0}
-    for c in sbi.columns:
-        values = codes.map(sbi[c])
-        if c in no_codes:
-            values = values.where(codes.notna(), no_codes[c])
-        out[c] = values
+    row = codes.cat.codes.to_numpy().copy()
+    row[row < 0] = len(sbi)
+    for c in sbi.columns.drop("main_activity_codes"):
+        per_value = pd.Series([*sbi[c], no_codes.get(c)], dtype=object)
+        out[c] = pd.Series(pd.Categorical(per_value).take(row), index=out.index)
     for c in ("main_activity_count", "sbi2008_candidates"):
         out[c] = out[c].astype("int64")
     for c in ("has_multiple_main_activities", "has_no_main_activity", "is_kvk_subcode"):

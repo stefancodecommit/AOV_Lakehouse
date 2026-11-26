@@ -303,10 +303,34 @@ the first:
       `testzip` by catching CRC errors while reading would add code and a failure path
       for that. Recommendation: drop it (the author decides). Found on the way: no test
       covers a corrupt zip (`find_csv`'s "Zip is corrupt" error)
-- [ ] **`_blank_to_null` turns categories back into 1.9M strings**
+- [x] **`_blank_to_null` turns categories back into 1.9M strings**
       (`pipeline/silver/kvk.py`): `astype("string")` first, then strip. On a category
       column `.str.strip()` runs once per distinct value. Measure peak memory before and
-      after (as for the 2.3 -> 1.3 GB change, NFR-7)
+      after (as for the 2.3 -> 1.3 GB change, NFR-7).
+      Done (2026-11-26), in two steps, each measured on the real data (build only, read
+      only; then a full run on a copy of the lakehouse):
+      1. `_blank_to_null` cleans each distinct value once and keeps the column a
+         category. Build 10.4 -> 4.1 s, same output. But it broke 3 tests: the SBI
+         lookup (`codes.map(...)` then `.where(...)`) got a category column back *for
+         some data only* (not for the real data), which refuses a new value ("none")
+      2. So the SBI lookup now goes explicitly through the category codes (one row per
+         distinct value plus one for "no main activity"), and its text columns stay
+         categories too. The output type no longer depends on the data
+      Real data, building kvk_company: 10.4 s -> 3.5 s, peak 1.55 -> 1.32 GB, the
+      DataFrame 1,311 -> 349 MB; output identical (schema and every value). Full run on a
+      copy: 13.7 s / 1.63 GB -> ~8-10 s / 1.48 GB; the published table equals the live one
+      except run_id. NFR-7, the report and the Q&A now say 1.5 GB (they said 1.74 GB,
+      measured 2026-11-11).
+      Found on the way: a KVK file without the optional main-activity column stopped the
+      run (an empty classification has no columns), also in the old code; fixed
+      (`SBI_COLUMNS`). Gold (`build_kvk_context`) now turns `sbi2008_section` and
+      `legal_form` into plain text first: `fillna("unknown")` fails on a category, and
+      grouping by a category would add sections with 0 companies (and change the
+      suppression). Only in-memory input (the lineage tests) had categories; all seven
+      gold tables built from the real silver are identical with the old and new code.
+      3 new tests (420): categories and plain text give the same table; the text columns
+      stay categories; a file without main activities. The last two fail on the old code;
+      the first guards against step 1's bug
 - [ ] **Gold reads more of `kvk_company` than it uses** (`pipeline/gold/build.py`,
       `PARTIAL_READS`): filter `is_active == True` in the Delta read (gold drops the other
       rows straight away), and read the low-cardinality text columns as categories
