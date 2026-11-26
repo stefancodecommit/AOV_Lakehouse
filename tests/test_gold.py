@@ -214,16 +214,26 @@ def test_gold_fails_when_silver_is_missing():
         g.run()
 
 
-def test_gold_reads_only_the_kvk_columns_it_needs():
-    """kvk_company is large (1.9M rows): gold reads only the seven columns it uses."""
-    rows = pd.DataFrame({"snapshot_date": [pd.Timestamp("2026-10-01").date()] * 2,
-                         "batch_id": ["new", "new"],
-                         "is_active": [True, False], "start_date": [None] * 2,
-                         "legal_form": ["BV"] * 2, "sbi2008_section": ["A"] * 2,
-                         "sbi_mapping": ["1:1"] * 2, "run_id": "silver_kvk_1"})
+def test_gold_reads_only_the_kvk_columns_and_rows_it_needs():
+    """kvk_company is large (1.9M rows): gold reads only the seven columns it uses, only
+    the active companies (as build_kvk_context counts them: a missing is_active is not
+    active), and text as categories."""
+    rows = pd.DataFrame({"snapshot_date": [pd.Timestamp("2026-10-01").date()] * 3,
+                         "batch_id": ["new"] * 3,
+                         "is_active": pd.array([True, False, None], dtype="boolean"),
+                         "start_date": [None] * 3,
+                         "legal_form": ["BV"] * 3, "sbi2008_section": ["A", "B", "C"],
+                         "sbi_mapping": ["1:1"] * 3, "run_id": "silver_kvk_1"})
     publish.write_table(g.SILVER_ROOT / "kvk_company", rows)
-    df = g.read_silver(["kvk_company"])["kvk_company"]
-    assert len(df) == 2 and "sbi_mapping" not in df and set(g.PARTIAL_READS["kvk_company"]["columns"]) == set(df)
+    inputs = {}
+    df = g.read_silver(["kvk_company"], inputs)["kvk_company"]
+    assert "sbi_mapping" not in df and set(g.PARTIAL_READS["kvk_company"]["columns"]) == set(df)
+    assert list(df["sbi2008_section"]) == ["A"]                       # the active one only
+    assert str(df["legal_form"].dtype) == "category"
+    assert inputs["silver/kvk_company#run_id"] == "silver_kvk_1"      # the run check still works
+    assert g.build_kvk_context({"kvk_company": df, "dim_sector": pd.DataFrame(
+        {"sbi_code": ["A"], "sbi_level": ["section"], "sector_name": ["Landbouw"]})}
+    )["active_companies"].dropna().empty                              # 1 company: suppressed
 
 
 # =========================================================================== risk index

@@ -289,7 +289,8 @@ the first:
       On a copy of the real lakehouse: the first run rebuilds once (older run-log rows have
       no crosswalk batch), 13.7 s and 1.6 GB peak; the next run skips, 0.9 s and 0.35 GB;
       the rebuilt table equals the live one except run_id (1,932,588 rows)
-- [ ] **The KVK file is read about four times per upload.** `inbox_files`
+- [x] **Dropped (2026-11-26, the author's decision, after the measurement below).**
+      **The KVK file is read about four times per upload.** `inbox_files`
       (`pipeline/bronze/kvk_agent.py`) hashes every inbox file on every call (cache by
       path, size and modification time); `testzip()` in `checks/kvk.py` decompresses the
       whole zip, which reading the CSV to the end already checks (its CRC); a rejected
@@ -331,10 +332,24 @@ the first:
       3 new tests (420): categories and plain text give the same table; the text columns
       stay categories; a file without main activities. The last two fail on the old code;
       the first guards against step 1's bug
-- [ ] **Gold reads more of `kvk_company` than it uses** (`pipeline/gold/build.py`,
+- [x] **Gold reads more of `kvk_company` than it uses** (`pipeline/gold/build.py`,
       `PARTIAL_READS`): filter `is_active == True` in the Delta read (gold drops the other
       rows straight away), and read the low-cardinality text columns as categories
-      (`legal_form`, `sbi2008_section`, `batch_id`, `run_id`)
+      (`legal_form`, `sbi2008_section`, `batch_id`, `run_id`).
+      Done (2026-11-26): both, in `PARTIAL_READS` and `read_silver`. Real data, gold
+      built read-only: 1,284,204 of 1,932,588 rows read; the KVK frame 653 -> 109 MB
+      (pandas' "deep" size); peak while reading 0.79 -> 0.76 GB, for the whole build
+      1.07 -> 1.00 GB; all seven gold tables identical. A modest gain: most of gold's
+      peak is reading `fct_business_count` (541,268 rows, 328 MB), and the time is in
+      item 5 below. The test of the partial read now also checks the rows (a missing
+      `is_active` counts as not active, as before), the categories and the run_id check;
+      it fails on the old code
+- [ ] **Item 5 (found while measuring item 4): `gold_business_context` takes 11 of gold's
+      ~14 s.** `build_business_context` (`pipeline/gold/build.py`) counts missing values
+      with a Python `lambda` in `groupby().agg`, called once per group (~166,000 groups);
+      the other aggregations run in pandas' compiled code. Measured on the real data
+      (scratch script, no code changed): the lambda 8.1 s, a vectorised count (a column
+      `count.isna()`, summed) 0.08 s, the same result. Not done yet: the author decides
 
 **Before submitting** (the numbers that live in the submitted documents):
 - [ ] `pytest` passes; that includes `tests/test_doc_numbers.py`, which checks the test

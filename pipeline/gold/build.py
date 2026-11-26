@@ -78,6 +78,9 @@ PARTIAL_READS = {
     "kvk_company": {
         "columns": ["snapshot_date", "batch_id", "is_active", "start_date",
                     "legal_form", "sbi2008_section", "run_id"],
+        # gold counts active companies only (build_kvk_context): the others are left out
+        # while reading instead of right after it (2026-11-26)
+        "filters": [("is_active", "=", True)],
     },
 }
 
@@ -105,8 +108,9 @@ def read_silver(names: list[str], inputs: dict | None = None,
                 continue
             raise RunFailed(f"silver table missing: {name} (run the silver pipelines first)")
         dt = DeltaTable(str(path))
-        if name in PARTIAL_READS:      # only the columns gold uses (memory)
-            df = dt.to_pyarrow_table(**PARTIAL_READS[name]).to_pandas()
+        if name in PARTIAL_READS:      # only the columns and rows gold uses (memory)
+            # text as categories: each distinct value stored once (a few per column)
+            df = dt.to_pyarrow_table(**PARTIAL_READS[name]).to_pandas(strings_to_categorical=True)
         else:
             df = dt.to_pandas()
         ids = sorted(df["run_id"].dropna().unique()) if "run_id" in df else []
