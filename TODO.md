@@ -263,6 +263,47 @@ has a test that fails on the old code (checked):
       Done: one commit, an overwrite limited to the period by a predicate (deltalake
       supports it together with new columns, `schema_mode="merge"`, tried first)
 
+Third review (2026-11-26, with Claude, at the author's request: *"check if there are
+still some optimizations"*; review only, no code changed during it). The code was
+already tuned where it matters most (KVK column selection and categories, the SBI logic
+once per distinct value, gold's partial KVK read, monthly compaction and vacuum). Found,
+most valuable first; the author chose to log the four "worth doing" items and start with
+the first:
+- [x] **Silver KVK is rebuilt when nothing it reads has changed.** `silver_kvk` depends on
+      `silver_cbs` (for the crosswalk), so every new CBS quarter rebuilds all 1.9M KVK
+      rows, also when the KVK file and the crosswalk are the same. Seen on the real
+      lakehouse: `silver/kvk_company` at Delta version 15, 5 files on disk for 1 live one
+      (~114 MB until vacuum). Done (2026-11-26): `kvk.unchanged_since` skips the rebuild
+      (nothing written, no run logged) when the last successful run read the same newest
+      batch_id and the same crosswalk batch_id (newly recorded in the run's inputs; the
+      crosswalk's Delta version changes on every silver CBS run, its batch doesn't), ran
+      the same committed code, and kvk_company still holds that run's rows. Uncommitted
+      ('-dirty'), missing or Docker's default 'unknown' code version: always rebuilt.
+      A changed KVK column name in config.yaml isn't compared: `--force` (new). Not a
+      skippable Dagster asset like cbs_bronze: tried first in a scratch test, and a
+      skipped asset also skips gold in the same run, so gold would miss the new CBS
+      quarter; silver_kvk still reports a materialization, with the previous run_id.
+      Tests: the conftest pins the code version (the real one ends in '-dirty' while
+      editing); 9 new in `tests/test_kvk_silver.py` and 1 in `tests/test_orchestration.py`
+      (gold still runs), 417 in total; breaking each condition fails its tests (checked).
+      On a copy of the real lakehouse: the first run rebuilds once (older run-log rows have
+      no crosswalk batch), 13.7 s and 1.6 GB peak; the next run skips, 0.9 s and 0.35 GB;
+      the rebuilt table equals the live one except run_id (1,932,588 rows)
+- [ ] **The KVK file is read about four times per upload.** `inbox_files`
+      (`pipeline/bronze/kvk_agent.py`) hashes every inbox file on every call (cache by
+      path, size and modification time); `testzip()` in `checks/kvk.py` decompresses the
+      whole zip, which reading the CSV to the end already checks (its CRC); a rejected
+      file is hashed again in `checks/quarantine.content_sha256` (pass the hash in).
+      The re-hash in `_ingest` stays: it checks the file didn't change after verification
+- [ ] **`_blank_to_null` turns categories back into 1.9M strings**
+      (`pipeline/silver/kvk.py`): `astype("string")` first, then strip. On a category
+      column `.str.strip()` runs once per distinct value. Measure peak memory before and
+      after (as for the 2.3 -> 1.3 GB change, NFR-7)
+- [ ] **Gold reads more of `kvk_company` than it uses** (`pipeline/gold/build.py`,
+      `PARTIAL_READS`): filter `is_active == True` in the Delta read (gold drops the other
+      rows straight away), and read the low-cardinality text columns as categories
+      (`legal_form`, `sbi2008_section`, `batch_id`, `run_id`)
+
 **Before submitting** (the numbers that live in the submitted documents):
 - [ ] `pytest` passes; that includes `tests/test_doc_numbers.py`, which checks the test
       count in the report, Q&A, GenAI section, requirements and tests/README.md, and the

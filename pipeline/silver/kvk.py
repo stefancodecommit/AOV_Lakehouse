@@ -52,14 +52,21 @@ the newest snapshot date (KVK's file date; not the last one loaded) and publishe
 replaced in one commit, with a run_id and a row in lakehouse/_run_log. Memory: one
 snapshot, however many uploads bronze keeps.
 
+A run is skipped when nothing it reads has changed since the last successful run: the
+same newest upload, the same crosswalk batch and the same committed code
+(unchanged_since). A new CBS quarter rebuilds silver CBS, which used to rebuild all
+1.9M KVK rows as well.
+
 Usage
 -----
-    python -m pipeline.silver.kvk            # rebuild from the newest upload
+    python -m pipeline.silver.kvk            # rebuild from the newest upload (if changed)
+    python -m pipeline.silver.kvk --force    # rebuild even when nothing changed
     python -m pipeline.silver.kvk --preview  # build and summarise, write nothing
 """
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 
 import pandas as pd
@@ -72,6 +79,9 @@ KVK_BRONZE = LAKEHOUSE / "bronze" / "kvk"
 SILVER_ROOT = LAKEHOUSE / "silver"
 RUN_LOG = LAKEHOUSE / "_run_log"
 PIPELINE = "silver_kvk"
+# run-log input keys that identify what a run was built from (see unchanged_since)
+NEWEST_BATCH = "bronze/kvk/_batch_log#batch_id"
+CROSSWALK_BATCH = "silver/map_sbi2008_sbi2025#batch_id"
 REQUIRED_COLUMNS = {k: set(v) for k, v in settings["kvk"]["required_columns"].items()}
 OPTIONAL_COLUMNS = {k: set(v) for k, v in settings["kvk"]["optional_columns"].items()}
 
@@ -133,11 +143,32 @@ def read_crosswalk(versions: dict | None = None) -> pd.DataFrame:
     if not (path / "_delta_log").exists():
         log.warning("Crosswalk missing: %s (run pipeline/bronze/reference.py and pipeline/silver/cbs.py first)",
                     path)
+        if versions is not None:
+            versions[CROSSWALK_BATCH] = ""
         return pd.DataFrame(columns=["sbi2008_code", "sbi2025_code"])
     dt = DeltaTable(str(path))
+    df = dt.to_pandas(columns=["sbi2008_code", "sbi2025_code", "batch_id"])
     if versions is not None:
         versions["silver/map_sbi2008_sbi2025"] = dt.version()
-    return dt.to_pandas(columns=["sbi2008_code", "sbi2025_code"])
+        # its content: silver CBS rewrites the table (a new Delta version) on every run,
+        # but the crosswalk only changes with a new bronze batch (see unchanged_since)
+        versions[CROSSWALK_BATCH] = _batch_ids(df["batch_id"])
+    return df[["sbi2008_code", "sbi2025_code"]]
+
+
+def _batch_ids(values) -> str:
+    """The distinct batch_ids of a column as one text ('' when there are none)."""
+    return ",".join(sorted(set(values.dropna())))
+
+
+def crosswalk_batch() -> str | None:
+    """The batch_id(s) of the crosswalk in silver, as read_crosswalk records them; ''
+    when there is no crosswalk table."""
+    from deltalake import DeltaTable
+    path = SILVER_ROOT / "map_sbi2008_sbi2025"
+    if not (path / "_delta_log").exists():
+        return ""
+    return _batch_ids(DeltaTable(str(path)).to_pandas(columns=["batch_id"])["batch_id"])
 
 
 # =========================================================================== SBI logic
@@ -281,7 +312,7 @@ def newest_batch(versions: dict | None = None) -> str | None:
     ok = by_snapshot_date(log_df[log_df["status"] == "success"])
     newest = ok["batch_id"].iloc[-1] if not ok.empty else None
     if versions is not None and newest is not None:
-        versions["bronze/kvk/_batch_log#batch_id"] = newest
+        versions[NEWEST_BATCH] = newest
     return newest
 
 
@@ -296,10 +327,54 @@ def build_all(inputs: dict | None = None) -> dict[str, pd.DataFrame]:
     return {TABLE: build_kvk_company(read_kvk_bronze(inputs, batches=[batch]), crosswalk)}
 
 
-def run() -> str:
+def unchanged_since() -> str | None:
+    """The run_id of the last successful run when a new run would build the same table,
+    else None. Same means: the same newest KVK batch, the same crosswalk batch, and the
+    same code, and kvk_company still holds that run's rows.
+
+    Why: silver_kvk depends on silver_cbs (for the crosswalk), so every new CBS quarter
+    asked for a rebuild of all 1.9M rows, although nothing silver KVK reads had changed.
+    The code version only counts when it is known and committed: with uncommitted
+    changes ('-dirty'), no git and no CODE_VERSION, or Docker's default 'unknown', the
+    code may differ, so the table is rebuilt. A changed setting in config.yaml (the
+    accepted KVK column names) is not compared: rebuild with --force after one."""
+    from deltalake import DeltaTable
+
+    from pipeline.common import runlog
+    runs = runlog.read_runs(RUN_LOG)
+    runs = runs[runs["pipeline"] == PIPELINE]
+    if runs.empty or runs.iloc[-1]["status"] != "success":
+        return None                       # nothing built yet, or the last run failed
+    last = runs.iloc[-1]
+    code = runlog.code_version()
+    if not code or code == "unknown" or code.endswith("-dirty") or last["code_version"] != code:
+        return None
+    built_from = json.loads(last["inputs"] or "{}")
+    if (built_from.get(NEWEST_BATCH) != newest_batch()
+            or built_from.get(CROSSWALK_BATCH) != crosswalk_batch()):
+        return None                       # a run logged before 2026-11-26 has no crosswalk key
+    path = SILVER_ROOT / TABLE
+    if not (path / "_delta_log").exists():
+        return None
+    ids = DeltaTable(str(path)).to_pyarrow_dataset().to_table(columns=["run_id"]).column("run_id")
+    if set(ids.unique().to_pylist()) != {last["run_id"]}:
+        return None                       # the table was replaced or changed since
+    return last["run_id"]
+
+
+def run(force: bool = False) -> str:
     """Build, stage, publish and log one silver KVK run (pipeline/common/publish.py).
-    Returns the run_id; raises (after logging the failed run) when something went wrong."""
+    Returns the run_id; raises (after logging the failed run) when something went wrong.
+
+    When nothing silver KVK reads has changed since the last successful run
+    (unchanged_since), nothing is rebuilt or logged and that run's run_id is returned;
+    `force` rebuilds anyway. Dagster still reports silver_kvk as materialized then: a
+    skipped asset would also skip gold in the same run (see orchestration/definitions.py)."""
     from pipeline.common.publish import run_pipeline
+    if not force and (previous := unchanged_since()):
+        log.info("Nothing changed since run %s (same KVK upload, crosswalk and code): "
+                 "kvk_company not rebuilt (--force rebuilds it)", previous)
+        return previous
     return run_pipeline(PIPELINE, build_all, SILVER_ROOT, RUN_LOG)
 
 
@@ -316,13 +391,15 @@ def main() -> None:
     """Command line: rebuild kvk_company from the newest upload, or only summarise it."""
     ap = argparse.ArgumentParser(description="Build silver kvk_company from bronze KVK.")
     ap.add_argument("--preview", action="store_true", help="build and summarise, write nothing")
+    ap.add_argument("--force", action="store_true",
+                    help="rebuild even when the KVK upload, crosswalk and code are unchanged")
     args = ap.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     if args.preview:
         preview()
         return
     try:
-        run()
+        run(force=args.force)
     except Exception:
         raise SystemExit(1) from None      # already logged by the run; exit code 1 only
 

@@ -40,6 +40,12 @@ and [docs/lineage.md](../../docs/lineage.md) (generated, complete).
   holds only that one (memory: one upload, however many bronze keeps; NFR-7 in docs/requirements.md); bronze keeps
   the older uploads, because KVK can't serve them again. (Until 2026-11 silver kept every
   snapshot and updated them incrementally; nothing used that history.)
+- **KVK: no rebuild when nothing changed.** A new CBS quarter rebuilds silver CBS, and
+  silver KVK depends on it for the crosswalk. Rebuilding 1.9M identical rows each time
+  is skipped: when the last successful run read the same newest upload and the same
+  crosswalk batch, with the same committed code, `kvk.py` writes and logs nothing
+  (`unchanged_since`). Uncommitted or unknown code always rebuilds; after changing the
+  KVK column names in `config.yaml`, rebuild with `--force`.
 - **A snapshot is dated by KVK, not by us.** `snapshot_date` is KVK's export date, read
   from the zip when the file is verified (bronze's batch log, `file_date`); the newest
   start date in the file must not be later. A file without a usable date (a loose CSV)
@@ -69,8 +75,9 @@ project:
 ```bash
 .venv/bin/python -m pipeline.silver.cbs --preview     # build and summarise, write nothing
 .venv/bin/python -m pipeline.silver.cbs
-.venv/bin/python -m pipeline.silver.kvk --preview     # what the next run would add or remove
-.venv/bin/python -m pipeline.silver.kvk               # needs silver CBS (the crosswalk)
+.venv/bin/python -m pipeline.silver.kvk --preview     # build from the newest upload and summarise, write nothing
+.venv/bin/python -m pipeline.silver.kvk               # needs silver CBS (the crosswalk); skipped when nothing changed
+.venv/bin/python -m pipeline.silver.kvk --force       # rebuild anyway
 ```
 
 ## Proof of working
@@ -79,7 +86,7 @@ project:
 .venv/bin/pytest tests/test_silver_logic.py tests/test_kvk_silver.py
 ```
 
-Expected: all tests pass (101 at the time of writing). They cover the parsers (periods,
+Expected: all tests pass (111 at the time of writing). They cover the parsers (periods,
 size classes, sectors), every silver table and its keys, "no padded keys anywhere",
 unknown keys kept and flagged, the SBI translation per case, and silver KVK runs (only
 the newest upload is read and published; a retired upload is skipped; a failed publish

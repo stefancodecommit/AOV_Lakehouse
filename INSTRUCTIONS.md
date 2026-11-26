@@ -79,6 +79,8 @@ Step 8 keeps running until you press Ctrl+C.
 
 Each layer is built from the one before it, so after a change, rerun from that layer
 down. Bronze steps only fetch what is new; silver and gold are rebuilt as a whole.
+Silver KVK skips the rebuild when its upload, the crosswalk and the committed code are
+unchanged; after changing the KVK column names in `config.yaml`, run it with `--force`.
 
 | What changed | Run |
 |---|---|
@@ -118,7 +120,8 @@ Each `pipeline.…` above is run as `.venv/bin/python -m pipeline.…`.
 .venv/bin/python -m pipeline.silver.cbs --preview           # build and summarise, write nothing
 .venv/bin/python -m pipeline.silver.cbs
 .venv/bin/python -m pipeline.silver.kvk --preview           # build from the newest upload and summarise, write nothing
-.venv/bin/python -m pipeline.silver.kvk                     # rebuild from the newest upload
+.venv/bin/python -m pipeline.silver.kvk                     # rebuild from the newest upload (skipped when nothing changed)
+.venv/bin/python -m pipeline.silver.kvk --force             # rebuild even when nothing changed
 .venv/bin/python -m pipeline.gold.build --preview
 .venv/bin/python -m pipeline.gold.build
 ```

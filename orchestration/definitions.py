@@ -20,7 +20,10 @@ sbi_crosswalk   reference_bronze: the SBI 2008 -> 2025 file, monthly. Materialis
 kvk_bronze      kvk_bronze_agent: started by a person in the UI ("Materialize", with
                 the file name typed as confirmation, like typing YES). Never scheduled.
 silver_cbs      after new cbs_bronze or sbi_crosswalk data
-silver_kvk      after new kvk_bronze data or a new silver_cbs (it uses the crosswalk)
+silver_kvk      after new kvk_bronze data or a new silver_cbs (it uses the crosswalk).
+                When neither the KVK upload, the crosswalk nor the code changed, the run
+                rebuilds nothing (pipeline/silver/kvk.py, unchanged_since) but still
+                reports the asset: a skipped asset would also skip gold in the same run
 gold            after new silver_cbs or silver_kvk
 The dashboard needs no asset: it reads gold and notices a new version by itself.
 

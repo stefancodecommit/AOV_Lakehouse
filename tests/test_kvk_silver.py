@@ -21,6 +21,8 @@ CROSSWALK = pd.DataFrame([
     ("0111", "01110"), ("66300", "66300"), ("66301", "66300"),
     ("46900", "46900"), ("52290", "46900"), ("47741", "47741"), ("47742", "47741"),
     ("6420", "64210")], columns=["sbi2008_code", "sbi2025_code"])
+# as silver CBS writes it: with the bronze batch the crosswalk came from
+SILVER_CROSSWALK = CROSSWALK.assign(batch_id="ref_v20")
 
 
 def classify(*values):
@@ -119,7 +121,7 @@ def kvk_lakehouse():
         "ingested_at": pa.array([pd.Timestamp("2026-10-01", tz="UTC")],
                                 pa.timestamp("us", tz="UTC")),
         "file_date": pa.array([None], pa.date32())}))        # no file date: upload date used
-    publish.write_table(k.SILVER_ROOT / "map_sbi2008_sbi2025", CROSSWALK)
+    publish.write_table(k.SILVER_ROOT / "map_sbi2008_sbi2025", SILVER_CROSSWALK)
 
 
 def test_run_publishes_kvk_company_with_run_id_and_log(kvk_lakehouse):
@@ -132,8 +134,10 @@ def test_run_publishes_kvk_company_with_run_id_and_log(kvk_lakehouse):
     assert json.loads(row.tables) == {"kvk_company": {"rows": 3, "status": "published"}}
     inputs = json.loads(row.inputs)
     assert set(inputs) == {"bronze/kvk/_batch_log", "bronze/kvk/_batch_log#batch_id",
-                           "bronze/kvk/basis_bedrijfsgegevens", "silver/map_sbi2008_sbi2025"}
+                           "bronze/kvk/basis_bedrijfsgegevens", "silver/map_sbi2008_sbi2025",
+                           "silver/map_sbi2008_sbi2025#batch_id"}
     assert inputs["bronze/kvk/_batch_log#batch_id"] == "kvk_b1"
+    assert inputs["silver/map_sbi2008_sbi2025#batch_id"] == "ref_v20"
     assert inspect_lakehouse.silver_run_problems(k.LAKEHOUSE, "silver_kvk")[1] == []
 
 
@@ -184,7 +188,7 @@ def silver_kvk():
 
 @pytest.fixture
 def crosswalk():
-    publish.write_table(k.SILVER_ROOT / "map_sbi2008_sbi2025", CROSSWALK)
+    publish.write_table(k.SILVER_ROOT / "map_sbi2008_sbi2025", SILVER_CROSSWALK)
 
 
 def test_a_run_builds_only_the_newest_upload(crosswalk, monkeypatch):
@@ -249,6 +253,74 @@ def test_a_failed_publish_leaves_the_live_table_untouched(crosswalk, monkeypatch
     assert not (k.SILVER_ROOT / "_staging").exists()
     k.run()                                        # a clean rerun publishes the new upload
     assert set(silver_kvk().batch_id) == {"kvk_2026_10"}
+
+
+# =========================================================================== skip when nothing changed
+def kvk_version():
+    return DeltaTable(str(k.SILVER_ROOT / "kvk_company")).version()
+
+
+def test_a_run_with_the_same_inputs_rebuilds_nothing(crosswalk):
+    """A new CBS quarter rebuilds silver CBS, and Dagster then asks for silver KVK too;
+    with the same upload, crosswalk and code there is nothing to rebuild."""
+    upload("kvk_2026_10", "2026-10-01")
+    first = k.run()
+    version, runs = kvk_version(), len(runlog.read_runs(k.RUN_LOG))
+    # silver CBS rewrites the crosswalk (a new Delta version) with the same content
+    publish.write_table(k.SILVER_ROOT / "map_sbi2008_sbi2025", SILVER_CROSSWALK)
+    assert k.run() == first
+    assert kvk_version() == version                          # nothing written
+    assert len(runlog.read_runs(k.RUN_LOG)) == runs          # and no run logged
+    assert inspect_lakehouse.silver_run_problems(k.LAKEHOUSE, "silver_kvk")[1] == []
+
+
+def test_force_rebuilds_anyway(crosswalk):
+    upload("kvk_2026_10", "2026-10-01")
+    first = k.run()
+    assert k.run(force=True) != first
+    assert set(silver_kvk().run_id) != {first}
+
+
+def test_a_new_crosswalk_batch_rebuilds(crosswalk):
+    upload("kvk_2026_10", "2026-10-01")
+    first = k.run()
+    publish.write_table(k.SILVER_ROOT / "map_sbi2008_sbi2025",
+                        SILVER_CROSSWALK.assign(batch_id="ref_v21"))
+    assert k.run() != first
+
+
+@pytest.mark.parametrize("now", ["def5678",            # other code
+                                 "abc1234-dirty",      # uncommitted changes
+                                 "unknown",            # Docker image built without the version
+                                 None])                # no git, no CODE_VERSION
+def test_changed_or_unknown_code_rebuilds(crosswalk, monkeypatch, now):
+    upload("kvk_2026_10", "2026-10-01")
+    first = k.run()
+    monkeypatch.setattr(runlog, "code_version", lambda: now)
+    assert k.run() != first
+
+
+def test_a_table_that_no_longer_holds_the_run_is_rebuilt(crosswalk):
+    upload("kvk_2026_10", "2026-10-01")
+    first = k.run()
+    publish.write_table(k.SILVER_ROOT / "kvk_company", silver_kvk().assign(run_id="other"))
+    second = k.run()
+    assert second != first and set(silver_kvk().run_id) == {second}
+
+
+def test_a_run_logged_without_the_crosswalk_batch_is_rebuilt_once(crosswalk):
+    """Runs logged before 2026-11-26 don't say which crosswalk batch they read."""
+    upload("kvk_2026_10", "2026-10-01")
+    first = k.run()
+    runs = runlog.read_runs(k.RUN_LOG)
+    inputs = json.loads(runs.iloc[-1]["inputs"])
+    del inputs[k.CROSSWALK_BATCH]
+    runs.loc[runs.index[-1], "inputs"] = json.dumps(inputs)
+    write_deltalake(str(k.RUN_LOG), pa.Table.from_pandas(runs, schema=runlog.schema(),
+                                                         preserve_index=False), mode="overwrite")
+    second = k.run()
+    assert second != first
+    assert k.run() == second                               # from then on: skipped
 
 
 def test_an_older_partitioned_table_is_replaced_by_an_unpartitioned_one(crosswalk):

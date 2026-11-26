@@ -74,6 +74,9 @@ def isolated_lakehouse(tmp_path, monkeypatch):
     monkeypatch.setattr(backup, "LAKEHOUSE", tmp_path)
     monkeypatch.setattr(backup, "INBOX_KVK", tmp_path / "inbox" / "kvk")
     monkeypatch.setattr(backup, "BACKUP_DIR", tmp_path / "backups")
+    # a fixed, committed code version: the real one ends in '-dirty' while files are being
+    # edited, which changes whether silver KVK may skip a rebuild (kvk.unchanged_since)
+    monkeypatch.setattr(runlog, "code_version", lambda: "abc1234")
 
     # Safety net: no module-level path may still point into the real lakehouse or inbox,
     # at the start of the test and again at its end (a test that calls monkeypatch.undo()

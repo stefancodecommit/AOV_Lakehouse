@@ -145,6 +145,16 @@ def test_failing_blocking_check_stops_gold(bronze_delta, monkeypatch):   # noqa:
     assert keys(result, "checks")[("silver_cbs", "unique_keys")] is False
 
 
+def test_gold_runs_when_silver_kvk_had_nothing_to_rebuild(bronze_delta, monkeypatch):   # noqa: F811
+    """A new CBS quarter: silver_cbs is new, silver_kvk has nothing to rebuild
+    (kvk.unchanged_since) and gold must still be built in the same run. silver_kvk is
+    deliberately not a skippable asset: a skipped asset also skips gold in its run."""
+    monkeypatch.setattr(sys, "argv", ["x"])
+    monkeypatch.setattr(d.kvk_silver, "run", lambda: "silver_kvk_previous")   # skipped rebuild
+    result = dg.materialize([d.silver_cbs, d.silver_kvk, d.gold])
+    assert result.success and keys(result) == ["gold", "silver_cbs", "silver_kvk"]
+
+
 def test_freshness_checks_warn_without_failing(bronze_delta):   # noqa: F811
     result = dg.materialize(ALL, selection=dg.AssetSelection.checks(d.cbs_fresh, d.kvk_fresh))
     checks = keys(result, "checks")
