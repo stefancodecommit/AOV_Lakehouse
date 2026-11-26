@@ -294,7 +294,15 @@ the first:
       path, size and modification time); `testzip()` in `checks/kvk.py` decompresses the
       whole zip, which reading the CSV to the end already checks (its CRC); a rejected
       file is hashed again in `checks/quarantine.content_sha256` (pass the hash in).
-      The re-hash in `_ingest` stays: it checks the file didn't change after verification
+      The re-hash in `_ingest` stays: it checks the file didn't change after verification.
+      **Measured before changing anything (2026-11-26), on the real file: not worth it.**
+      The KVK zip is 13 MB (the review assumed hundreds): SHA-256 0.1 s, `testzip` 0.3 s,
+      `inbox_files` 0.4 s (with reading the batch log), `check_file` 5.1 s in all, almost
+      all of it the row checks on 1,932,588 rows, which must read every row anyway. The
+      extra reads cost ~0.4 s on a monthly, manual upload; a hash cache and replacing
+      `testzip` by catching CRC errors while reading would add code and a failure path
+      for that. Recommendation: drop it (the author decides). Found on the way: no test
+      covers a corrupt zip (`find_csv`'s "Zip is corrupt" error)
 - [ ] **`_blank_to_null` turns categories back into 1.9M strings**
       (`pipeline/silver/kvk.py`): `astype("string")` first, then strip. On a category
       column `.str.strip()` runs once per distinct value. Measure peak memory before and

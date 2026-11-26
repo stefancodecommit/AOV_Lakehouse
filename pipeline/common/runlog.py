@@ -1,23 +1,29 @@
 """
 Run log: one row per pipeline run in the Delta table lakehouse/_run_log.
 
-Every table a run publishes carries the run's `run_id` column, so any silver (and later
-gold) row can be joined to the run that produced it:
+Every table a run publishes carries the run's `run_id` column, so any silver or gold row
+can be joined to the run that produced it:
 
     SELECT ... FROM silver.fct_absence_rate f JOIN _run_log r USING (run_id)
 
 Columns
 -------
 run_id        e.g. silver_cbs_20261005T163000123456Z
-pipeline      silver_cbs (later also silver_kvk, gold, ...)
+pipeline      silver_cbs | silver_kvk | gold
 started_at    UTC
 finished_at   UTC
 status        success | failed
 error         what went wrong (failed runs)
-tables        JSON: {table: {"rows": n, "status": "published" | "skipped"}}; silver KVK
-              also: "updated" | "unchanged", mode (full | incremental), reason, added, removed
-inputs        JSON: {input table: Delta version read}, e.g. bronze tables
+tables        JSON: {table: {"rows": n, "status": ...}}. A successful run: published, or
+              skipped (an optional table that came out empty). A failed run: how far each
+              table got (built, staged, published; pipeline/common/publish.py)
+inputs        JSON: what the run read. "<layer>/<table>": the Delta version read;
+              "<...>#batch_id": the upload or file version used (KVK, SBI crosswalk);
+              "<...>#run_id": the run that wrote a silver table gold read
 code_version  git commit of the code that ran ("-dirty" with uncommitted changes)
+
+A silver KVK run that has nothing to rebuild is not logged (pipeline/silver/kvk.py,
+unchanged_since).
 """
 from __future__ import annotations
 
