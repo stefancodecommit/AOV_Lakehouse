@@ -688,7 +688,10 @@ words counted per paragraph from the .docx text, unchanged)
       healthcare 7.80% in both tables, every relative risk inside its band). Slides 6 and
       10 rendered and checked; report exported (4,945 words, per paragraph). Not changed:
       the worked examples of 2026 Q2 records in docs/bronze_to_silver.md and the lineage
-      label example (still real records in bronze)
+      label example (still real records in bronze).
+      Run again at 10:21 the same day (at the author's request): CBS had nothing new
+      (fetched 0, 74 already in bronze); silver and gold rebuilt; all seven gold tables
+      identical to the 10:11 run except run_id; inspection clean. No document changed
 - [ ] Export the report again (`python -m tools.export_report`) and check the word count
       (≤5000) in the Word document. Last exported 2026-11-26, after the third review
       (420 tests, 1.5 GB): ~4,938 words (counted from the .docx text, not by Word); open
