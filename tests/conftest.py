@@ -14,7 +14,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from pipeline.bronze import cbs as cbs_bronze  # noqa: E402
 from pipeline.bronze import kvk as kvk_bronze  # noqa: E402
-from pipeline.bronze import kvk_agent  # noqa: E402
+from pipeline.bronze import (
+    kvk_agent,  # noqa: E402
+    odata,  # noqa: E402
+)
 from pipeline.gold import build as gold  # noqa: E402
 from pipeline.silver import cbs as cbs_silver  # noqa: E402
 
@@ -39,7 +42,7 @@ def isolated_lakehouse(tmp_path, monkeypatch):
     monkeypatch.setattr(cbs_bronze, "BRONZE_ROOT", tmp_path / "bronze")
     monkeypatch.setattr(cbs_bronze, "LOG_TABLE", tmp_path / "bronze" / "_ingestion_log")
     monkeypatch.setattr(cbs_bronze, "QUARANTINE_ROOT", tmp_path / "quarantine")
-    monkeypatch.setattr(cbs_bronze, "PAUSE_SECONDS", 0)
+    monkeypatch.setattr(odata, "PAUSE_SECONDS", 0)          # pipeline/bronze/odata.py
     monkeypatch.setattr(cbs_silver, "BRONZE_ROOT", tmp_path / "bronze")
     monkeypatch.setattr(cbs_silver, "SILVER_ROOT", tmp_path / "silver")
     monkeypatch.setattr(cbs_silver, "LAKEHOUSE", tmp_path)

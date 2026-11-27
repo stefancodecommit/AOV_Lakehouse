@@ -529,8 +529,22 @@ Open, most valuable first (the author decides):
       report and gold's README.) No test of `_risk_row` on its own: the risk index tests
       (`test_relative_risk_band_and_assessment` and others) cover it through
       `build_risk_index`
-- [ ] **Optional: `pipeline/bronze/cbs.py` (665 lines)**: move the HTTP part
-      (`make_session`, `fetch_all`) to its own module
+- [x] **Optional: `pipeline/bronze/cbs.py` (665 lines)**: move the HTTP part
+      (`make_session`, `fetch_all`) to its own module.
+      Done (2026-11-27, at the author's request): `pipeline/bronze/odata.py` (59 lines)
+      holds `make_session` (retries on 429/5xx), `fetch_all` (nextLink or $skip paging,
+      a pause between pages) and `PAGE_SIZE`, `PAUSE_SECONDS`. `cbs.py` (643 lines; it
+      also grew a little with the folder parameters) decides what to request and where
+      it goes; it imports both functions by name, so the tests that swap
+      `cbs.fetch_all`/`cbs.make_session` for fakes are unchanged. Changed with it:
+      `tests/conftest.py` sets `odata.PAUSE_SECONDS` to 0 (was `cbs`; without that the
+      tests would wait between fake pages, run time is unchanged at ~72 s), and the two
+      paging tests in `tests/test_bronze_logic.py` call `odata.fetch_all` and patch
+      `odata.PAGE_SIZE`. Checked: 420 tests pass, ruff clean, the live test
+      (`pytest -m live`, real CBS API) passes, and `python -m pipeline.bronze.cbs
+      --dry-run` plans against the real API as before (63 requests already in bronze;
+      it also shows CBS has newer 81589NED quarters, which the next real run fetches).
+      Docs: bronze README, docs/PROJECT.md (layout)
 - [ ] **Optional (Liskov, small):** a missing optional table comes back as `pd.DataFrame()`
       without columns (gold `read_silver`), so each consumer checks for it; an empty frame
       with the expected columns would make "missing" behave like "no rows"

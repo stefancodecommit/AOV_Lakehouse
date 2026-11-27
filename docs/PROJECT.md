@@ -516,6 +516,7 @@ pipeline/                the data flow, one subpackage per layer; run as python 
   bronze/kvk_agent.py    the optional chat agent around bronze/kvk.py
   bronze/reference.py    CBS SBI 2008 -> SBI 2025 crosswalk -> bronze
   bronze/batchlog.py     shared by kvk.py and reference.py: load a file once, remove unlogged rows
+  bronze/odata.py        HTTP for cbs.py: a session that retries, every page of a request
   silver/cbs.py          bronze CBS -> silver
   silver/kvk.py          bronze KVK -> silver kvk_company
   gold/build.py          silver -> gold

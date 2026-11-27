@@ -7,6 +7,7 @@ import requests
 
 from conftest import DP_81589, table_info, topic_keys
 from pipeline.bronze import cbs as b
+from pipeline.bronze import odata
 from pipeline.silver import cbs as s
 
 Endpoint = b.Endpoint
@@ -106,16 +107,16 @@ class FakeSession:
 def test_fetch_all_follows_next_link():
     session = FakeSession({"value": [{"a": 1}], "odata.nextLink": "https://next/page2"},
                           {"value": [{"a": 2}]})
-    records, pages = b.fetch_all(session, "https://x/TypedDataSet", {"$filter": "f"})
+    records, pages = odata.fetch_all(session, "https://x/TypedDataSet", {"$filter": "f"})
     assert records == [{"a": 1}, {"a": 2}] and pages == 2
     assert session.calls[0] == ("https://x/TypedDataSet", {"$filter": "f", "$format": "json"})
     assert session.calls[1] == ("https://next/page2", None)  # nextLink already has the params
 
 
 def test_fetch_all_uses_skip_when_a_full_page_has_no_next_link(monkeypatch):
-    monkeypatch.setattr(b, "PAGE_SIZE", 2)
+    monkeypatch.setattr(odata, "PAGE_SIZE", 2)
     session = FakeSession({"value": [1, 2]}, {"value": [3, 4]}, {"value": [5]})
-    records, pages = b.fetch_all(session, "https://x", {})
+    records, pages = odata.fetch_all(session, "https://x", {})
     assert records == [1, 2, 3, 4, 5] and pages == 3
     assert [c[1].get("$skip") for c in session.calls] == [None, "2", "4"]
 

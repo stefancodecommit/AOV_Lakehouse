@@ -19,7 +19,8 @@ How "ask only once" works
   table) are fetched again; final periods are still asked only once. A correction of a
   final figure (rare; CBS announces it) needs --force.
 * Pagination inside a request is followed until the last page (odata.nextLink,
-  or $skip when a page comes back full without a nextLink).
+  or $skip when a page comes back full without a nextLink): pipeline/bronze/odata.py,
+  which holds the HTTP part (a session that retries, fetching every page).
 * Before writing, the records are checked (checks/cbs.py): data requests against the
   table's DataProperties (columns, period, numeric measures, unique keys, not empty),
   code lists on not being empty. A batch that fails is not written and not logged,
@@ -66,17 +67,15 @@ from __future__ import annotations
 import argparse
 import json
 import logging
-import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlencode
 
 import requests
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
 
 from checks.cbs import DIMENSION_TYPES, NUMERIC_DATATYPES
+from pipeline.bronze.odata import fetch_all, make_session  # HTTP: session with retries, paging
 from pipeline.common.config import project_path, settings
 
 _CFG = settings["cbs"]
@@ -84,9 +83,6 @@ BASE_URL = _CFG["base_url"]
 BRONZE_ROOT = project_path(settings["paths"]["lakehouse"]) / "bronze"
 LOG_TABLE = BRONZE_ROOT / "_ingestion_log"
 QUARANTINE_ROOT = project_path(settings["paths"]["lakehouse"]) / "quarantine"
-PAGE_SIZE = 10_000          # CBS ODataApi returns at most 10,000 records per response
-# (when a page comes back full without a nextLink, fetch_all continues with $skip)
-PAUSE_SECONDS = float(_CFG["pause_seconds"])
 
 log = logging.getLogger("cbs_bronze")
 
@@ -251,44 +247,6 @@ def plan_requests(session: requests.Session, ep: Endpoint,
             ))
         return reqs
     return [Request(endpoint=ep, key=f"{ep.table_id}/{ep.entity}", params={})]
-
-
-# --------------------------------------------------------------------------- http
-def make_session() -> requests.Session:
-    """HTTP session that retries up to 5 times, with increasing waits, on rate limits
-    (429) and server errors (5xx), so a short CBS hiccup doesn't fail a run."""
-    s = requests.Session()
-    retry = Retry(total=5, backoff_factor=2, status_forcelist=(429, 500, 502, 503, 504),
-                  allowed_methods=("GET",))
-    s.mount("https://", HTTPAdapter(max_retries=retry))
-    s.headers["Accept"] = "application/json"
-    return s
-
-
-def fetch_all(session: requests.Session, url: str, params: dict) -> tuple[list[dict], int]:
-    """Fetch every page of one logical request. Returns (records, pages)."""
-    records: list[dict] = []
-    pages = 0
-    base_params = {**params, "$format": "json"}
-    next_url, next_params, skip = url, base_params, 0
-
-    while next_url:
-        resp = session.get(next_url, params=next_params, timeout=180)
-        resp.raise_for_status()
-        payload = resp.json()
-        page = payload.get("value", [])
-        records.extend(page)
-        pages += 1
-        time.sleep(PAUSE_SECONDS)
-
-        if payload.get("odata.nextLink"):            # server-driven paging
-            next_url, next_params = payload["odata.nextLink"], None
-        elif len(page) >= PAGE_SIZE:                   # full page, no nextLink -> $skip
-            skip += len(page)
-            next_url, next_params = url, {**base_params, "$skip": str(skip)}
-        else:
-            next_url = None
-    return records, pages
 
 
 # --------------------------------------------------------------------------- delta io

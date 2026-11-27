@@ -21,7 +21,9 @@ keeps the original, every later step can be rebuilt without asking a source agai
 
 The two file sources share [`batchlog.py`](batchlog.py): a file whose SHA-256 is in the
 source's batch log is not loaded again, and rows of a batch that was written but never
-logged (a crash in between) are removed before the next write.
+logged (a crash in between) are removed before the next write. `cbs.py` gets its HTTP
+from [`odata.py`](odata.py): a session that retries on rate limits and server errors,
+and fetching every page of one request.
 
 ## Design decisions
 
