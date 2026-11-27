@@ -44,7 +44,11 @@ KVK agent split from the ingest, shared batch-log helpers, folders as parameters
 place for the lakehouse layout (`pipeline/common/paths.py`), explicit inputs for the gold
 builders, `_risk_row`, the HTTP part in `pipeline/bronze/odata.py`, an empty optional
 table with its columns, and three tests (422 tests). The same day: a CBS update, the data
-now runs to 2026 Q3, and the report, slides and demo follow it.
+now runs to 2026 Q3, and the report, slides and demo follow it. Also that day: Q&A
+question 13 ("why are facts and dimensions in silver?"), rewritten after checking the
+Databricks and Microsoft docs (the star schema is usually gold; this silver matches
+Databricks' own silver wording), with one sentence in README "The data model"; the
+layers keep their names, and "regio" left the silver dimensions in report section 3.3.
 
 Still open: nothing for the assignment except the author's part below. The code review
 is finished (section "Code review", 2026-11-11 to 11-13; ERD added 2026-11-19). The second
@@ -54,7 +58,8 @@ before submitting: the Word report must be exported again
 (`rapport.md` changed: test count and lineage columns). A fourth review (2026-11-27,
 SOLID principles) logged optional design items in section "Code review"; none is needed
 for the assignment. Status 2026-11-27: every item of the fourth review is done, and the
-report was exported again after the Q3 update (4,945 words); what is left is the
+report was exported again after the Q3 update (4,945 words) and after removing
+"regio" from section 3.3 (4,944 words); what is left is the
 author's part below and the checks under "Before submitting" (section "Code review"),
 which stay open until the report is handed in.
 
@@ -67,10 +72,10 @@ next steps.
 
 **Last: the author's part** (only the author can do this):
 1. ~~**GenAI reflection**~~ in report section 5.4 (done 2026-11-05, 237 words; the whole
-   Word document is now 4,945 words). Not in docs/genai_use.md (the author's choice);
+   Word document is now 4,944 words). Not in docs/genai_use.md (the author's choice);
    its placeholder section 6 was removed
 2. **Title page** of the report: name and student number filled in (2026-11-11; the whole
-   Word document is now 4,942 words; 4,945 since the Q3 update of 2026-11-27). Still open: the **date** of submission; then
+   Word document is now 4,942 words; 4,945 since the Q3 update of 2026-11-27; 4,944 since "regio" left section 3.3 the same day). Still open: the **date** of submission; then
    export again (`python -m tools.export_report`) and tick the Report item in section
    "Assignment"
 3. **Presentation:** practise the Q&A (docs/qa_practice.md), rehearse the demo
