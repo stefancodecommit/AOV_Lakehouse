@@ -131,6 +131,15 @@ def endpoints_from_config(cfg: dict) -> list[Endpoint]:
 ENDPOINTS: list[Endpoint] = endpoints_from_config(_CFG)
 
 
+def _folders(lakehouse: Path | None) -> tuple[Path, Path, Path]:
+    """(bronze folder, ingestion log, quarantine folder) of `lakehouse`, or the configured
+    ones for None. run() and cleanup_scope() take a lakehouse (e.g. a copy to try a
+    change on) and pass these down."""
+    if lakehouse is None:
+        return BRONZE_ROOT, LOG_TABLE, QUARANTINE_ROOT
+    return lakehouse / "bronze", lakehouse / "bronze" / "_ingestion_log", lakehouse / "quarantine"
+
+
 # --------------------------------------------------------------------------- schemas
 # pyarrow/deltalake are imported where Delta is read or written, so the planning and
 # HTTP logic (and its tests, and --dry-run) work without them.
@@ -283,12 +292,14 @@ def fetch_all(session: requests.Session, url: str, params: dict) -> tuple[list[d
 
 
 # --------------------------------------------------------------------------- delta io
-def done_keys() -> set[str]:
-    """Request keys already in bronze (from bronze/_ingestion_log); run() skips these."""
-    if not (LOG_TABLE / "_delta_log").exists():
+def done_keys(log_table: Path | None = None) -> set[str]:
+    """Request keys already in bronze (from bronze/_ingestion_log, or `log_table`); run()
+    skips these."""
+    log_table = LOG_TABLE if log_table is None else log_table
+    if not (log_table / "_delta_log").exists():
         return set()
     from deltalake import DeltaTable
-    return set(DeltaTable(str(LOG_TABLE)).to_pyarrow_table(columns=["request_key"])
+    return set(DeltaTable(str(log_table)).to_pyarrow_table(columns=["request_key"])
                .column("request_key").to_pylist())
 
 
@@ -383,7 +394,8 @@ def _fit_to_table(path: Path, table):
     return table.cast(pa.schema(fields))
 
 
-def write_bronze(req: Request, records: list[dict], dataprops: list[dict] | None = None) -> None:
+def write_bronze(req: Request, records: list[dict], dataprops: list[dict] | None = None,
+                 root: Path | None = None) -> None:
     """Write the records of one request to its bronze table.
 
     Replaces earlier rows of the same period (or the same request key) in ONE Delta
@@ -391,10 +403,10 @@ def write_bronze(req: Request, records: list[dict], dataprops: list[dict] | None
     its old rows, a retry after a crash can't create duplicates, and a reader never sees
     the period missing in between (until 2026-11-20 this was a delete and an append, two
     commits). `dataprops` (the table's DataProperties) gives the fields their types;
-    without it they are inferred."""
+    without it they are inferred. `root`: the bronze folder (default: the configured one)."""
     from deltalake import DeltaTable, write_deltalake
     ep = req.endpoint
-    path = BRONZE_ROOT / ep.name
+    path = (BRONZE_ROOT if root is None else root) / ep.name
     now = datetime.now(timezone.utc)
     exists = (path / "_delta_log").exists()
     pred = (f"_period = '{req.period}'" if req.period
@@ -412,7 +424,7 @@ def write_bronze(req: Request, records: list[dict], dataprops: list[dict] | None
         write_deltalake(str(path), table, mode="append", schema_mode="merge")
 
 
-def log_success(req: Request, row_count: int, pages: int) -> None:
+def log_success(req: Request, row_count: int, pages: int, log_table: Path | None = None) -> None:
     """Record a request in bronze/_ingestion_log, after its data was written.
 
     The order matters: data first, log second. If the run stops in between, the request
@@ -427,7 +439,7 @@ def log_success(req: Request, row_count: int, pages: int) -> None:
         "row_count": [row_count], "pages": [pages],
         "ingested_at": [datetime.now(timezone.utc)],
     }, schema=log_schema())
-    write_deltalake(str(LOG_TABLE), row, mode="append")
+    write_deltalake(str(LOG_TABLE if log_table is None else log_table), row, mode="append")
 
 
 # --------------------------------------------------------------------------- checks
@@ -453,10 +465,12 @@ def table_infos_request(table_id: str, info: dict) -> Request:
 
 
 def ingest_table_infos(session, table_ids: list[str], already: set[str],
-                       dry_run: bool, modified: dict | None = None) -> tuple[int, int, int]:
+                       dry_run: bool, modified: dict | None = None,
+                       lakehouse: Path | None = None) -> tuple[int, int, int]:
     """Lifecycle warnings per table, and a bronze snapshot when TableInfos changed.
     Fills `modified` (table_id -> TableInfos.Modified, for plan_requests). Returns
     (snapshots written, warnings, failed requests)."""
+    bronze, log_table, _ = _folders(lakehouse)
     from checks import warnings
     from checks.cbs import check_table_lifecycle
     written = warned = failed = 0
@@ -479,8 +493,8 @@ def ingest_table_infos(session, table_ids: list[str], already: set[str],
         req = table_infos_request(table_id, infos[0])
         if req.key in already or dry_run:
             continue
-        write_bronze(req, infos)
-        log_success(req, len(infos), pages)
+        write_bronze(req, infos, root=bronze)
+        log_success(req, len(infos), pages, log_table=log_table)
         already.add(req.key)
         written += 1
         log.info("%-40s TableInfos changed (modified %s), snapshot stored",
@@ -488,7 +502,8 @@ def ingest_table_infos(session, table_ids: list[str], already: set[str],
     return written, warned, failed
 
 
-def quarantine_batch(req: Request, records: list[dict], results: list, pages: int):
+def quarantine_batch(req: Request, records: list[dict], results: list, pages: int,
+                     quarantine_root: Path | None = None):
     """Save a batch that failed its checks to lakehouse/quarantine/cbs/ with a report
     (request, source URL, every check result) and the records as received."""
     from checks.quarantine import quarantine
@@ -497,7 +512,8 @@ def quarantine_batch(req: Request, records: list[dict], results: list, pages: in
               "period_status": req.period_status, "source_url": req.display_url,
               "row_count": len(records), "pages": pages,
               "checks": [r.as_dict() for r in results]}
-    return quarantine(QUARANTINE_ROOT, "cbs", req.endpoint.name + (f"_{req.period}" if req.period else ""),
+    root = QUARANTINE_ROOT if quarantine_root is None else quarantine_root
+    return quarantine(root, "cbs", req.endpoint.name + (f"_{req.period}" if req.period else ""),
                       report, records=records)
 
 
@@ -523,20 +539,22 @@ def _sql_list(values) -> str:
     return ", ".join("'" + str(v).replace("'", "''") + "'" for v in sorted(values))
 
 
-def cleanup_scope(session=None, dry_run: bool = True) -> list[str]:
+def cleanup_scope(session=None, dry_run: bool = True, lakehouse: Path | None = None) -> list[str]:
     """Remove bronze tables, rows and log entries outside the configuration.
-    Returns a description of every action (done, or with dry_run only planned)."""
+    Returns a description of every action (done, or with dry_run only planned).
+    `lakehouse`: another lakehouse folder than the configured one."""
     import shutil
 
     from deltalake import DeltaTable
+    bronze, log_table, _ = _folders(lakehouse)
     actions: list[str] = []
-    log_dt = DeltaTable(str(LOG_TABLE)) if (LOG_TABLE / "_delta_log").exists() else None
+    log_dt = DeltaTable(str(log_table)) if (log_table / "_delta_log").exists() else None
     log_df = (log_dt.to_pandas(columns=["table_id", "entity"]).drop_duplicates()
               if log_dt else None)
     configured = configured_table_names()
 
     # 1. whole tables that are no longer configured (KVK and reference live in subfolders)
-    for path in sorted(BRONZE_ROOT.glob("*/_delta_log")):
+    for path in sorted(bronze.glob("*/_delta_log")):
         table = path.parent
         if table.name.startswith("_") or table.name in configured:
             continue
@@ -553,7 +571,7 @@ def cleanup_scope(session=None, dry_run: bool = True) -> list[str]:
     # 2. periods outside the start year / period preference
     session = session or make_session()
     for ep in ENDPOINTS:
-        path = BRONZE_ROOT / ep.name
+        path = bronze / ep.name
         if not ep.split_by_period or not (path / "_delta_log").exists():
             continue
         dt = DeltaTable(str(path))
@@ -573,7 +591,7 @@ def cleanup_scope(session=None, dry_run: bool = True) -> list[str]:
 
 
 # --------------------------------------------------------------------------- main
-def run(only: str | None, force: bool, dry_run: bool) -> dict:
+def run(only: str | None, force: bool, dry_run: bool, lakehouse: Path | None = None) -> dict:
     """Ingest everything new for the configured endpoints.
 
     Per request: skip it when its key is already logged; otherwise fetch every page,
@@ -582,10 +600,12 @@ def run(only: str | None, force: bool, dry_run: bool) -> dict:
     limits the run to endpoints whose name contains that text; `force` ignores the log
     (rows are replaced, not duplicated); `dry_run` only lists the requests. Returns the
     counts (fetched, skipped, failed, ...), which Dagster uses to decide whether
-    anything new arrived."""
+    anything new arrived. `lakehouse`: write to another lakehouse folder than the configured
+    one (e.g. a copy to try a change on)."""
     from checks import failures
+    bronze, log_table, quarantine_root = _folders(lakehouse)
     session = make_session()
-    already = set() if force else done_keys()
+    already = set() if force else done_keys(log_table)
     fetched = skipped = failed = quarantined = 0
     dataprops_cache: dict[str, list[dict]] = {}
 
@@ -597,7 +617,7 @@ def run(only: str | None, force: bool, dry_run: bool) -> dict:
                    if not only or only.lower() in f"{t}_tableinfos".lower()]
     modified: dict[str, str | None] = {}
     infos_written, warned, infos_failed = ingest_table_infos(session, data_tables, already,
-                                                             dry_run, modified)
+                                                             dry_run, modified, lakehouse)
     failed += infos_failed
 
     # 2. data and code lists, one request at a time
@@ -622,14 +642,14 @@ def run(only: str | None, force: bool, dry_run: bool) -> dict:
                 records, pages = fetch_all(session, ep.url, req.params)
                 results = check_records(session, req, records, dataprops_cache)
                 if failures(results):
-                    folder = quarantine_batch(req, records, results, pages)
+                    folder = quarantine_batch(req, records, results, pages, quarantine_root)
                     quarantined += 1
                     log.error("Checks failed for %s: %s -> %s", req.display_url,
                               "; ".join(f"{r.name}: {r.detail}" for r in failures(results)),
                               folder or "already in quarantine")
                     continue
-                write_bronze(req, records, dataprops_cache.get(ep.table_id))
-                log_success(req, len(records), pages)
+                write_bronze(req, records, dataprops_cache.get(ep.table_id), root=bronze)
+                log_success(req, len(records), pages, log_table=log_table)
                 already.add(req.key)
                 fetched += 1
                 log.info("%-40s %6d rows  %d page(s)  %s", ep.name, len(records), pages,

@@ -140,21 +140,34 @@ def check_crosswalk(df: pd.DataFrame) -> tuple[list[str], list[str]]:
 
 
 # --------------------------------------------------------------------------- delta io
-def ingested_hashes() -> dict[str, str]:
+def _folders(lakehouse: Path | None) -> tuple[Path, Path, Path]:
+    """(crosswalk table, batch log, quarantine folder) of `lakehouse`, or the configured
+    ones for None. ingest() takes a lakehouse (e.g. a copy to try a change on)."""
+    if lakehouse is None:
+        return DATA_TABLE, LOG_TABLE, QUARANTINE_ROOT
+    ref = lakehouse / "bronze" / "reference"
+    return ref / DATASET, ref / "_batch_log", lakehouse / "quarantine"
+
+
+def ingested_hashes(log_table: Path | None = None) -> dict[str, str]:
     """file_sha256 -> batch_id of every successful crosswalk batch (pipeline/bronze/batchlog.py)."""
-    return batchlog.ingested_hashes(LOG_TABLE)
+    return batchlog.ingested_hashes(LOG_TABLE if log_table is None else log_table)
 
 
 def write_batch(df: pd.DataFrame, batch_id: str, now: datetime, source_file: str,
-                source_url: str | None, sha: str, version: str) -> int:
+                source_url: str | None, sha: str, version: str,
+                data_table: Path | None = None, log_table: Path | None = None) -> int:
     """Write the crosswalk rows as one batch in ONE Delta commit; returns the row count.
 
     Rows of a batch that was written earlier but never logged (a crash in between) are
-    removed first, so retrying can't double them."""
+    removed first, so retrying can't double them. The tables default to the configured
+    ones."""
     import pyarrow as pa
     from deltalake import write_deltalake
 
-    batchlog.remove_orphan_rows(DATA_TABLE, LOG_TABLE)
+    data_table = DATA_TABLE if data_table is None else data_table
+    log_table = LOG_TABLE if log_table is None else log_table
+    batchlog.remove_orphan_rows(data_table, log_table)
     n = len(df)
     schema = pa.schema([pa.field(c, pa.string()) for c in COLUMNS] + [
         ("_batch_id", pa.string()), ("_ingested_at", pa.timestamp("us", tz="UTC")),
@@ -166,12 +179,12 @@ def write_batch(df: pd.DataFrame, batch_id: str, now: datetime, source_file: str
                       "_source_file": [source_file] * n, "_source_url": [source_url] * n,
                       "_source_sha256": [sha] * n, "_source_version": [version] * n,
                       "_row_number": list(range(1, n + 1))}, schema=schema)
-    write_deltalake(str(DATA_TABLE), table, mode="append")   # one commit per batch
+    write_deltalake(str(data_table), table, mode="append")   # one commit per batch
     return n
 
 
 def write_log(batch_id: str, now: datetime, source_file: str, source_url: str | None,
-              sha: str, version: str, rows: int) -> None:
+              sha: str, version: str, rows: int, log_table: Path | None = None) -> None:
     """Record a written batch in bronze/reference/_batch_log (after the data)."""
     import pyarrow as pa
     from deltalake import write_deltalake
@@ -184,16 +197,18 @@ def write_log(batch_id: str, now: datetime, source_file: str, source_url: str | 
         ("ingested_at", pa.timestamp("us", tz="UTC")), ("source_file", pa.string()),
         ("source_url", pa.string()), ("file_sha256", pa.string()),
         ("source_version", pa.string()), ("row_count", pa.int64()), ("status", pa.string())]))
-    write_deltalake(str(LOG_TABLE), table, mode="append")
+    write_deltalake(str(LOG_TABLE if log_table is None else log_table), table, mode="append")
 
 
 # --------------------------------------------------------------------------- main
-def ingest(path: Path, source_url: str | None = None) -> dict:
+def ingest(path: Path, source_url: str | None = None, lakehouse: Path | None = None) -> dict:
     """Check and load one crosswalk file. Returns a report with status
-    INGESTED, SKIPPED (this exact file is already in bronze) or FAILED."""
+    INGESTED, SKIPPED (this exact file is already in bronze) or FAILED. `lakehouse`:
+    load into another lakehouse folder than the configured one."""
+    data_table, log_table, quarantine_root = _folders(lakehouse)
     path = Path(path)
     sha = sha256(path)
-    if (batch := ingested_hashes().get(sha)):
+    if (batch := ingested_hashes(log_table).get(sha)):
         return {"status": "SKIPPED", "reason": f"This exact file was already ingested as batch {batch}",
                 "batch_id": batch, "file_sha256": sha}
 
@@ -202,22 +217,27 @@ def ingest(path: Path, source_url: str | None = None) -> dict:
         from checks.quarantine import quarantine
         report = {"status": "FAILED", "errors": errors, "warnings": warnings,
                   "file_sha256": sha, "source_url": source_url}
-        folder = quarantine(QUARANTINE_ROOT, "reference", path.name, report, file=path)
+        folder = quarantine(quarantine_root, "reference", path.name, report, file=path)
         return {**report, "quarantine": str(folder) if folder else "already in quarantine"}
 
     now = datetime.now(timezone.utc)
     batch_id = f"{DATASET}_{now:%Y%m%dT%H%M%S%fZ}_{sha[:8]}"
-    rows = write_batch(df, batch_id, now, path.name, source_url, sha, version)
-    write_log(batch_id, now, path.name, source_url, sha, version, rows)
+    rows = write_batch(df, batch_id, now, path.name, source_url, sha, version,
+                       data_table, log_table)
+    write_log(batch_id, now, path.name, source_url, sha, version, rows, log_table)
     return {"status": "INGESTED", "batch_id": batch_id, "rows": rows, "version": version,
             "sbi2008_codes": int(df["sbi2008"].nunique()),
             "sbi2025_codes": int(df["sbi2025"].nunique()), "warnings": warnings,
             "file_sha256": sha}
 
 
-def download(url: str, dest_dir: Path = DOWNLOAD_DIR) -> Path:
-    """Download the file at `url` into `dest_dir` (inbox/reference/) and return its path."""
+def download(url: str, dest_dir: Path | None = None) -> Path:
+    """Download the file at `url` into `dest_dir` (default: inbox/reference/) and return
+    its path. (The default was `dest_dir: Path = DOWNLOAD_DIR` until 2026-11-27: Python
+    fixes such a default when it loads the module, so a test's patch of DOWNLOAD_DIR
+    never reached it.)"""
     import requests
+    dest_dir = DOWNLOAD_DIR if dest_dir is None else dest_dir
     dest_dir.mkdir(parents=True, exist_ok=True)
     dest = dest_dir / url.rstrip("/").rsplit("/", 1)[-1]
     resp = requests.get(url, timeout=120)

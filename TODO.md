@@ -420,7 +420,7 @@ Open, most valuable first (the author decides):
       (`test_rows_of_an_unlogged_batch_are_removed_before_the_next_load`); KVK has no
       test of its own for it (there was none before either). Docs: bronze README,
       docs/PROJECT.md (layout)
-- [ ] **Gradually: pass folders as parameters instead of module constants** (dependency
+- [x] **Gradually: pass folders as parameters instead of module constants** (dependency
       inversion). Every pipeline module computes `BRONZE_ROOT`, `GOLD_ROOT`, `RUN_LOG`,
       `ENDPOINTS`, ... from `settings` at import; `tests/conftest.py` needs ~40
       `monkeypatch.setattr` calls to point them at a temporary folder, and a forgotten
@@ -456,7 +456,43 @@ Open, most valuable first (the author decides):
         KVK's `unchanged_since` reading the crosswalk batch from the configured silver
         (the copy's crosswalk is the same, so the answer is too)
       Next, when bronze is touched anyway: `pipeline/bronze/kvk.py` (16 uses of its
-      folder constants), `reference.py`, `cbs.py`; `batchlog.py` already takes its tables
+      folder constants), `reference.py`, `cbs.py`; `batchlog.py` already takes its tables.
+      **Step 1 done for bronze too** (2026-11-27, at the author's request), the same way:
+      - `pipeline/bronze/cbs.py`: `run(..., lakehouse=None)` and `cleanup_scope(...,
+        lakehouse=None)`; helper `_folders` (bronze, ingestion log, quarantine);
+        `done_keys(log_table)`, `write_bronze(..., root)`, `log_success(..., log_table)`,
+        `quarantine_batch(..., quarantine_root)`, `ingest_table_infos(..., lakehouse)`
+      - `pipeline/bronze/reference.py`: `ingest(path, source_url, lakehouse=None)`; helper
+        `_folders`; `ingested_hashes(log_table)`, `write_batch(..., data_table,
+        log_table)`, `write_log(..., log_table)`. **Fixed on the way:**
+        `download(url, dest_dir=DOWNLOAD_DIR)` had exactly the trap described above (the
+        default was fixed when the module loaded, so the test patch of DOWNLOAD_DIR never
+        reached it). No test downloads, and Dagster means the real inbox, so it did no
+        harm; now `dest_dir=None`
+      - `pipeline/bronze/kvk.py`: `verify(file_path, lakehouse=None)`, `ingest(...,
+        lakehouse=None)`, `ingest_confirmed_file(..., lakehouse=None)`; helper `_folders`;
+        `ingested_hashes`, `newest_snapshot_date`, `list_batches`, `inbox_files`,
+        `newest_new_inbox_file` take `log_table`; `write_batch(..., data_table,
+        log_table)`, `write_log(..., log_table)`. The inbox stays INBOX: it is a setting
+        of its own (paths.inbox), not part of the lakehouse. **Changed protocol:** the
+        human gate is now `confirm(verification, batch_id, table)`, so
+        `confirm_at_keyboard` shows the table the rows really go to (with a lakehouse
+        argument it isn't the configured one); Dagster's gate is `lambda v, batch_id,
+        table: True`. The agent and the command line pass nothing: as before
+      - tests: still 420; fakes in `tests/test_bronze_logic.py` and
+        `tests/test_kvk_logic.py` take the new arguments. Three existing tests also run
+        into a second, empty lakehouse and check that data, log and quarantine go there
+        and the configured lakehouse is untouched:
+        `test_quarantined_period_is_cleaned_up_after_cbs_fixes_it` (CBS),
+        `test_loading_the_same_file_twice_adds_nothing` (crosswalk),
+        `test_dagster_ingest_needs_the_exact_file_name_as_confirmation` (KVK). Checked
+        with 15 deliberate misroutings (each folder or table of each module pointed back
+        at the configured one): all 15 make a test fail (the first try missed KVK's rows
+        going to the configured data table; the KVK test now checks where the rows are)
+      Step 1 is now done for every pipeline module. Not done (step 2, optional): no
+      folder constants per module, so the ~40 patches in `tests/conftest.py` could go.
+      The tools (`tools/maintenance.py`, `backup.py`, `inspect_lakehouse.py`) and
+      `dashboard/data.py` were not part of this item
 - [x] **Optional: explicit inputs for the gold builders** (interface segregation). Each
       `build_*` in `pipeline/gold/build.py` takes `t` (all silver tables), so what it
       really reads is hidden; silver CBS builders already name theirs

@@ -134,7 +134,7 @@ def pipeline(monkeypatch):
            Endpoint("81589NED", "Perioden")]
     monkeypatch.setattr(b, "ENDPOINTS", eps)
     monkeypatch.setattr(b, "make_session", lambda: None)
-    monkeypatch.setattr(b, "done_keys", lambda: set(state["log"]))
+    monkeypatch.setattr(b, "done_keys", lambda log_table=None: set(state["log"]))
 
     def fetch_all(session, url, params):
         if url.endswith("/DataProperties"):
@@ -155,8 +155,9 @@ def pipeline(monkeypatch):
 
     monkeypatch.setattr(b, "fetch_all", fetch_all)
     monkeypatch.setattr(b, "write_bronze",
-                        lambda req, recs, dataprops=None: state["written"].append(req.key))
-    monkeypatch.setattr(b, "log_success", lambda req, n, pages: state["log"].add(req.key))
+                        lambda req, recs, dataprops=None, root=None: state["written"].append(req.key))
+    monkeypatch.setattr(b, "log_success",
+                        lambda req, n, pages, log_table=None: state["log"].add(req.key))
     return state
 
 

@@ -1,5 +1,7 @@
 """Reference data: the SBI 2008 -> SBI 2025 crosswalk, from xlsx to bronze to silver.
 Small xlsx files are built in tmp_path with the real v2.0 header and sample rows."""
+from pathlib import Path
+
 import pandas as pd
 import pytest
 from deltalake import DeltaTable
@@ -58,6 +60,17 @@ def test_loading_the_same_file_twice_adds_nothing(tmp_path):
     second = r.ingest(path)
     assert second["status"] == "SKIPPED" and second["batch_id"] == first["batch_id"]
     assert len(bronze()) == 6 and len(batch_log()) == 1
+
+    # ingest(lakehouse=...): another lakehouse has its own log, table and quarantine
+    other = tmp_path / "other"
+    assert r.ingest(path, lakehouse=other)["status"] == "INGESTED"
+    ref = other / "bronze" / "reference"
+    assert len(DeltaTable(str(ref / "sbi2008_sbi2025")).to_pandas()) == 6
+    assert len(DeltaTable(str(ref / "_batch_log")).to_pandas()) == 1
+    assert len(bronze()) == 6 and len(batch_log()) == 1        # the configured ones untouched
+    bad = r.ingest(xlsx(tmp_path / "bad.xlsx", sheet="Other"), lakehouse=other)
+    assert bad["status"] == "FAILED"
+    assert Path(bad["quarantine"]).parent == other / "quarantine" / "reference"
 
 
 def test_same_content_under_another_name_is_skipped_too(tmp_path):

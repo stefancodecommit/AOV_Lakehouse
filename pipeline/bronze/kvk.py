@@ -104,6 +104,17 @@ class Verification:
 VERIFIED: dict[str, Verification] = {}   # resolved file path -> latest verification
 
 
+def _folders(lakehouse: Path | None) -> tuple[Path, Path, Path]:
+    """(data table, batch log, quarantine folder) of `lakehouse`, or the configured ones
+    for None. verify(), ingest() and ingest_confirmed_file() take a lakehouse (e.g. a
+    copy to try a change on) and pass these down. The inbox is a setting of its own
+    (paths.inbox), not part of the lakehouse, so it stays INBOX."""
+    if lakehouse is None:
+        return DATA_TABLE, LOG_TABLE, QUARANTINE_ROOT
+    kvk = lakehouse / "bronze" / "kvk"
+    return kvk / DATA_TABLE.name, kvk / LOG_TABLE.name, lakehouse / "quarantine"
+
+
 # --------------------------------------------------------------------------- files and the batch log
 def resolve_path(file_path: str) -> Path:
     """A file path as typed or dragged into the terminal -> an absolute Path.
@@ -116,11 +127,12 @@ def resolve_path(file_path: str) -> Path:
     return path.resolve()
 
 
-def inbox_files() -> list[dict]:
-    """Zip and CSV files in the inbox, newest first, marked when already ingested."""
+def inbox_files(log_table: Path | None = None) -> list[dict]:
+    """Zip and CSV files in the inbox, newest first, marked when already ingested
+    (according to `log_table`, default: the configured batch log)."""
     if not INBOX.is_dir():
         return []
-    done = ingested_hashes()
+    done = ingested_hashes(log_table)
     files = sorted((f for f in INBOX.iterdir()
                     if f.is_file() and f.suffix.lower() in {".zip", ".csv"}),
                    key=lambda f: f.stat().st_mtime, reverse=True)
@@ -133,9 +145,9 @@ def inbox_files() -> list[dict]:
     return out
 
 
-def newest_new_inbox_file() -> str | None:
+def newest_new_inbox_file(log_table: Path | None = None) -> str | None:
     """Name of the newest file in the inbox that isn't ingested yet, or None."""
-    return next((f["file"] for f in inbox_files() if not f["already_ingested_as"]), None)
+    return next((f["file"] for f in inbox_files(log_table) if not f["already_ingested_as"]), None)
 
 
 def by_snapshot_date(batches):
@@ -154,28 +166,30 @@ def by_snapshot_date(batches):
     return df.sort_values(["snapshot_day", "ingested_at"]).reset_index(drop=True)
 
 
-def newest_snapshot_date() -> date | None:
+def newest_snapshot_date(log_table: Path | None = None) -> date | None:
     """KVK file date (or upload day) of the newest snapshot in bronze, or None."""
-    if not (LOG_TABLE / "_delta_log").exists():
+    log_table = LOG_TABLE if log_table is None else log_table
+    if not (log_table / "_delta_log").exists():
         return None
     from deltalake import DeltaTable
-    log = DeltaTable(str(LOG_TABLE)).to_pandas()
+    log = DeltaTable(str(log_table)).to_pandas()
     log = log[log["status"] == "success"]
     return None if log.empty else by_snapshot_date(log)["snapshot_day"].iloc[-1].date()
 
 
-def ingested_hashes() -> dict[str, str]:
+def ingested_hashes(log_table: Path | None = None) -> dict[str, str]:
     """file_sha256 -> batch_id of every successful KVK batch (pipeline/bronze/batchlog.py)."""
-    return batchlog.ingested_hashes(LOG_TABLE)
+    return batchlog.ingested_hashes(LOG_TABLE if log_table is None else log_table)
 
 
-def list_batches() -> list[dict]:
+def list_batches(log_table: Path | None = None) -> list[dict]:
     """The batches in the batch log, oldest first: batch_id, ingested_at (ISO text),
     source_file, row_count, status."""
-    if not (LOG_TABLE / "_delta_log").exists():
+    log_table = LOG_TABLE if log_table is None else log_table
+    if not (log_table / "_delta_log").exists():
         return []
     from deltalake import DeltaTable
-    rows = DeltaTable(str(LOG_TABLE)).to_pyarrow_table(
+    rows = DeltaTable(str(log_table)).to_pyarrow_table(
         columns=["batch_id", "ingested_at", "source_file", "row_count", "status"]).to_pylist()
     for r in rows:
         r["ingested_at"] = r["ingested_at"].isoformat()
@@ -183,14 +197,16 @@ def list_batches() -> list[dict]:
 
 
 # --------------------------------------------------------------------------- verify, confirm, ingest
-def verify(file_path: str) -> dict:
+def verify(file_path: str, lakehouse: Path | None = None) -> dict:
     """Verify a KVK file (zip or csv) before it may be ingested; returns the report
     (status PASSED or FAILED and the reasons). The result is kept in VERIFIED, which
-    ingest() requires. A rejected file goes to quarantine with its report."""
+    ingest() requires. A rejected file goes to quarantine with its report. `lakehouse`:
+    compare with (and quarantine in) another lakehouse folder than the configured one."""
+    _, log_table, quarantine_root = _folders(lakehouse)
     path = resolve_path(file_path)
     check = check_file(path, REQUIRED_COLUMNS, OPTIONAL_COLUMNS, MAX_MALFORMED_SHARE,
-                       ingested=ingested_hashes())
-    newest = newest_snapshot_date() if check.passed else None
+                       ingested=ingested_hashes(log_table))
+    newest = newest_snapshot_date(log_table) if check.passed else None
     if newest and check.file_date and check.file_date < newest:
         # allowed (bronze keeps history), but it won't change silver: say so
         check.warnings.append(f"this file ({check.file_date}) is older than the newest "
@@ -200,7 +216,7 @@ def verify(file_path: str) -> dict:
     if not check.passed and path.is_file() and "already_ingested" not in check.details:
         # a rejected file is kept with its report; a file that is already in bronze isn't
         from checks.quarantine import quarantine
-        folder = quarantine(QUARANTINE_ROOT, "kvk", path.name, report, file=path)
+        folder = quarantine(quarantine_root, "kvk", path.name, report, file=path)
         report["quarantine"] = str(folder) if folder else "already in quarantine"
     VERIFIED[str(path)] = Verification(str(path), check.sha256, check.passed, check.csv_member,
                                        check.encoding, check.header, check.row_count, report,
@@ -208,11 +224,12 @@ def verify(file_path: str) -> dict:
     return report
 
 
-def confirm_at_keyboard(v: Verification, batch_id: str) -> bool:
-    """Human gate: reads from the real keyboard, never from a language model."""
+def confirm_at_keyboard(v: Verification, batch_id: str, table: Path) -> bool:
+    """Human gate: reads from the real keyboard, never from a language model. Shows the
+    table the rows would go to, so the person sees where they write."""
     print("\n" + "=" * 70)
     print(f"  Write {v.row_count:,} rows from {Path(v.path).name}")
-    print(f"  to {DATA_TABLE} as batch {batch_id}?")
+    print(f"  to {table} as batch {batch_id}?")
     print("=" * 70)
     try:
         return input("  Type YES to confirm: ").strip() == "YES"
@@ -220,13 +237,15 @@ def confirm_at_keyboard(v: Verification, batch_id: str) -> bool:
         return False
 
 
-def ingest(path: Path, confirm, confirmed_by: str) -> dict:
-    """Write a verified file to bronze after `confirm(verification, batch_id)` says yes.
+def ingest(path: Path, confirm, confirmed_by: str, lakehouse: Path | None = None) -> dict:
+    """Write a verified file to bronze after `confirm(verification, batch_id, table)` says yes.
 
     `confirm` is passed in, so each way in brings its own human gate (the keyboard YES
     for the agent and the command line, the typed file name for Dagster) while the
     checks below are the same for all. Refused: a file not verified, verified as FAILED,
-    changed since verification (other SHA-256), or already in bronze."""
+    changed since verification (other SHA-256), or already in bronze. `lakehouse`: write
+    to another lakehouse folder than the configured one (verify with the same one)."""
+    data_table, log_table, _ = _folders(lakehouse)
     v = VERIFIED.get(str(path))
     if v is None:
         return {"status": "REFUSED", "reason": "File was not verified. Run verify_dataset first."}
@@ -236,29 +255,30 @@ def ingest(path: Path, confirm, confirmed_by: str) -> dict:
     if sha256(path) != v.sha256:
         VERIFIED.pop(str(path))
         return {"status": "REFUSED", "reason": "File changed since verification. Verify again."}
-    if (batch := ingested_hashes().get(v.sha256)):
+    if (batch := ingested_hashes(log_table).get(v.sha256)):
         return {"status": "REFUSED", "reason": f"Already ingested as batch {batch}"}
 
     now = datetime.now(timezone.utc)
     batch_id = f"kvk_{now:%Y%m%dT%H%M%SZ}_{v.sha256[:8]}"
-    if not confirm(v, batch_id):
+    if not confirm(v, batch_id, data_table):
         return {"status": "CANCELLED", "reason": "User did not type YES. Nothing written."}
 
-    rows = write_batch(v, batch_id, now)
-    write_log(v, batch_id, now, rows, confirmed_by)
+    rows = write_batch(v, batch_id, now, data_table, log_table)
+    write_log(v, batch_id, now, rows, confirmed_by, log_table)
     VERIFIED.pop(str(path))
     return {"status": "INGESTED", "batch_id": batch_id, "rows": rows,
-            "ingested_at": now.isoformat(), "table": str(DATA_TABLE)}
+            "ingested_at": now.isoformat(), "table": str(data_table)}
 
 
-def ingest_confirmed_file(file_name: str, typed_confirmation: str, confirmed_by: str) -> dict:
+def ingest_confirmed_file(file_name: str, typed_confirmation: str, confirmed_by: str,
+                          lakehouse: Path | None = None) -> dict:
     """Verify and ingest one file without a keyboard, for Dagster (orchestration/).
 
     The person launching the run must type the exact file name as `typed_confirmation`;
     that plays the role of typing YES. The agent never gets this function as a tool, so
     the language model can never call it (a test checks that)."""
     path = resolve_path(file_name)
-    report = verify(str(path))
+    report = verify(str(path), lakehouse)
     if report["status"] != "PASSED":
         return {"status": "FAILED", "report": report}
     if typed_confirmation.strip() != path.name:
@@ -266,7 +286,7 @@ def ingest_confirmed_file(file_name: str, typed_confirmation: str, confirmed_by:
         return {"status": "CANCELLED",
                 "reason": f"Confirmation {typed_confirmation!r} is not the file name {path.name!r}. "
                           "Nothing written."}
-    return ingest(path, lambda v, batch_id: True, confirmed_by)
+    return ingest(path, lambda v, batch_id, table: True, confirmed_by, lakehouse)
 
 
 # --------------------------------------------------------------------------- delta writes
@@ -280,12 +300,16 @@ def _clean_name(name: str, seen: set[str]) -> str:
     return out
 
 
-def write_batch(v: Verification, batch_id: str, now: datetime) -> int:
-    """Stream the CSV into the bronze table as one Delta commit. Returns rows written."""
+def write_batch(v: Verification, batch_id: str, now: datetime, data_table: Path | None = None,
+                log_table: Path | None = None) -> int:
+    """Stream the CSV into the bronze table (default: the configured one) as one Delta
+    commit. Returns rows written."""
     import pyarrow as pa
     from deltalake import write_deltalake
 
-    batchlog.remove_orphan_rows(DATA_TABLE, LOG_TABLE)   # a crash before an earlier log
+    data_table = DATA_TABLE if data_table is None else data_table
+    log_table = LOG_TABLE if log_table is None else log_table
+    batchlog.remove_orphan_rows(data_table, log_table)   # a crash before an earlier log
     seen: set[str] = set()
     cols = [_clean_name(h, seen) for h in v.header]
     schema = pa.schema([pa.field(c, pa.string()) for c in cols] + [
@@ -326,12 +350,12 @@ def write_batch(v: Verification, batch_id: str, now: datetime) -> int:
     reader = pa.RecordBatchReader.from_batches(schema, batches())
     # One call = one Delta commit: a batch is either fully in bronze or not at all.
     # schema_mode="merge" lets KVK add columns later without breaking older batches.
-    write_deltalake(str(DATA_TABLE), reader, mode="append", schema_mode="merge")
+    write_deltalake(str(data_table), reader, mode="append", schema_mode="merge")
     return written
 
 
 def write_log(v: Verification, batch_id: str, now: datetime, rows: int,
-              confirmed_by: str | None = None) -> None:
+              confirmed_by: str | None = None, log_table: Path | None = None) -> None:
     """Record a written batch in bronze/kvk/_batch_log, with its hash and verification
     report. Written after the data, so an unlogged batch is recognisable as unfinished
     (batchlog.remove_orphan_rows deletes it before the next write)."""
@@ -352,7 +376,8 @@ def write_log(v: Verification, batch_id: str, now: datetime, rows: int,
         ("verified_at", pa.timestamp("us", tz="UTC")), ("verification_report", pa.string()),
         ("confirmed_by", pa.string()), ("status", pa.string()), ("file_date", pa.date32())]))
     # "merge": a column added to the log later is added to the table (empty for old rows)
-    write_deltalake(str(LOG_TABLE), table, mode="append", schema_mode="merge")
+    write_deltalake(str(LOG_TABLE if log_table is None else log_table), table, mode="append",
+                    schema_mode="merge")
 
 
 # --------------------------------------------------------------------------- command line

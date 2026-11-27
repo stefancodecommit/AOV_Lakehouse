@@ -90,7 +90,7 @@ def test_inbox_lists_newest_first_and_marks_ingested_files(monkeypatch):
     old = inbox_zip("old.zip", age=86_400)
     inbox_zip("new.zip", rows=REAL_ROWS[:2])
     (k.INBOX / "notes.txt").write_text("ignored")
-    monkeypatch.setattr(k, "ingested_hashes", lambda: {k.sha256(old): "kvk_batch_1"})
+    monkeypatch.setattr(k, "ingested_hashes", lambda log_table=None: {k.sha256(old): "kvk_batch_1"})
     files = json.loads(agent.list_inbox())["files"]
     assert [f["file"] for f in files] == ["new.zip", "old.zip"]
     assert [f["already_ingested_as"] for f in files] == [None, "kvk_batch_1"]
@@ -100,7 +100,7 @@ def test_newest_new_file_skips_ingested_ones(monkeypatch):
     inbox_zip("old.zip", age=86_400)
     new = inbox_zip("new.zip", rows=REAL_ROWS[:2])
     assert k.newest_new_inbox_file() == "new.zip"
-    monkeypatch.setattr(k, "ingested_hashes", lambda: {k.sha256(new): "kvk_batch_2"})
+    monkeypatch.setattr(k, "ingested_hashes", lambda log_table=None: {k.sha256(new): "kvk_batch_2"})
     assert k.newest_new_inbox_file() == "old.zip"
 
 
@@ -114,7 +114,7 @@ def test_bare_file_name_is_looked_up_in_the_inbox(tmp_path, monkeypatch):
 
 
 # =========================================================================== Dagster entry point
-def test_dagster_ingest_needs_the_exact_file_name_as_confirmation():
+def test_dagster_ingest_needs_the_exact_file_name_as_confirmation(tmp_path_factory):
     inbox_zip("kvk.zip")
     wrong = k.ingest_confirmed_file("kvk.zip", "yes", confirmed_by="dagster:test")
     assert wrong["status"] == "CANCELLED" and not k.DATA_TABLE.exists()
@@ -126,6 +126,20 @@ def test_dagster_ingest_needs_the_exact_file_name_as_confirmation():
     assert list(log["confirmed_by"]) == ["dagster:test"]
     again = k.ingest_confirmed_file("kvk.zip", "kvk.zip", confirmed_by="dagster:test")
     assert again["status"] == "FAILED"                # already ingested
+
+    # lakehouse=...: another lakehouse has its own batch log, table and quarantine
+    other = tmp_path_factory.mktemp("other")
+    there = k.ingest_confirmed_file("kvk.zip", "kvk.zip", confirmed_by="t", lakehouse=other)
+    assert there["status"] == "INGESTED"              # not in that lakehouse's log yet
+    assert there["table"] == str(other / "bronze" / "kvk" / "basis_bedrijfsgegevens")
+    assert len(DeltaTable(str(other / "bronze" / "kvk" / "_batch_log")).to_pandas()) == 1
+    assert len(DeltaTable(there["table"]).to_pandas()) == 3            # the rows went there
+    assert len(DeltaTable(str(k.LOG_TABLE)).to_pandas()) == 1     # the configured ones untouched
+    assert len(DeltaTable(str(k.DATA_TABLE)).to_pandas()) == 3
+    bad = other / "bad.csv"
+    bad.write_text("just;one\n1;2\n")
+    folder = Path(k.verify(str(bad), lakehouse=other)["quarantine"])
+    assert folder.parent == other / "quarantine" / "kvk" and not k.QUARANTINE_ROOT.exists()
 
 
 def test_dagster_entry_point_is_not_an_agent_tool():

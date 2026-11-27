@@ -91,7 +91,7 @@ def test_file_sources_resolved_by_a_later_batch():
 
 
 # =========================================================================== end to end
-def test_quarantined_period_is_cleaned_up_after_cbs_fixes_it(monkeypatch):
+def test_quarantined_period_is_cleaned_up_after_cbs_fixes_it(monkeypatch, tmp_path_factory):
     """Bad batch -> quarantine; CBS fixes it -> ingested; cleanup removes the entry."""
     state = {"value": "5,4"}
     monkeypatch.setattr(b, "ENDPOINTS", [ABSENCE])
@@ -116,6 +116,18 @@ def test_quarantined_period_is_cleaned_up_after_cbs_fixes_it(monkeypatch):
     removed = m.clean_quarantine()
     assert len(removed) == 1 and removed[0][1].startswith("resolved: 80072NED/TypedDataSet")
     assert list_entries(m.QUARANTINE_ROOT) == []
+
+    # run(lakehouse=...): another lakehouse gets its own data, log and quarantine
+    other = tmp_path_factory.mktemp("other")
+    before = b.done_keys()
+    state["value"] = "5,4"
+    b.run(None, False, False, lakehouse=other)
+    assert len(list_entries(other / "quarantine")) == 1 and list_entries(m.QUARANTINE_ROOT) == []
+    state["value"] = 5.4
+    b.run(None, False, False, lakehouse=other)
+    assert (other / "bronze" / ABSENCE.name / "_delta_log").exists()
+    assert b.done_keys(other / "bronze" / "_ingestion_log") == before   # the same requests
+    assert b.done_keys() == before                         # the configured log untouched
 
 
 
