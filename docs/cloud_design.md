@@ -244,3 +244,16 @@ Each step can be reversed: the local and Docker setups keep working throughout.
 | **Open:** Dagster self-managed or Dagster+ (hosted) | Self-managed in this design (no extra licence); Dagster+ would add the column-lineage graph and managed alerting, at a cost. |
 | **Open:** who operates it | The insurer's data team (OR-3); the design assumes they know containers and Azure basics. |
 | **Not decided:** Power BI on gold | Possible once gold is on ADLS Gen2; would replace or complement the Streamlit dashboard for analysts who already use Power BI. |
+
+**Not decided: a data catalog such as OpenMetadata.** The column lineage is not inferred
+from the code. It is declared in `tools/lineage.py`, and a test fails when a silver or gold
+column is missing there or names a field that doesn't exist. Catalogs like OpenMetadata
+work out lineage by themselves only from SQL (query logs of the databases they connect to).
+This pipeline transforms data in Python on Delta tables, so a catalog would not find the
+lineage itself. It could still show it: a small script would push the lineage from
+`tools/lineage.py` through OpenMetadata's lineage API, and the checks' results through its
+data-quality API. `tools/lineage.py` would stay the single source, and the catalog would be
+one more view next to the lineage explorer and the Dagster UI. A catalog needs its own
+server, database and search engine (Elasticsearch or OpenSearch), which is too much for a
+project that runs on one machine. It becomes worth it when the insurer has more data
+sources and wants one place to search them all.
