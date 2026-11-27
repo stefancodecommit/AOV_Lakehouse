@@ -124,8 +124,9 @@ cbs-kvk-lakehouse/
 
 ### The data model
 
-**Silver** is a star schema: CBS facts point to shared dimensions, and KVK companies get
-an SBI 2008 code through the crosswalk. The diagram shows each table's key (PK), the
+**Silver** is star-schema-like: CBS facts point to shared dimensions; the mapping tables
+and KVK companies sit outside the star (KVK companies get an SBI 2008 code through the
+crosswalk). The diagram shows each table's key (PK), the
 columns that point to another table (FK) and the main value; all columns are in
 [docs/lineage.md](docs/lineage.md).
 
