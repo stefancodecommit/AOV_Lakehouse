@@ -19,13 +19,14 @@ in silver. A loose CSV has no reliable date: its file_date stays empty, not gues
 from __future__ import annotations
 
 import csv
-import hashlib
 import io
 import re
 import zipfile
 from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
+
+from checks.files import norm, sha256
 
 DELIMITER = ";"
 DATE_RE = re.compile(r"\d{8}|\d{4}-\d{2}-\d{2}|\d{2}-\d{2}-\d{4}")
@@ -61,20 +62,7 @@ class FileCheck:
 
 
 # --------------------------------------------------------------------------- file helpers
-def norm(name: str) -> str:
-    """'Datum aanvang' -> 'datumaanvang': compare headers without case or punctuation."""
-    return re.sub(r"[^a-z0-9]", "", name.lower())
-
-
-def sha256(path: Path) -> str:
-    """SHA-256 of a file: its fingerprint, used to recognise a file that was already loaded."""
-    h = hashlib.sha256()
-    with Path(path).open("rb") as f:
-        for chunk in iter(lambda: f.read(1 << 20), b""):
-            h.update(chunk)
-    return h.hexdigest()
-
-
+# sha256 and norm: checks/files.py (shared with pipeline/bronze/reference.py)
 def open_csv_bytes(path: Path, member: str | None):
     """Binary stream of the CSV, from inside the zip or the file itself."""
     if member:

@@ -515,6 +515,7 @@ pipeline/                the data flow, one subpackage per layer; run as python 
   bronze/kvk.py          KVK zip -> bronze (verify, confirm, write)
   bronze/kvk_agent.py    the optional chat agent around bronze/kvk.py
   bronze/reference.py    CBS SBI 2008 -> SBI 2025 crosswalk -> bronze
+  bronze/batchlog.py     shared by kvk.py and reference.py: load a file once, remove unlogged rows
   silver/cbs.py          bronze CBS -> silver
   silver/kvk.py          bronze KVK -> silver kvk_company
   gold/build.py          silver -> gold
@@ -522,7 +523,8 @@ pipeline/                the data flow, one subpackage per layer; run as python 
   common/publish.py      silver and gold: staging, then publishing all tables together
   common/runlog.py       the run log (one row per silver/gold run)
 checks/                  data checks (cbs.py, kvk.py) shared by ingestion, Dagster and pytest;
-                         layers.py (layer checks), freshness.py, quarantine.py
+                         layers.py (layer checks), freshness.py, quarantine.py; files.py
+                         (a file's SHA-256, header names compared loosely)
 tools/                   run by hand (some also scheduled by Dagster); python -m tools.<script>
   inspect_lakehouse.py   overview of all Delta tables and problems after a run
   lakehouse_viewer.py    browse any Delta table, with data quality statistics

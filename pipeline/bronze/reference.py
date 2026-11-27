@@ -48,7 +48,6 @@ Usage
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import logging
 import re
@@ -57,6 +56,8 @@ from pathlib import Path
 
 import pandas as pd
 
+from checks.files import norm, sha256
+from pipeline.bronze import batchlog
 from pipeline.common.config import project_path, settings
 
 CROSSWALK_URL = settings["reference"]["sbi_crosswalk_url"]
@@ -85,21 +86,6 @@ CODE_RE = re.compile(r"\d{4,6}")
 log = logging.getLogger("reference_bronze")
 
 
-def _norm(name: str) -> str:
-    """Compare headers without case or punctuation:
-    'SBI2025 titel dd 20260101' -> 'sbi2025titeldd20260101'."""
-    return re.sub(r"[^a-z0-9]", "", str(name).lower())
-
-
-def _sha256(path: Path) -> str:
-    """SHA-256 of a file: its fingerprint, used to recognise a file that was already loaded."""
-    h = hashlib.sha256()
-    with path.open("rb") as f:
-        for chunk in iter(lambda: f.read(1 << 20), b""):
-            h.update(chunk)
-    return h.hexdigest()
-
-
 # --------------------------------------------------------------------------- read & check
 def read_crosswalk(path: Path) -> tuple[pd.DataFrame, str, list[str], list[str]]:
     """Returns (rows with bronze column names, all text; version from the sheet name;
@@ -114,7 +100,7 @@ def read_crosswalk(path: Path) -> tuple[pd.DataFrame, str, list[str], list[str]]
     raw = raw.apply(lambda c: c.str.strip())
     rename, errors = {}, []
     for col, pattern in COLUMNS.items():
-        match = next((h for h in raw.columns if re.fullmatch(pattern, _norm(h))), None)
+        match = next((h for h in raw.columns if re.fullmatch(pattern, norm(h))), None)
         if match is None:
             errors.append(f"Column missing: {col} (header pattern {pattern!r})")
         else:
@@ -155,26 +141,8 @@ def check_crosswalk(df: pd.DataFrame) -> tuple[list[str], list[str]]:
 
 # --------------------------------------------------------------------------- delta io
 def ingested_hashes() -> dict[str, str]:
-    """file_sha256 -> batch_id of every successful batch."""
-    if not (LOG_TABLE / "_delta_log").exists():
-        return {}
-    from deltalake import DeltaTable
-    rows = DeltaTable(str(LOG_TABLE)).to_pyarrow_table(
-        columns=["file_sha256", "batch_id", "status"]).to_pylist()
-    return {r["file_sha256"]: r["batch_id"] for r in rows if r["status"] == "success"}
-
-
-def remove_orphan_rows() -> None:
-    """Delete rows of a batch that was written but never logged (crash in between)."""
-    if not (DATA_TABLE / "_delta_log").exists():
-        return
-    from deltalake import DeltaTable
-    good = set(ingested_hashes().values())
-    dt = DeltaTable(str(DATA_TABLE))
-    present = set(dt.to_pyarrow_table(columns=["_batch_id"]).column("_batch_id").unique().to_pylist())
-    for orphan in present - good:
-        dt.delete(f"_batch_id = '{orphan}'")
-        log.warning("Removed rows of unlogged batch %s", orphan)
+    """file_sha256 -> batch_id of every successful crosswalk batch (pipeline/bronze/batchlog.py)."""
+    return batchlog.ingested_hashes(LOG_TABLE)
 
 
 def write_batch(df: pd.DataFrame, batch_id: str, now: datetime, source_file: str,
@@ -186,7 +154,7 @@ def write_batch(df: pd.DataFrame, batch_id: str, now: datetime, source_file: str
     import pyarrow as pa
     from deltalake import write_deltalake
 
-    remove_orphan_rows()
+    batchlog.remove_orphan_rows(DATA_TABLE, LOG_TABLE)
     n = len(df)
     schema = pa.schema([pa.field(c, pa.string()) for c in COLUMNS] + [
         ("_batch_id", pa.string()), ("_ingested_at", pa.timestamp("us", tz="UTC")),
@@ -224,7 +192,7 @@ def ingest(path: Path, source_url: str | None = None) -> dict:
     """Check and load one crosswalk file. Returns a report with status
     INGESTED, SKIPPED (this exact file is already in bronze) or FAILED."""
     path = Path(path)
-    sha = _sha256(path)
+    sha = sha256(path)
     if (batch := ingested_hashes().get(sha)):
         return {"status": "SKIPPED", "reason": f"This exact file was already ingested as batch {batch}",
                 "batch_id": batch, "file_sha256": sha}

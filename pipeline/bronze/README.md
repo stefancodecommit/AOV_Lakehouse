@@ -19,6 +19,10 @@ keeps the original, every later step can be rebuilt without asking a source agai
 | [`reference.py`](reference.py) | the CBS SBI 2008 → SBI 2025 crosswalk (Excel) | downloaded when CBS publishes a new version | a file already loaded (same content) is skipped |
 | [`kvk.py`](kvk.py) | the KVK open dataset (zip, ~13 MB, ~1.9M companies) | placed in `inbox/kvk/` by a person | verified, then loaded only after the person confirms; never the same file twice. [`kvk_agent.py`](kvk_agent.py) is the optional chat agent around it |
 
+The two file sources share [`batchlog.py`](batchlog.py): a file whose SHA-256 is in the
+source's batch log is not loaded again, and rows of a batch that was written but never
+logged (a crash in between) are removed before the next write.
+
 ## Design decisions
 
 - **Ask only once (idempotent).** Every CBS request has a key that includes the period

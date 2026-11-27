@@ -56,9 +56,10 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from pathlib import Path
 
+from checks.files import sha256
 from checks.kvk import check_file
 from checks.kvk import iter_rows as _iter_rows
-from checks.kvk import sha256 as _sha256
+from pipeline.bronze import batchlog
 from pipeline.common.config import project_path, settings
 
 # --------------------------------------------------------------------------- config
@@ -125,7 +126,7 @@ def inbox_files() -> list[dict]:
                    key=lambda f: f.stat().st_mtime, reverse=True)
     out = []
     for f in files:
-        batch = done.get(_sha256(f))
+        batch = done.get(sha256(f))
         out.append({"file": f.name, "size_mb": round(f.stat().st_size / 1e6, 1),
                     "modified": datetime.fromtimestamp(f.stat().st_mtime, timezone.utc).isoformat(),
                     "already_ingested_as": batch})
@@ -164,13 +165,8 @@ def newest_snapshot_date() -> date | None:
 
 
 def ingested_hashes() -> dict[str, str]:
-    """file_sha256 -> batch_id of every successful batch."""
-    if not (LOG_TABLE / "_delta_log").exists():
-        return {}
-    from deltalake import DeltaTable
-    log = DeltaTable(str(LOG_TABLE)).to_pyarrow_table(
-        columns=["file_sha256", "batch_id", "status"]).to_pylist()
-    return {r["file_sha256"]: r["batch_id"] for r in log if r["status"] == "success"}
+    """file_sha256 -> batch_id of every successful KVK batch (pipeline/bronze/batchlog.py)."""
+    return batchlog.ingested_hashes(LOG_TABLE)
 
 
 def list_batches() -> list[dict]:
@@ -237,7 +233,7 @@ def ingest(path: Path, confirm, confirmed_by: str) -> dict:
     if not v.passed:
         return {"status": "REFUSED", "reason": "Verification FAILED for this file.",
                 "errors": v.report["errors"]}
-    if _sha256(path) != v.sha256:
+    if sha256(path) != v.sha256:
         VERIFIED.pop(str(path))
         return {"status": "REFUSED", "reason": "File changed since verification. Verify again."}
     if (batch := ingested_hashes().get(v.sha256)):
@@ -284,25 +280,12 @@ def _clean_name(name: str, seen: set[str]) -> str:
     return out
 
 
-def remove_orphan_rows() -> None:
-    """Delete rows of a batch that was written but never logged (crash in between)."""
-    if not (DATA_TABLE / "_delta_log").exists():
-        return
-    from deltalake import DeltaTable
-    good = set(ingested_hashes().values())
-    dt = DeltaTable(str(DATA_TABLE))
-    present = set(dt.to_pyarrow_table(columns=["_batch_id"]).column("_batch_id").unique().to_pylist())
-    for orphan in present - good:
-        dt.delete(f"_batch_id = '{orphan}'")
-        print(f"Removed rows of unlogged batch {orphan}")
-
-
 def write_batch(v: Verification, batch_id: str, now: datetime) -> int:
     """Stream the CSV into the bronze table as one Delta commit. Returns rows written."""
     import pyarrow as pa
     from deltalake import write_deltalake
 
-    remove_orphan_rows()
+    batchlog.remove_orphan_rows(DATA_TABLE, LOG_TABLE)   # a crash before an earlier log
     seen: set[str] = set()
     cols = [_clean_name(h, seen) for h in v.header]
     schema = pa.schema([pa.field(c, pa.string()) for c in cols] + [
@@ -351,7 +334,7 @@ def write_log(v: Verification, batch_id: str, now: datetime, rows: int,
               confirmed_by: str | None = None) -> None:
     """Record a written batch in bronze/kvk/_batch_log, with its hash and verification
     report. Written after the data, so an unlogged batch is recognisable as unfinished
-    (remove_orphan_rows deletes it before the next write)."""
+    (batchlog.remove_orphan_rows deletes it before the next write)."""
     import pyarrow as pa
     from deltalake import write_deltalake
 

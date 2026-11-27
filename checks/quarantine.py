@@ -27,14 +27,10 @@ def _safe(name: str) -> str:
 def content_sha256(records: list[dict] | None = None, file: Path | None = None) -> str:
     """Fingerprint of a batch (its records as JSON) or a file, to quarantine the same
     content only once."""
-    h = hashlib.sha256()
     if file is not None:
-        with Path(file).open("rb") as f:
-            for chunk in iter(lambda: f.read(1 << 20), b""):
-                h.update(chunk)
-    else:
-        h.update(json.dumps(records, sort_keys=True, ensure_ascii=False).encode())
-    return h.hexdigest()
+        from checks.files import sha256
+        return sha256(file)
+    return hashlib.sha256(json.dumps(records, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
 
 
 def list_entries(root: Path, source: str | None = None) -> list[dict]:

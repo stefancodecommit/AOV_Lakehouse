@@ -396,11 +396,29 @@ Open, most valuable first (the author decides):
       ingest tests call `kvk` directly, the tool and gate tests go through `kvk_agent`;
       the safety net in conftest checks both modules. Still 420 tests, all passing; ruff
       clean; Dagster's definitions load
-- [ ] **Worth doing: share the batch-log helpers** (duplication). `ingested_hashes` and
+- [x] **Worth doing: share the batch-log helpers** (duplication). `ingested_hashes` and
       `remove_orphan_rows` exist in both `pipeline/bronze/reference.py` and
       `kvk_agent.py`; the SHA-256 and header-normalising helpers also in `checks/kvk.py`
       (`reference.py` has its own `_sha256`, `_norm`). One module (e.g.
-      `pipeline/bronze/batchlog.py`) taking the table paths as arguments
+      `pipeline/bronze/batchlog.py`) taking the table paths as arguments.
+      Done (2026-11-27, at the author's request), in two modules:
+      1. `pipeline/bronze/batchlog.py`: `ingested_hashes(log_table)` and
+         `remove_orphan_rows(data_table, log_table)` (now returns the removed batch_ids
+         and logs a warning; KVK's copy used `print`). The tables are arguments: the
+         first code here that follows the "folders as parameters" item below.
+         `kvk.py` and `reference.py` keep a one-line `ingested_hashes()` for their own
+         log (the tests replace it), and call `remove_orphan_rows` directly
+      2. `checks/files.py`: `sha256(path)` and `norm(name)`. In `checks/`, not
+         `pipeline/`, because `checks/kvk.py` needs them and `checks/` doesn't import
+         from `pipeline/`. It replaces four copies of the file hash: `checks/kvk.py`,
+         `reference.py`, the file branch of `checks/quarantine.content_sha256`, and (via
+         `checks.kvk`) bronze KVK. `norm` now always does `str(name)` first, as
+         reference's copy did (harmless for KVK's text headers)
+      No behaviour change otherwise. Still 420 tests, all passing; the orphan cleanup is
+      covered through reference
+      (`test_rows_of_an_unlogged_batch_are_removed_before_the_next_load`); KVK has no
+      test of its own for it (there was none before either). Docs: bronze README,
+      docs/PROJECT.md (layout)
 - [ ] **Gradually: pass folders as parameters instead of module constants** (dependency
       inversion). Every pipeline module computes `BRONZE_ROOT`, `GOLD_ROOT`, `RUN_LOG`,
       `ENDPOINTS`, ... from `settings` at import; `tests/conftest.py` needs ~40
