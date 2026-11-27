@@ -545,9 +545,26 @@ Open, most valuable first (the author decides):
       --dry-run` plans against the real API as before (63 requests already in bronze;
       it also shows CBS has newer 81589NED quarters, which the next real run fetches).
       Docs: bronze README, docs/PROJECT.md (layout)
-- [ ] **Optional (Liskov, small):** a missing optional table comes back as `pd.DataFrame()`
+- [x] **Optional (Liskov, small):** a missing optional table comes back as `pd.DataFrame()`
       without columns (gold `read_silver`), so each consumer checks for it; an empty frame
-      with the expected columns would make "missing" behave like "no rows"
+      with the expected columns would make "missing" behave like "no rows".
+      Done (2026-11-27, at the author's request), in gold only (as the item says):
+      `no_rows(name)` (`pipeline/gold/build.py`) gives a table without rows but with the
+      columns gold reads from it (`PARTIAL_READS`); `read_silver` returns that for a
+      missing optional table (kvk_company before silver KVK), and `build_kvk_context`
+      uses it when no kvk_company is given. Its own empty result now has its columns
+      (`KVK_CONTEXT_COLUMNS`, also used for the normal result, so there is one list).
+      **Bug found on the way:** `build_kvk_context` checked for "no rows" before
+      filtering on active companies, so input with only inactive companies crashed
+      (`IndexError` at `snapshot_date.iloc[0]`; confirmed on the old code). It can't
+      happen in a real run (gold reads active companies only), but the check now comes
+      after the filter. Test: the existing `test_kvk_context_empty_without_silver_kvk`
+      now checks missing, no rows and only inactive (columns and no rows); it fails on
+      the old code. Still 420 tests; all seven gold tables identical on the real data.
+      Not changed: silver CBS also returns `pd.DataFrame()` for a missing bronze table,
+      but its columns come from CBS's metadata (no fixed list to give), and its builders
+      handle empty input explicitly; the dashboard's and Dagster checks' empty frames
+      are meant to be reported as empty
 - Leave as is: no classes or abstract base classes just to look "more SOLID"; that would
   make this code worse
 

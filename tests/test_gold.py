@@ -180,7 +180,15 @@ def test_kvk_context_hides_what_subtraction_would_reveal(silver_tables):
 
 
 def test_kvk_context_empty_without_silver_kvk(silver_tables):
-    assert g.build(g.build_kvk_context, silver_tables).empty
+    """Missing, without rows, or only inactive companies: the same table, with its
+    columns and no rows (a missing table used to come back without columns, and only
+    inactive companies made it crash)."""
+    inactive = g.no_rows("kvk_company").astype(object)
+    inactive.loc[0] = ["2026-10-01", "b1", False, "2000-01-01", "BV", "A", "silver_kvk_1"]
+    for kvk in (None, g.no_rows("kvk_company"), inactive):
+        t = silver_tables if kvk is None else {**silver_tables, "kvk_company": kvk}
+        df = g.build(g.build_kvk_context, t)
+        assert df.empty and list(df.columns) == g.KVK_CONTEXT_COLUMNS
 
 
 # =========================================================================== end to end

@@ -88,6 +88,15 @@ PARTIAL_READS = {
 log = logging.getLogger("gold")
 
 
+def no_rows(name: str) -> pd.DataFrame:
+    """A silver table without rows but with the columns gold reads from it: what an
+    optional table that doesn't exist yet (kvk_company before silver KVK) stands in as.
+    So a builder handles "missing" exactly like "no rows", and its own empty result
+    still has its columns (until 2026-11-27 a missing table was pd.DataFrame(), without
+    columns, which each consumer had to check for separately)."""
+    return pd.DataFrame(columns=PARTIAL_READS.get(name, {}).get("columns", []))
+
+
 # =========================================================================== reading
 def read_silver(names: list[str], inputs: dict | None = None,
                 optional: set[str] = frozenset(), root: Path | None = None) -> dict[str, pd.DataFrame]:
@@ -107,7 +116,7 @@ def read_silver(names: list[str], inputs: dict | None = None,
         path = root / name
         if not (path / "_delta_log").exists():
             if name in optional:
-                out[name] = pd.DataFrame()
+                out[name] = no_rows(name)
                 continue
             raise RunFailed(f"silver table missing: {name} (run the silver pipelines first)")
         dt = DeltaTable(str(path))
@@ -372,6 +381,9 @@ def build_business_context(*, fct_business_count: pd.DataFrame, dim_sector: pd.D
 
 
 SUPPRESSED_COLUMNS = ["active_companies", "companies_with_age", "median_age_years"]
+KVK_CONTEXT_COLUMNS = ["snapshot_date", "batch_id", "sbi2008_section", "sector_name",
+                       "legal_form", "active_companies", "companies_with_age",
+                       "median_age_years", "is_small_group", "is_suppressed"]
 
 
 def suppress_small_groups(df: pd.DataFrame) -> pd.DataFrame:
@@ -408,11 +420,14 @@ def build_kvk_context(*, dim_sector: pd.DataFrame, kvk_company: pd.DataFrame | N
     totals still add up. is_small_group marks groups under 10 companies (the KVK
     re-identification rule); their numbers are left empty here, in gold, and so are those
     of the groups that would give them away (suppress_small_groups). A median age of
-    fewer than 10 companies is left empty as well."""
-    k = kvk_company if kvk_company is not None else pd.DataFrame()
-    if k.empty:
-        return pd.DataFrame()
+    fewer than 10 companies is left empty as well.
+
+    Without KVK data (kvk_company not given, or without active companies) the table has
+    its columns but no rows."""
+    k = no_rows("kvk_company") if kvk_company is None else kvk_company
     k = k[k["is_active"] == True].copy()  # noqa: E712
+    if k.empty:                # checked after the filter: only inactive companies is "none" too
+        return pd.DataFrame(columns=KVK_CONTEXT_COLUMNS)
     snap = pd.to_datetime(k["snapshot_date"])
     start = pd.to_datetime(k["start_date"])
     # age on the snapshot day; companies without a valid start date get no age
@@ -441,11 +456,9 @@ def build_kvk_context(*, dim_sector: pd.DataFrame, kvk_company: pd.DataFrame | N
     df = suppress_small_groups(df)
     df["snapshot_date"] = k["snapshot_date"].iloc[0]
     df["batch_id"] = k["batch_id"].iloc[0]
-    cols = ["snapshot_date", "batch_id", "section", "sector_name", "legal_form",
-            "active_companies", "companies_with_age", "median_age_years", "is_small_group",
-            "is_suppressed"]
-    return (df[cols].rename(columns={"section": "sbi2008_section"})
+    return (df.rename(columns={"section": "sbi2008_section"})[KVK_CONTEXT_COLUMNS]
             .sort_values(["legal_form", "sbi2008_section"]).reset_index(drop=True))
+
 
 
 # =========================================================================== risk index
