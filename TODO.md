@@ -609,26 +609,47 @@ test count where `tests/test_doc_numbers.py` checks it (report, Q&A, GenAI secti
 requirements, tests/README.md), the slides by hand (slide 9 and its notes, see "Before
 submitting"), and export the report again. Adding them together needs one round of
 updates:
-- [ ] **KVK: rows of an unlogged batch are removed before the next load**
+- [x] **KVK: rows of an unlogged batch are removed before the next load**
       (`tests/test_kvk_logic.py`). `pipeline/bronze/batchlog.remove_orphan_rows` is
       tested only through the crosswalk
       (`test_rows_of_an_unlogged_batch_are_removed_before_the_next_load` in
       `tests/test_reference.py`); KVK never had a test of its own. Idea: write KVK rows
       with a batch_id that is not in the batch log, ingest a file, check only the logged
       batch's rows remain
-- [ ] **Silver KVK in a copy: the crosswalk batch is read from the copy**
+- [x] **Silver KVK in a copy: the crosswalk batch is read from the copy**
       (`tests/test_kvk_silver.py`). The copy check in
       `test_a_run_builds_only_the_newest_upload` doesn't catch `unchanged_since` reading
       the crosswalk batch from the configured silver instead of the copy, because both
       crosswalks are the same. Idea: give the copy's `map_sbi2008_sbi2025` another
       batch_id; then `unchanged_since(copy)` must be None (as an extra check in that test
       it wouldn't change the count)
-- [ ] **Gold builders read what the lineage says** (`tests/test_lineage.py` or
+- [x] **Gold builders read what the lineage says** (`tests/test_lineage.py` or
       `tests/test_gold.py`). Each builder's parameters (`pipeline/gold/build.py`,
       `BUILDERS`) are the silver tables it reads; `tools/lineage.py` names the silver
       sources of each gold table's columns. A test that compares the two keeps code and
       documentation in step: a builder that starts reading a new table without the
       lineage saying so (or the other way round) fails
+
+All three done (2026-11-27, at the author's request), together, so the numbers were
+updated once:
+- `test_rows_of_an_unlogged_batch_are_removed_before_the_next_load`
+  (`tests/test_kvk_logic.py`, new): loads a file, adds its rows again under a batch_id
+  that never reached the log (the crash), loads a second file, and checks that only the
+  two logged batches remain (3 + 2 rows)
+- the copy check in `test_a_run_builds_only_the_newest_upload` (`tests/test_kvk_silver.py`,
+  extended, no new test): the copy gets another crosswalk batch (`ref_v21`), so
+  `unchanged_since(copy)` must be None while `unchanged_since()` still returns the run
+- `test_gold_builders_read_what_the_lineage_names` (`tests/test_lineage.py`, new): per gold
+  table, the builder's keyword-only parameters equal the silver tables its columns name in
+  `tools/lineage.py` (they already did for all seven)
+Each was checked by breaking what it guards (KVK without the orphan removal; silver KVK
+reading the crosswalk batch from the configured lakehouse; a gold builder taking a table
+the lineage doesn't name): each makes its test fail.
+Numbers: **422 tests** (was 420). Updated: the report (twice), Q&A, GenAI section (twice),
+requirements (NFR-20), tests/README.md (`test_doc_numbers.py` passes); slide 9 and its
+notes in docs/presentatie.pptx (only those two text runs changed in the file; checked
+with a render of the slide); the report exported again (`build/rapport.docx`, 4,938
+words counted per paragraph from the .docx text, unchanged)
 
 **Before submitting** (the numbers that live in the submitted documents):
 - [ ] `pytest` passes; that includes `tests/test_doc_numbers.py`, which checks the test
@@ -637,14 +658,18 @@ updates:
 - [ ] The slides (docs/presentatie.pptx), slide 9: the number and the speaker notes state
       the test count that pytest reports (not checked automatically). Last set on
       2026-11-26: slide and notes say 420 (were 394, 404 and 407; checked with a render
-      of the slide). Open until submitting, because any later test changes the number again
+      of the slide). Open until submitting, because any later test changes the number again.
+      Set again on 2026-11-27: 422 (the tests of the fourth review; rendered and checked)
 - [ ] If the data or the code changed since: the measured results quoted in the report and
       the Q&A (silver KVK's memory, 1.9M companies, 90% with a sector, 440 backtest cases)
       still match docs/requirements.md (NFR-7) and gold's README ("Backtest")
 - [ ] Export the report again (`python -m tools.export_report`) and check the word count
       (≤5000) in the Word document. Last exported 2026-11-26, after the third review
       (420 tests, 1.5 GB): ~4,938 words (counted from the .docx text, not by Word); open
-      until submitting, because any later change to `rapport.md` needs a new export
+      until submitting, because any later change to `rapport.md` needs a new export.
+      Exported again on 2026-11-27 (422 tests): 4,938 words. Count the words per paragraph
+      with the text pieces joined without spaces: joining every piece with a space splits
+      words Word stores in several pieces and gave 4,991 for the same document
 
 ## First real run (done 2026-10-05)
 

@@ -212,6 +212,11 @@ def test_a_run_builds_only_the_newest_upload(crosswalk, monkeypatch, tmp_path_fa
     copy = tmp_path_factory.mktemp("copy") / "lakehouse"
     shutil.copytree(paths.lakehouse().root, copy)
     assert k.unchanged_since(copy) == run_id              # the copy's log, batch and table
+    # another crosswalk batch in the copy only: the copy must be rebuilt, the original not
+    # (so unchanged_since reads the crosswalk of the lakehouse it is given)
+    publish.write_table(copy / "silver" / "map_sbi2008_sbi2025",
+                        SILVER_CROSSWALK.assign(batch_id="ref_v21", run_id="silver_cbs_2"))
+    assert k.unchanged_since(copy) is None and k.unchanged_since() == run_id
     with monkeypatch.context() as m:              # upload() writes to the configured lakehouse
         m.setitem(config.settings["paths"], "lakehouse", str(copy))
         upload("kvk_2026_11", "2026-11-01", rows=ROWS[:1])

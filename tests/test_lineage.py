@@ -19,6 +19,21 @@ from tools import lineage as L
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def test_gold_builders_read_what_the_lineage_names():
+    """A gold builder's parameters (pipeline/gold/build.py, BUILDERS) are the silver tables
+    it reads; tools/lineage.py names the silver sources of each gold column. The two must
+    name the same tables: a builder that starts reading a table the lineage doesn't
+    mention (or a lineage entry naming a table the builder never gets) fails here."""
+    import inspect
+    assert set(g.BUILDERS) == set(L.GOLD_LINEAGE)
+    for table, builder in g.BUILDERS.items():
+        reads = {name for name, p in inspect.signature(builder).parameters.items()
+                 if p.kind is p.KEYWORD_ONLY and name != "settings_"}
+        named = {s.table.removeprefix("silver:") for c in L.GOLD_LINEAGE[table].values()
+                 for s in c.sources}
+        assert reads == named, f"{table}: builder reads {sorted(reads)}, lineage names {sorted(named)}"
+
+
 @pytest.fixture
 def silver_columns(silver):
     """Columns of every silver table as built from the sample data (+ run_id, which

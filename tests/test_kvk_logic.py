@@ -142,6 +142,29 @@ def test_dagster_ingest_needs_the_exact_file_name_as_confirmation(tmp_path_facto
     assert folder.parent == other / "quarantine" / "kvk" and not paths.lakehouse().quarantine.exists()
 
 
+def test_rows_of_an_unlogged_batch_are_removed_before_the_next_load():
+    """A crash between writing a batch's rows and logging it leaves rows that no batch
+    log entry covers. The next load removes them first (pipeline/bronze/batchlog.py), so
+    a retry never doubles them. Until 2026-11-27 only the crosswalk had a test of this."""
+    import pyarrow as pa
+    from deltalake import DeltaTable, write_deltalake
+    inbox_zip("first.zip")
+    first = k.ingest_confirmed_file("first.zip", "first.zip", confirmed_by="t")
+    data = paths.lakehouse().kvk_data
+    # the crash: the same rows again under a batch_id that never reached the log
+    rows = DeltaTable(str(data)).to_pyarrow_table()
+    crashed = rows.set_column(rows.schema.get_field_index("_batch_id"), "_batch_id",
+                              pa.array(["kvk_crashed"] * rows.num_rows, pa.string()))
+    write_deltalake(str(data), crashed, mode="append")
+    assert DeltaTable(str(data)).to_pandas()["_batch_id"].nunique() == 2
+
+    inbox_zip("second.zip", rows=REAL_ROWS[:2])
+    second = k.ingest_confirmed_file("second.zip", "second.zip", confirmed_by="t")
+    assert second["status"] == "INGESTED"
+    batches = DeltaTable(str(data)).to_pandas()["_batch_id"].value_counts().to_dict()
+    assert batches == {first["batch_id"]: 3, second["batch_id"]: 2}     # the orphan rows gone
+
+
 def test_dagster_entry_point_is_not_an_agent_tool():
     """The model must never be able to skip the human confirmation."""
     assert "ingest_confirmed_file" not in agent.TOOLS and "ingest" not in agent.TOOLS
