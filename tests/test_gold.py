@@ -184,7 +184,7 @@ def test_kvk_context_empty_without_silver_kvk(silver_tables):
 
 
 # =========================================================================== end to end
-def test_gold_run_from_bronze_to_gold(bronze_delta, monkeypatch):
+def test_gold_run_from_bronze_to_gold(bronze_delta, monkeypatch, tmp_path_factory):
     monkeypatch.setattr(sys, "argv", ["pipeline/silver/cbs.py"])
     silver_run = s.run()
     run_id = g.run()
@@ -197,6 +197,19 @@ def test_gold_run_from_bronze_to_gold(bronze_delta, monkeypatch):
     inputs = json.loads(row.inputs)
     assert inputs["silver/fct_absence_rate#run_id"] == silver_run      # which silver run
     assert inspect_lakehouse.silver_run_problems(g.LAKEHOUSE, "gold")[1] == []
+
+    # run(lakehouse=...): silver and gold built in a copy read and write only the copy
+    import shutil
+    copy = tmp_path_factory.mktemp("copy") / "lakehouse"
+    shutil.copytree(g.LAKEHOUSE, copy)
+    copy_silver, copy_gold = s.run(lakehouse=copy), g.run(lakehouse=copy)
+    assert list(runlog.read_runs(g.RUN_LOG).run_id) == [silver_run, run_id]   # untouched
+    copy_runs = runlog.read_runs(copy / "_run_log")
+    assert list(copy_runs.run_id) == [silver_run, run_id, copy_silver, copy_gold]
+    assert set(copy_runs.status) == {"success"}
+    copy_inputs = json.loads(copy_runs.iloc[-1].inputs)
+    assert copy_inputs["silver/fct_absence_rate#run_id"] == copy_silver
+    assert inspect_lakehouse.silver_run_problems(copy, "gold")[1] == []
 
 
 def test_gold_refuses_silver_tables_from_different_runs(bronze_delta):

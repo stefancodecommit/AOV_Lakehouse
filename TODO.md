@@ -426,7 +426,36 @@ Open, most valuable first (the author decides):
       one lets a test touch the real lakehouse. Step 1: a parameter with the constant as
       default (`def read_silver(names, ..., root: Path = SILVER_ROOT)`), starting with
       gold `read_silver` and the bronze writers. Possible step 2: one small `Paths`
-      dataclass built from settings, passed down from `run()`/`main()`
+      dataclass built from settings, passed down from `run()`/`main()`.
+      **Step 1 done for silver and gold** (2026-11-27, at the author's request; bronze
+      still open):
+      - `run(lakehouse=None)` in `pipeline/silver/cbs.py`, `pipeline/silver/kvk.py` and
+        `pipeline/gold/build.py`: one argument, another lakehouse folder (e.g. a copy to
+        try a change on, as done by hand several times in the third review); `run()`
+        works out bronze / silver / gold / run log from it and passes them down. Without
+        it, everything is as before (Dagster and the command line pass nothing)
+      - the readers take the folder they read as `root=None`: silver CBS `read_bronze`,
+        `read_reference`; silver KVK `read_kvk_bronze`, `newest_batch`, `read_crosswalk`,
+        `crosswalk_batch` (plus `build_all(inputs, lakehouse)` and
+        `unchanged_since(lakehouse)`, which read several places; helper `_folders`);
+        gold `read_silver`, `read_inputs(inputs, silver_root)`
+      - the default is `None`, resolved to the module constant at call time, not
+        `root: Path = SILVER_ROOT`: a default is fixed when Python defines the function,
+        so the patches in `tests/conftest.py` would not reach it
+      - the module constants stay, as defaults, and so do their conftest patches: the
+        safety net there (no module Path may point at real data) checks them. Removing
+        the patches needs step 2 (no folder constants per module)
+      - tests: no new test (still 420); two end-to-end tests now also build in a copy of
+        the test lakehouse and check that only the copy changed:
+        `test_gold_run_from_bronze_to_gold` (silver CBS and gold) and
+        `test_a_run_builds_only_the_newest_upload` (silver KVK, with a newer upload in
+        the copy only). Checked that they catch a misrouted folder: each of gold's run
+        log, silver CBS's silver folder and silver KVK's KVK bronze, silver and run log
+        pointed back at the configured lakehouse makes a test fail. Not caught: silver
+        KVK's `unchanged_since` reading the crosswalk batch from the configured silver
+        (the copy's crosswalk is the same, so the answer is too)
+      Next, when bronze is touched anyway: `pipeline/bronze/kvk.py` (16 uses of its
+      folder constants), `reference.py`, `cbs.py`; `batchlog.py` already takes its tables
 - [ ] **Optional: explicit inputs for the gold builders** (interface segregation). Each
       `build_*` in `pipeline/gold/build.py` takes `t` (all silver tables), so what it
       really reads is hidden; silver CBS builders already name theirs

@@ -53,6 +53,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -89,9 +90,10 @@ log = logging.getLogger("gold")
 
 # =========================================================================== reading
 def read_silver(names: list[str], inputs: dict | None = None,
-                optional: set[str] = frozenset()) -> dict[str, pd.DataFrame]:
-    """Silver tables by name. Records version and run_id in `inputs`; raises when the
-    silver CBS tables come from different runs.
+                optional: set[str] = frozenset(), root: Path | None = None) -> dict[str, pd.DataFrame]:
+    """Silver tables by name, from `root` (default: the configured silver folder).
+    Records version and run_id in `inputs`; raises when the silver CBS tables come from
+    different runs.
 
     Different run_ids mean a silver publish stopped halfway (see pipeline/common/publish.py): some
     tables are new and some old. Combining them could pair, for example, a new fact
@@ -99,9 +101,10 @@ def read_silver(names: list[str], inputs: dict | None = None,
     from deltalake import DeltaTable
 
     from pipeline.common.publish import RunFailed
+    root = SILVER_ROOT if root is None else root
     out, run_ids = {}, {}
     for name in names:
-        path = SILVER_ROOT / name
+        path = root / name
         if not (path / "_delta_log").exists():
             if name in optional:
                 out[name] = pd.DataFrame()
@@ -612,16 +615,25 @@ def build_all(t: dict) -> dict[str, pd.DataFrame]:
     }
 
 
-def read_inputs(inputs: dict | None = None) -> dict:
+def read_inputs(inputs: dict | None = None, silver_root: Path | None = None) -> dict:
     """Read every silver table gold needs; kvk_company is optional (empty without silver KVK)."""
-    return read_silver([*SILVER_CBS_TABLES, "kvk_company"], inputs, optional={"kvk_company"})
+    return read_silver([*SILVER_CBS_TABLES, "kvk_company"], inputs, optional={"kvk_company"},
+                       root=silver_root)
 
 
-def run() -> str:
-    """Build, stage, publish and log one gold run (pipeline/common/publish.py). Returns the run_id."""
+def run(lakehouse: Path | None = None) -> str:
+    """Build, stage, publish and log one gold run (pipeline/common/publish.py). Returns the run_id.
+
+    `lakehouse`: build in another lakehouse folder than the configured one (e.g. a copy
+    to try a change on): silver is read from, and gold and the run log are written to,
+    that folder."""
     from pipeline.common.publish import run_pipeline
-    return run_pipeline(PIPELINE, lambda inputs: build_all(read_inputs(inputs)),
-                        GOLD_ROOT, RUN_LOG, OPTIONAL_TABLES)
+    if lakehouse is None:
+        silver, gold, run_log = SILVER_ROOT, GOLD_ROOT, RUN_LOG
+    else:
+        silver, gold, run_log = lakehouse / "silver", lakehouse / "gold", lakehouse / "_run_log"
+    return run_pipeline(PIPELINE, lambda inputs: build_all(read_inputs(inputs, silver)),
+                        gold, run_log, OPTIONAL_TABLES)
 
 
 def main() -> None:

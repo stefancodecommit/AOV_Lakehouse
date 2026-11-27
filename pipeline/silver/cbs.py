@@ -55,6 +55,7 @@ import json
 import logging
 import re
 from datetime import date
+from pathlib import Path
 
 import pandas as pd
 
@@ -90,10 +91,12 @@ BRONZE_FIXED = {"_request_key", "_table_id", "_entity", "_period", "_period_stat
 
 
 # =========================================================================== bronze io
-def read_bronze(table_id: str, entity: str, versions: dict | None = None) -> pd.DataFrame:
+def read_bronze(table_id: str, entity: str, versions: dict | None = None,
+                root: Path | None = None) -> pd.DataFrame:
     """Bronze table as a DataFrame: one column per CBS field, plus the period status and
-    ingest time. `versions` (optional) collects the Delta version read, for the run log."""
-    path = BRONZE_ROOT / f"{table_id}_{entity}".lower()
+    ingest time. `versions` (optional) collects the Delta version read, for the run log;
+    `root` is the bronze folder (default: the configured one)."""
+    path = (BRONZE_ROOT if root is None else root) / f"{table_id}_{entity}".lower()
     if not (path / "_delta_log").exists():
         log.warning("Bronze table missing: %s (run pipeline/bronze/cbs.py first)", path)
         return pd.DataFrame()
@@ -113,10 +116,12 @@ def read_bronze(table_id: str, entity: str, versions: dict | None = None) -> pd.
     return clean_fields(df, drop_id)
 
 
-def read_reference(dataset: str, versions: dict | None = None) -> pd.DataFrame:
+def read_reference(dataset: str, versions: dict | None = None,
+                   root: Path | None = None) -> pd.DataFrame:
     """Rows of the latest successful batch of a reference table (pipeline/bronze/reference.py).
-    Bronze keeps every file version; silver uses only the newest one."""
-    root = BRONZE_ROOT / "reference"
+    Bronze keeps every file version; silver uses only the newest one. `root` is the
+    bronze folder (default: the configured one)."""
+    root = (BRONZE_ROOT if root is None else root) / "reference"
     if not (root / dataset / "_delta_log").exists() or not (root / "_batch_log" / "_delta_log").exists():
         log.warning("Reference table missing: %s (run pipeline/bronze/reference.py first)", root / dataset)
         return pd.DataFrame()
@@ -659,18 +664,26 @@ def build_all(read=read_bronze, read_ref=read_reference) -> dict[str, pd.DataFra
     }
 
 
-def run() -> str:
+def run(lakehouse: Path | None = None) -> str:
     """Build, stage, publish and log one silver CBS run (pipeline/common/publish.py). Returns the run_id;
-    raises (after logging the failed run) when something went wrong."""
+    raises (after logging the failed run) when something went wrong.
+
+    `lakehouse`: build in another lakehouse folder than the configured one (e.g. a copy
+    to try a change on): bronze is read from, and silver and the run log are written
+    to, that folder."""
     from functools import partial
 
     from pipeline.common.publish import run_pipeline
+    if lakehouse is None:
+        bronze, silver, run_log = BRONZE_ROOT, SILVER_ROOT, RUN_LOG
+    else:
+        bronze, silver, run_log = lakehouse / "bronze", lakehouse / "silver", lakehouse / "_run_log"
 
     def build(inputs: dict) -> dict:
-        return build_all(read=partial(read_bronze, versions=inputs),
-                         read_ref=partial(read_reference, versions=inputs))
+        return build_all(read=partial(read_bronze, versions=inputs, root=bronze),
+                         read_ref=partial(read_reference, versions=inputs, root=bronze))
 
-    return run_pipeline(PIPELINE, build, SILVER_ROOT, RUN_LOG, OPTIONAL_TABLES)
+    return run_pipeline(PIPELINE, build, silver, run_log, OPTIONAL_TABLES)
 
 
 def main() -> None:

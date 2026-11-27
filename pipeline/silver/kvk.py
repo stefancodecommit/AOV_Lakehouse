@@ -68,6 +68,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+from pathlib import Path
 
 import pandas as pd
 
@@ -104,11 +105,20 @@ SBI_COLUMNS = ["main_activity_codes", "main_activity_count", "has_multiple_main_
 
 
 # =========================================================================== reading
-def read_kvk_bronze(versions: dict | None = None, batches: list[str] | None = None) -> pd.DataFrame:
+def _folders(lakehouse: Path | None) -> tuple[Path, Path, Path]:
+    """(KVK bronze, silver, run log) of `lakehouse`, or the configured ones for None."""
+    if lakehouse is None:
+        return KVK_BRONZE, SILVER_ROOT, RUN_LOG
+    return lakehouse / "bronze" / "kvk", lakehouse / "silver", lakehouse / "_run_log"
+
+
+def read_kvk_bronze(versions: dict | None = None, batches: list[str] | None = None,
+                    root: Path | None = None) -> pd.DataFrame:
     """Rows of every successfully logged KVK batch, with batch_id and ingested_at.
     `batches`: only these batch_ids (a run reads only the newest)."""
     from deltalake import DeltaTable
-    data, batch_log = KVK_BRONZE / "basis_bedrijfsgegevens", KVK_BRONZE / "_batch_log"
+    root = KVK_BRONZE if root is None else root           # the KVK bronze folder
+    data, batch_log = root / "basis_bedrijfsgegevens", root / "_batch_log"
     if not (data / "_delta_log").exists() or not (batch_log / "_delta_log").exists():
         log.warning("KVK bronze missing: %s (load a KVK file first: python -m pipeline.bronze.kvk --inbox)", data)
         return pd.DataFrame()
@@ -140,11 +150,11 @@ def read_kvk_bronze(versions: dict | None = None, batches: list[str] | None = No
     return df.sort_values(["_batch_id", "_row_number"], ignore_index=True)
 
 
-def read_crosswalk(versions: dict | None = None) -> pd.DataFrame:
+def read_crosswalk(versions: dict | None = None, root: Path | None = None) -> pd.DataFrame:
     """The SBI 2008 <-> 2025 crosswalk from silver (map_sbi2008_sbi2025), only the two
     code columns. Without it every code becomes 'unknown', so run pipeline/silver/cbs.py first."""
     from deltalake import DeltaTable
-    path = SILVER_ROOT / "map_sbi2008_sbi2025"
+    path = (SILVER_ROOT if root is None else root) / "map_sbi2008_sbi2025"   # root: silver
     if not (path / "_delta_log").exists():
         log.warning("Crosswalk missing: %s (run pipeline/bronze/reference.py and pipeline/silver/cbs.py first)",
                     path)
@@ -166,11 +176,11 @@ def _batch_ids(values) -> str:
     return ",".join(sorted(set(values.dropna())))
 
 
-def crosswalk_batch() -> str | None:
-    """The batch_id(s) of the crosswalk in silver, as read_crosswalk records them; ''
-    when there is no crosswalk table."""
+def crosswalk_batch(root: Path | None = None) -> str | None:
+    """The batch_id(s) of the crosswalk in silver (`root`, default: the configured
+    folder), as read_crosswalk records them; '' when there is no crosswalk table."""
     from deltalake import DeltaTable
-    path = SILVER_ROOT / "map_sbi2008_sbi2025"
+    path = (SILVER_ROOT if root is None else root) / "map_sbi2008_sbi2025"
     if not (path / "_delta_log").exists():
         return ""
     return _batch_ids(DeltaTable(str(path)).to_pandas(columns=["batch_id"])["batch_id"])
@@ -313,14 +323,14 @@ def build_kvk_company(bronze: pd.DataFrame, crosswalk: pd.DataFrame) -> pd.DataF
 TABLE = "kvk_company"
 
 
-def newest_batch(versions: dict | None = None) -> str | None:
+def newest_batch(versions: dict | None = None, root: Path | None = None) -> str | None:
     """The successful KVK batch with the newest snapshot (KVK's file date, else the upload
     day; pipeline/bronze/kvk.by_snapshot_date), or None. Not the last one loaded:
     an older file loaded later must not replace a newer snapshot."""
     from deltalake import DeltaTable
 
     from pipeline.bronze.kvk import by_snapshot_date
-    batch_log = KVK_BRONZE / "_batch_log"
+    batch_log = (KVK_BRONZE if root is None else root) / "_batch_log"   # root: KVK bronze
     if not (batch_log / "_delta_log").exists():
         return None
     log_df = DeltaTable(str(batch_log)).to_pandas()
@@ -331,18 +341,21 @@ def newest_batch(versions: dict | None = None) -> str | None:
     return newest
 
 
-def build_all(inputs: dict | None = None) -> dict[str, pd.DataFrame]:
+def build_all(inputs: dict | None = None, lakehouse: Path | None = None) -> dict[str, pd.DataFrame]:
     """{kvk_company: DataFrame} from the newest upload; `inputs` collects what was read
-    (Delta versions and the batch_id) for the run log."""
+    (Delta versions and the batch_id) for the run log; `lakehouse`: read from another
+    lakehouse folder than the configured one."""
     from pipeline.common.publish import RunFailed
-    batch = newest_batch(inputs)
+    kvk_bronze, silver, _ = _folders(lakehouse)
+    batch = newest_batch(inputs, root=kvk_bronze)
     if batch is None:
         raise RunFailed("no KVK batches in bronze (load a KVK file first)")
-    crosswalk = read_crosswalk(inputs)
-    return {TABLE: build_kvk_company(read_kvk_bronze(inputs, batches=[batch]), crosswalk)}
+    crosswalk = read_crosswalk(inputs, root=silver)
+    return {TABLE: build_kvk_company(read_kvk_bronze(inputs, batches=[batch], root=kvk_bronze),
+                                     crosswalk)}
 
 
-def unchanged_since() -> str | None:
+def unchanged_since(lakehouse: Path | None = None) -> str | None:
     """The run_id of the last successful run when a new run would build the same table,
     else None. Same means: the same newest KVK batch, the same crosswalk batch, and the
     same code, and kvk_company still holds that run's rows.
@@ -356,7 +369,8 @@ def unchanged_since() -> str | None:
     from deltalake import DeltaTable
 
     from pipeline.common import runlog
-    runs = runlog.read_runs(RUN_LOG)
+    kvk_bronze, silver, run_log = _folders(lakehouse)
+    runs = runlog.read_runs(run_log)
     runs = runs[runs["pipeline"] == PIPELINE]
     if runs.empty or runs.iloc[-1]["status"] != "success":
         return None                       # nothing built yet, or the last run failed
@@ -365,10 +379,10 @@ def unchanged_since() -> str | None:
     if not code or code == "unknown" or code.endswith("-dirty") or last["code_version"] != code:
         return None
     built_from = json.loads(last["inputs"] or "{}")
-    if (built_from.get(NEWEST_BATCH) != newest_batch()
-            or built_from.get(CROSSWALK_BATCH) != crosswalk_batch()):
+    if (built_from.get(NEWEST_BATCH) != newest_batch(root=kvk_bronze)
+            or built_from.get(CROSSWALK_BATCH) != crosswalk_batch(silver)):
         return None                       # a run logged before 2026-11-26 has no crosswalk key
-    path = SILVER_ROOT / TABLE
+    path = silver / TABLE
     if not (path / "_delta_log").exists():
         return None
     ids = DeltaTable(str(path)).to_pyarrow_dataset().to_table(columns=["run_id"]).column("run_id")
@@ -377,20 +391,24 @@ def unchanged_since() -> str | None:
     return last["run_id"]
 
 
-def run(force: bool = False) -> str:
+def run(force: bool = False, lakehouse: Path | None = None) -> str:
     """Build, stage, publish and log one silver KVK run (pipeline/common/publish.py).
     Returns the run_id; raises (after logging the failed run) when something went wrong.
 
     When nothing silver KVK reads has changed since the last successful run
     (unchanged_since), nothing is rebuilt or logged and that run's run_id is returned;
     `force` rebuilds anyway. Dagster still reports silver_kvk as materialized then: a
-    skipped asset would also skip gold in the same run (see orchestration/definitions.py)."""
+    skipped asset would also skip gold in the same run (see orchestration/definitions.py).
+
+    `lakehouse`: build in another lakehouse folder than the configured one (e.g. a copy
+    to try a change on): read from, and write silver and the run log to, that folder."""
     from pipeline.common.publish import run_pipeline
-    if not force and (previous := unchanged_since()):
+    _, silver, run_log = _folders(lakehouse)
+    if not force and (previous := unchanged_since(lakehouse)):
         log.info("Nothing changed since run %s (same KVK upload, crosswalk and code): "
                  "kvk_company not rebuilt (--force rebuilds it)", previous)
         return previous
-    return run_pipeline(PIPELINE, build_all, SILVER_ROOT, RUN_LOG)
+    return run_pipeline(PIPELINE, lambda inputs: build_all(inputs, lakehouse), silver, run_log)
 
 
 def preview() -> None:

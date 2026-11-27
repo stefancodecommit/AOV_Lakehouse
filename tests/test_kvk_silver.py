@@ -191,20 +191,39 @@ def crosswalk():
     publish.write_table(k.SILVER_ROOT / "map_sbi2008_sbi2025", SILVER_CROSSWALK)
 
 
-def test_a_run_builds_only_the_newest_upload(crosswalk, monkeypatch):
+def test_a_run_builds_only_the_newest_upload(crosswalk, monkeypatch, tmp_path_factory):
     for month in ("08", "09"):
         upload(f"kvk_2026_{month}", f"2026-{month}-01")
     upload("kvk_2026_10", "2026-10-01", rows=ROWS[:2])
     reads = []
     real = k.read_kvk_bronze
-    monkeypatch.setattr(k, "read_kvk_bronze", lambda versions=None, batches=None:
-                        reads.append(batches) or real(versions, batches))
+    monkeypatch.setattr(k, "read_kvk_bronze", lambda versions=None, batches=None, root=None:
+                        reads.append(batches) or real(versions, batches, root))
     run_id = k.run()
     assert reads == [["kvk_2026_10"]]                     # memory: one snapshot read
     df = silver_kvk()
     assert set(df.batch_id) == {"kvk_2026_10"} and len(df) == 2 and set(df.run_id) == {run_id}
     assert all(r.passed for r in layers.check_silver_kvk(df))
     assert inspect_lakehouse.silver_run_problems(k.LAKEHOUSE, "silver_kvk")[1] == []
+
+    # run(lakehouse=...): a copy with a newer upload of its own is read and written; the
+    # configured lakehouse isn't
+    import shutil
+    copy = tmp_path_factory.mktemp("copy") / "lakehouse"
+    shutil.copytree(k.LAKEHOUSE, copy)
+    assert k.unchanged_since(copy) == run_id              # the copy's log, batch and table
+    with monkeypatch.context() as m:                       # upload() writes to KVK_BRONZE
+        m.setattr(k, "KVK_BRONZE", copy / "bronze" / "kvk")
+        upload("kvk_2026_11", "2026-11-01", rows=ROWS[:1])
+    assert k.unchanged_since(copy) is None and k.unchanged_since() == run_id
+    copy_run = k.run(lakehouse=copy)
+    assert reads[-1] == ["kvk_2026_11"]                    # the copy's newest upload
+    assert list(runlog.read_runs(k.RUN_LOG).run_id) == [run_id]              # untouched
+    assert set(silver_kvk().run_id) == {run_id}
+    assert list(runlog.read_runs(copy / "_run_log").run_id) == [run_id, copy_run]
+    copy_df = DeltaTable(str(copy / "silver" / "kvk_company")).to_pandas()
+    assert set(copy_df.batch_id) == {"kvk_2026_11"} and set(copy_df.run_id) == {copy_run}
+    assert k.unchanged_since(copy) == copy_run
 
 
 def test_a_new_upload_replaces_the_snapshot(crosswalk):
