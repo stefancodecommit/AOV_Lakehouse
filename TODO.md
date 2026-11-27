@@ -488,6 +488,33 @@ Open, most valuable first (the author decides):
 - Leave as is: no classes or abstract base classes just to look "more SOLID"; that would
   make this code worse
 
+**Tests not added yet** (found during the fourth review's changes, 2026-11-27; skipped
+then only because a new test changes the counted 420). Adding one means: update the
+test count where `tests/test_doc_numbers.py` checks it (report, Q&A, GenAI section,
+requirements, tests/README.md), the slides by hand (slide 9 and its notes, see "Before
+submitting"), and export the report again. Adding them together needs one round of
+updates:
+- [ ] **KVK: rows of an unlogged batch are removed before the next load**
+      (`tests/test_kvk_logic.py`). `pipeline/bronze/batchlog.remove_orphan_rows` is
+      tested only through the crosswalk
+      (`test_rows_of_an_unlogged_batch_are_removed_before_the_next_load` in
+      `tests/test_reference.py`); KVK never had a test of its own. Idea: write KVK rows
+      with a batch_id that is not in the batch log, ingest a file, check only the logged
+      batch's rows remain
+- [ ] **Silver KVK in a copy: the crosswalk batch is read from the copy**
+      (`tests/test_kvk_silver.py`). The copy check in
+      `test_a_run_builds_only_the_newest_upload` doesn't catch `unchanged_since` reading
+      the crosswalk batch from the configured silver instead of the copy, because both
+      crosswalks are the same. Idea: give the copy's `map_sbi2008_sbi2025` another
+      batch_id; then `unchanged_since(copy)` must be None (as an extra check in that test
+      it wouldn't change the count)
+- [ ] **Gold builders read what the lineage says** (`tests/test_lineage.py` or
+      `tests/test_gold.py`). Each builder's parameters (`pipeline/gold/build.py`,
+      `BUILDERS`) are the silver tables it reads; `tools/lineage.py` names the silver
+      sources of each gold table's columns. A test that compares the two keeps code and
+      documentation in step: a builder that starts reading a new table without the
+      lineage saying so (or the other way round) fails
+
 **Before submitting** (the numbers that live in the submitted documents):
 - [ ] `pytest` passes; that includes `tests/test_doc_numbers.py`, which checks the test
       count in the report, Q&A, GenAI section, requirements and tests/README.md, and the
