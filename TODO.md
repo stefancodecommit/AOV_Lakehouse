@@ -44,7 +44,9 @@ is finished (section "Code review", 2026-11-11 to 11-13; ERD added 2026-11-19). 
 review (2026-11-20) found nine nice-to-have items (three of them nits), listed in that
 section under "Nice to have"; all nine are done (the same day). Because of that review,
 before submitting: the Word report must be exported again
-(`rapport.md` changed: test count and lineage columns).
+(`rapport.md` changed: test count and lineage columns). A fourth review (2026-11-27,
+SOLID principles) logged optional design items in section "Code review"; none is needed
+for the assignment.
 
 Optional work removed from this list on 2026-11-19 (the author's decision: not needed
 for the assignment): a backup on another disk, pandas 3, checking for a new SBI
@@ -355,6 +357,54 @@ the first:
       (~1.0 GB); all seven gold tables identical. Covered by the existing
       `test_business_context_bands_and_missing_classes` (a band with a missing class
       stays empty, not undercounted)
+
+Fourth review (2026-11-27, with Claude, at the author's request: *"how well are SOLID
+principles applied?"*; review only, no code changed during it). SOLID is written for
+classes; this code is mostly functions, so it was applied in spirit. Verdict: clear
+responsibilities and good extension points; the weakest principle is dependency
+inversion (modules read the global settings and fixed paths when imported).
+Done well, no action: open/closed (CBS endpoints from config, `run_pipeline` takes a
+`build` function, checks return `CheckResult` lists, gold's `PARTIAL_READS`); Liskov
+(only `ConfigError(ValueError)` and `RunFailed(RuntimeError)`, both sound). Good
+examples of dependency inversion already in the code, worth naming in the report:
+`_ingest(path, confirm, confirmed_by)` (the human gate passed in), silver CBS
+`build_all(read=..., read_ref=...)`, `run_pipeline(..., root, run_log)`, dashboard
+`read_table(..., root=None)`, `build_risk_index(t, settings_=None)`.
+Open, most valuable first (the author decides):
+- [ ] **Worth doing: split `pipeline/bronze/kvk_agent.py`** (single responsibility). It
+      holds the Ollama chat loop, the LLM tool definitions, the keyboard confirmation,
+      path cleanup, Delta writes and the command line. Dagster calls
+      `ingest_confirmed_file` from a module named "agent". Idea: an ingest module
+      (verify, `_ingest`, `write_batch`, `write_log`, `VERIFIED`) and a thin agent module
+      that only wraps it as LLM tools. Keep the test that the model can't call
+      `ingest_confirmed_file`
+- [ ] **Worth doing: share the batch-log helpers** (duplication). `ingested_hashes` and
+      `remove_orphan_rows` exist in both `pipeline/bronze/reference.py` and
+      `kvk_agent.py`; the SHA-256 and header-normalising helpers also in `checks/kvk.py`
+      (`reference.py` has its own `_sha256`, `_norm`). One module (e.g.
+      `pipeline/bronze/batchlog.py`) taking the table paths as arguments
+- [ ] **Gradually: pass folders as parameters instead of module constants** (dependency
+      inversion). Every pipeline module computes `BRONZE_ROOT`, `GOLD_ROOT`, `RUN_LOG`,
+      `ENDPOINTS`, ... from `settings` at import; `tests/conftest.py` needs ~40
+      `monkeypatch.setattr` calls to point them at a temporary folder, and a forgotten
+      one lets a test touch the real lakehouse. Step 1: a parameter with the constant as
+      default (`def read_silver(names, ..., root: Path = SILVER_ROOT)`), starting with
+      gold `read_silver` and the bronze writers. Possible step 2: one small `Paths`
+      dataclass built from settings, passed down from `run()`/`main()`
+- [ ] **Optional: explicit inputs for the gold builders** (interface segregation). Each
+      `build_*` in `pipeline/gold/build.py` takes `t` (all silver tables), so what it
+      really reads is hidden; silver CBS builders already name theirs
+      (`build_fct_absence_rate(data, mapping)`)
+- [ ] **Optional: a `_risk_row` helper in `build_risk_index`** (single responsibility):
+      windowing, scoring, trend fit, merge and explanation are one function; one row per
+      group in its own function is easier to read and test
+- [ ] **Optional: `pipeline/bronze/cbs.py` (665 lines)**: move the HTTP part
+      (`make_session`, `fetch_all`) to its own module
+- [ ] **Optional (Liskov, small):** a missing optional table comes back as `pd.DataFrame()`
+      without columns (gold `read_silver`), so each consumer checks for it; an empty frame
+      with the expected columns would make "missing" behave like "no rows"
+- Leave as is: no classes or abstract base classes just to look "more SOLID"; that would
+  make this code worse
 
 **Before submitting** (the numbers that live in the submitted documents):
 - [ ] `pytest` passes; that includes `tests/test_doc_numbers.py`, which checks the test
