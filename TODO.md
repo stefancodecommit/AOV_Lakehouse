@@ -896,6 +896,18 @@ documentation, AI-driven automation (KVK agent).
       run and clean stop, the Dagster links by screenshot; tests/test_demo.py.
       Original item: dashboard, Dagster, lineage explorer,
       lakehouse viewer
+- [x] **OpenMetadata for the lineage? Not adopted** (2026-11-27, the author's question and
+      decision). The question was whether OpenMetadata
+      ([data quality as code](https://docs.open-metadata.org/v2.0.x/how-to-guides/data-quality-observability/quality/data-quality-as-code))
+      could build the lineage instead of `tools/lineage.py`. It can't work it out by
+      itself: OpenMetadata infers lineage only from SQL (query logs, or SQL given to
+      `add_lineage_by_query`), and this pipeline transforms in Python on Delta tables, so
+      the lineage would still have to be pushed from `tools/lineage.py` through its lineage
+      API. It also needs a server, a database and Elasticsearch/OpenSearch, which is too
+      much for a project that runs on one machine. Kept the original design (declared
+      lineage, guarded by `tests/test_lineage.py`); added a "Not decided: a data catalog
+      such as OpenMetadata" paragraph at the end of section 11 of
+      [docs/cloud_design.md](docs/cloud_design.md) (commit f0cbbab)
 
 ## 0. Foundations
 - [x] Decide the dashboard's audience: personal use, for an educational project
