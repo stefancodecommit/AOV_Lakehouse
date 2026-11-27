@@ -165,7 +165,7 @@ Still open (not done yet; in order of value):
       evidence in the comment; the checks take them as arguments; the unused weekly and
       monthly limits dropped; docs point to config.yaml. Tests with the real cases
       (80072NED on 2026-11-13, 86009NED just before its April release)
-- [x] **Q&A: why does the KVK upload use an LLM?** (2026-11-13) Question 20 in
+- [x] **Q&A: why does the KVK upload use an LLM?** (2026-11-13) Question 20 (21 since 2026-11-27) in
       docs/qa_practice.md, in its own section: the model only guides and chooses among
       five tools; the checks are Python; loading needs the exact verified file and a typed
       YES; it runs locally; and honestly, it isn't needed (`--inbox`, Dagster), it shows
@@ -708,7 +708,12 @@ words counted per paragraph from the .docx text, unchanged)
       until submitting, because any later change to `rapport.md` needs a new export.
       Exported again on 2026-11-27 (422 tests): 4,938 words. Count the words per paragraph
       with the text pieces joined without spaces: joining every piece with a space splits
-      words Word stores in several pieces and gave 4,991 for the same document
+      words Word stores in several pieces and gave 4,991 for the same document.
+      Exported again on 2026-11-27 after removing "regio" from the silver dimensions in
+      section 3.3 (there is no region dimension since 81644NED left on 2026-11-13; found
+      while answering "why are facts and dimensions in silver?"): 4,944 words. That
+      question is now Q&A question 13 (docs/qa_practice.md, "Data engineering"); the
+      questions after it moved up one (21 in all)
 
 ## First real run (done 2026-10-05)
 

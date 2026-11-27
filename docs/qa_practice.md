@@ -91,20 +91,35 @@ code, dus die zouden hetzelfde, verkeerde aantal kunnen krijgen. In de echte cij
 dat niet voor, maar het is gerepareerd (koppelen op de sectorsleutel) met een test die
 op de oude code faalt. Een goed voorbeeld van waarom een tweede blik nuttig is.
 
+**13. Feiten en dimensies horen toch in gold? Waarom staan ze bij jou in silver?**
+*Antwoord:* Het medallion-patroon schrijft dat niet voor; er zijn twee gangbare lezingen.
+Databricks zet een sterschema vaak in gold. Ik gebruik de andere: silver is het
+opgeschoonde, op elkaar afgestemde model, gold is gemaakt voor één gebruik. Drie
+CBS-tabellen en KVK op dezelfde sleutels brengen (sector via de schakeltabel, periode,
+grootteklasse) is integratiewerk, en dat is precies silver. De feiten blijven op het
+niveau van de bron, zonder bedrijfsregels, dus herbruikbaar. In gold zit de logica:
+vergelijking met landelijk, rangorde, de risico-index en het verbergen van kleine
+KVK-groepen. Het dashboard leest alleen gold, dus gold is ook de laag die veilig te tonen
+is. Het is sterschema-*achtig*: de koppeltabellen en `kvk_company` vallen erbuiten. Komt er
+een BI-tool waarin analisten zelf willen snijden, dan bied ik het sterschema ook in gold
+aan, bijvoorbeeld als views op silver.
+*Evidence:* README.md, "The data model"; pipeline/silver/README.md; pipeline/gold/README.md;
+docs/rapport.md, 3.3.
+
 ## Business value and responsibility
 
-**13. Wat moet de verzekeraar hier concreet mee?**
+**14. Wat moet de verzekeraar hier concreet mee?**
 *Antwoord:* De analist ziet per sector en grootteklasse waar het verzuim structureel hoger
 ligt, met uitleg in één zin. Via de manager gaat dat naar risicomanagement (portefeuille,
 premies) en accountmanagers (preventiegesprekken met werkgevers). Als benchmark náást de
 eigen cijfers, op groepsniveau.
 
-**14. Mag je een sectorcijfer gebruiken voor één werkgever of voor premies?**
+**15. Mag je een sectorcijfer gebruiken voor één werkgever of voor premies?**
 *Antwoord:* Niet voor één werkgever: dat is een groepscijfer (*ecological fallacy*). Voor
 premies pas na een toets door compliance: sector kan indirect een beschermde groep raken
 (de zorg heeft vooral vrouwelijke werknemers).
 
-**15. Zitten er persoonsgegevens in?**
+**16. Zitten er persoonsgegevens in?**
 *Antwoord:* Niet van verzekerden. Wel is een bedrijf op rijniveau soms herleidbaar (851.804
 van de 1,9 miljoen bedrijven zijn uniek op regio, SBI-code en startdatum), dus het dashboard
 toont alleen aantallen, met kleine groepen verborgen. En het log bevat wie een KVK-bestand
@@ -113,27 +128,27 @@ laadde; die naam wordt na een jaar verwijderd.
 
 ## Your own work and GenAI
 
-**16. Wat heb je zelf gedaan, en wat de AI?**
+**17. Wat heb je zelf gedaan, en wat de AI?**
 *Antwoord (in je eigen woorden):* Ik nam de beslissingen en de AI-assistent bouwde, testte
 en documenteerde binnen die keuzes. Noem twee of drie beslissingen die van jou kwamen, bijv.
 markeren in plaats van aannemen, de verzekeraar en de keten analist → manager →
 risicomanagement, en de vraag of pandas zou schalen, die tot de incrementele opzet leidde.
 *Evidence:* `docs/genai_use.md`, section 3 (the author's decisions).
 
-**17. Hoe weet je dat de code van de AI klopt?**
+**18. Hoe weet je dat de code van de AI klopt?**
 *Antwoord:* Niet op vertrouwen: 422 tests, ook op een schone machine in GitHub Actions; code
 expres kapotgemaakt om te zien of de tests dat merken; resultaten vergeleken op de echte
 data na elke grote wijziging; en vragen als "hoe heb je dat getest?", die een onterecht
 afgevinkt item aan het licht brachten.
 *Evidence:* `docs/genai_use.md`, sections 4 and 5.
 
-**18. Wat zou je anders doen?**
+**19. Wat zou je anders doen?**
 *Antwoord (in je eigen woorden):* bijvoorbeeld eerder een terugtoets van het model doen, of
 eerder iemand anders laten meekijken (de review vond een echte, latente fout).
 
 ## Operations
 
-**19. Wat gebeurt er als je laptop op de eerste van de maand uit staat?**
+**20. Wat gebeurt er als je laptop op de eerste van de maand uit staat?**
 *Antwoord:* Dan draait de maandelijkse CBS-run niet op dat moment, maar hij gaat niet
 verloren. Dagster kijkt bij het starten welke geplande momenten voorbij zijn gegaan en
 start de laatste daarvan meteen. Voorbeeld: Dagster werd op 9 november gestart en haalde
@@ -145,7 +160,7 @@ page; `docs/cloud_design.md`.
 
 ## The AI agent in the pipeline
 
-**20. Waarom gebruik je een taalmodel om een KVK-bestand te laden?**
+**21. Waarom gebruik je een taalmodel om een KVK-bestand te laden?**
 *Antwoord:* Het model laadt zelf niets; het begeleidt de medewerker: welk bestand staat
 klaar, waar download je het, wat zegt het controlerapport. Het kan alleen vijf vaste
 functies aanroepen. De controles zijn gewone Python-code; laden lukt alleen voor precies

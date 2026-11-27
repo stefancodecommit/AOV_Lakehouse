@@ -253,7 +253,7 @@ aannames die de gebruiker niet kan zien.
 ### 3.3 Modelontwerp en trainingsaanpak
 
 Het project heeft twee soorten modellen. Het **datamodel** in silver is een
-sterschema-achtige opzet van dimensies (periode, sector, grootteklasse, regio,
+sterschema-achtige opzet van dimensies (periode, sector, grootteklasse,
 enquêtemaat) en feiten (verzuim, enquête, aantallen bedrijven). Daarop is het
 **kwantitatieve model** gebouwd: de risico-index per sector en grootteklasse
 (paragraaf 4.2 beschrijft de berekening).
