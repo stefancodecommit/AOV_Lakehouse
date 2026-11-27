@@ -116,7 +116,7 @@ def kvk_retention(dry_run: bool = False, path: Path | None = None) -> list[str]:
     data, batch_log = root / "basis_bedrijfsgegevens", root / "_batch_log"
     if not (batch_log / "_delta_log").exists():
         return []
-    from pipeline.bronze.kvk_agent import by_snapshot_date
+    from pipeline.bronze.kvk import by_snapshot_date
     batches = _read_log(batch_log)
     if batches.empty:
         return []

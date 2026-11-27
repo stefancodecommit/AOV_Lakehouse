@@ -110,7 +110,7 @@ def read_kvk_bronze(versions: dict | None = None, batches: list[str] | None = No
     from deltalake import DeltaTable
     data, batch_log = KVK_BRONZE / "basis_bedrijfsgegevens", KVK_BRONZE / "_batch_log"
     if not (data / "_delta_log").exists() or not (batch_log / "_delta_log").exists():
-        log.warning("KVK bronze missing: %s (run pipeline/bronze/kvk_agent.py first)", data)
+        log.warning("KVK bronze missing: %s (load a KVK file first: python -m pipeline.bronze.kvk --inbox)", data)
         return pd.DataFrame()
     log_dt, data_dt = DeltaTable(str(batch_log)), DeltaTable(str(data))
     if versions is not None:
@@ -315,11 +315,11 @@ TABLE = "kvk_company"
 
 def newest_batch(versions: dict | None = None) -> str | None:
     """The successful KVK batch with the newest snapshot (KVK's file date, else the upload
-    day; pipeline/bronze/kvk_agent.by_snapshot_date), or None. Not the last one loaded:
+    day; pipeline/bronze/kvk.by_snapshot_date), or None. Not the last one loaded:
     an older file loaded later must not replace a newer snapshot."""
     from deltalake import DeltaTable
 
-    from pipeline.bronze.kvk_agent import by_snapshot_date
+    from pipeline.bronze.kvk import by_snapshot_date
     batch_log = KVK_BRONZE / "_batch_log"
     if not (batch_log / "_delta_log").exists():
         return None

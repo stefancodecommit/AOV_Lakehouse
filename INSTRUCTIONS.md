@@ -63,7 +63,7 @@ it skips what is already there.
 ```bash
 .venv/bin/python -m pipeline.bronze.cbs                # 1. CBS API -> bronze (~40 s the first time)
 .venv/bin/python -m pipeline.bronze.reference          # 2. SBI crosswalk (xlsx) -> bronze
-.venv/bin/python -m pipeline.bronze.kvk_agent --inbox  # 3. newest new KVK zip in inbox/kvk/ -> bronze (type YES)
+.venv/bin/python -m pipeline.bronze.kvk --inbox        # 3. newest new KVK zip in inbox/kvk/ -> bronze (type YES)
 .venv/bin/python -m pipeline.silver.cbs                # 4. bronze CBS + crosswalk -> silver
 .venv/bin/python -m pipeline.silver.kvk                # 5. bronze KVK -> silver kvk_company (needs 4)
 .venv/bin/python -m pipeline.gold.build                # 6. silver -> gold
@@ -85,7 +85,7 @@ unchanged; after changing the KVK column names in `config.yaml`, run it with `--
 | What changed | Run |
 |---|---|
 | CBS published new figures (about monthly) | `pipeline.bronze.cbs`, `pipeline.silver.cbs`, `pipeline.gold.build` |
-| A new KVK file in `inbox/kvk/` | `pipeline.bronze.kvk_agent --inbox`, `pipeline.silver.kvk`, `pipeline.gold.build` |
+| A new KVK file in `inbox/kvk/` | `pipeline.bronze.kvk --inbox`, `pipeline.silver.kvk`, `pipeline.gold.build` |
 | A new SBI crosswalk version from CBS | `pipeline.bronze.reference --url <url>`, `pipeline.silver.cbs`, `pipeline.silver.kvk`, `pipeline.gold.build` |
 | Code in `pipeline/silver/` | `pipeline.silver.cbs` and/or `pipeline.silver.kvk`, then `pipeline.gold.build` |
 | Code in `pipeline/gold/` | `pipeline.gold.build` |
@@ -109,8 +109,8 @@ Each `pipeline.…` above is run as `.venv/bin/python -m pipeline.…`.
 .venv/bin/python -m pipeline.bronze.reference --url <url of a newer version>
 
 # KVK (asks you to type YES before writing)
-.venv/bin/python -m pipeline.bronze.kvk_agent --inbox       # the newest file in inbox/kvk/ not loaded yet
-.venv/bin/python -m pipeline.bronze.kvk_agent --file kvk-open-dataset-basis-bedrijfsgegevens.zip
+.venv/bin/python -m pipeline.bronze.kvk --inbox             # the newest file in inbox/kvk/ not loaded yet
+.venv/bin/python -m pipeline.bronze.kvk --file kvk-open-dataset-basis-bedrijfsgegevens.zip
 .venv/bin/python -m pipeline.bronze.kvk_agent               # chat with the agent (Ollama must be running)
 ```
 

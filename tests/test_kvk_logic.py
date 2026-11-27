@@ -1,11 +1,13 @@
-"""Bronze KVK: verification of an uploaded file. Offline: the batch log points at tmp_path."""
+"""Bronze KVK: verification of an uploaded file (pipeline/bronze/kvk.py) and the agent's
+tools around it (pipeline/bronze/kvk_agent.py). Offline: the batch log points at tmp_path."""
 import json
 import zipfile
 from pathlib import Path
 
 import pytest
 
-from pipeline.bronze import kvk_agent as k
+from pipeline.bronze import kvk as k
+from pipeline.bronze import kvk_agent as agent
 
 # Header and rows as in the real KVK file of 2026-10-01
 REAL_HEADER = ('"Datum aanvang";"Actief";"Insolventie";"Rechtsvorm";"Postcode regio";'
@@ -27,7 +29,7 @@ def kvk_zip(tmp_path, monkeypatch):
 
 
 def test_verify_recognises_every_column_of_the_real_header(kvk_zip):
-    report = json.loads(k.verify_dataset(str(kvk_zip)))
+    report = k.verify(str(kvk_zip))
     assert report["status"] == "PASSED", report["errors"]
     assert report["file"] == kvk_zip.name             # no folder: it holds a username (R10)
     assert report["row_count"] == 3
@@ -43,7 +45,7 @@ def test_verify_recognises_every_column_of_the_real_header(kvk_zip):
 def test_rejected_file_is_quarantined_with_its_report(tmp_path):
     bad = tmp_path / "kvk.csv"
     bad.write_text("just;one\n1;2\n")                 # required columns missing
-    report = json.loads(k.verify_dataset(str(bad)))
+    report = k.verify(str(bad))
     assert report["status"] == "FAILED"
     folder = Path(report["quarantine"])
     assert folder.parent == k.QUARANTINE_ROOT / "kvk"
@@ -51,11 +53,11 @@ def test_rejected_file_is_quarantined_with_its_report(tmp_path):
     saved = json.loads((folder / "report.json").read_text())
     assert saved["status"] == "FAILED" and any("Required column missing" in e for e in saved["errors"])
     # verifying the same file again doesn't add a second copy
-    assert json.loads(k.verify_dataset(str(bad)))["quarantine"] == "already in quarantine"
+    assert k.verify(str(bad))["quarantine"] == "already in quarantine"
 
 
 def test_passed_file_is_not_quarantined(kvk_zip):
-    report = json.loads(k.verify_dataset(str(kvk_zip)))
+    report = k.verify(str(kvk_zip))
     assert report["status"] == "PASSED" and "quarantine" not in report
     assert not k.QUARANTINE_ROOT.exists()
 
@@ -72,7 +74,7 @@ def inbox_zip(name, rows=REAL_ROWS, age=0):
 
 
 def test_empty_or_missing_inbox():
-    listing = json.loads(k.list_inbox())
+    listing = json.loads(agent.list_inbox())
     assert listing["files"] == [] and listing["new_files"] == []
     assert "get_dataset_info" in listing["next_step"]
     assert k.newest_new_inbox_file() is None
@@ -80,7 +82,7 @@ def test_empty_or_missing_inbox():
 
 def test_list_inbox_tells_the_agent_which_file_is_new():
     inbox_zip("kvk.zip")
-    listing = json.loads(k.list_inbox())
+    listing = json.loads(agent.list_inbox())
     assert listing["new_files"] == ["kvk.zip"] and "verify_dataset" in listing["next_step"]
 
 
@@ -89,7 +91,7 @@ def test_inbox_lists_newest_first_and_marks_ingested_files(monkeypatch):
     inbox_zip("new.zip", rows=REAL_ROWS[:2])
     (k.INBOX / "notes.txt").write_text("ignored")
     monkeypatch.setattr(k, "ingested_hashes", lambda: {k._sha256(old): "kvk_batch_1"})
-    files = json.loads(k.list_inbox())["files"]
+    files = json.loads(agent.list_inbox())["files"]
     assert [f["file"] for f in files] == ["new.zip", "old.zip"]
     assert [f["already_ingested_as"] for f in files] == [None, "kvk_batch_1"]
 
@@ -105,9 +107,9 @@ def test_newest_new_file_skips_ingested_ones(monkeypatch):
 def test_bare_file_name_is_looked_up_in_the_inbox(tmp_path, monkeypatch):
     path = inbox_zip("kvk.zip")
     monkeypatch.chdir(tmp_path)                    # not the inbox
-    assert k._resolve("kvk.zip") == path.resolve()
-    assert json.loads(k.verify_dataset("kvk.zip"))["status"] == "PASSED"
-    assert k._resolve("'/somewhere/else.zip'") == Path("/somewhere/else.zip")
+    assert k.resolve_path("kvk.zip") == path.resolve()
+    assert k.verify("kvk.zip")["status"] == "PASSED"
+    assert k.resolve_path("'/somewhere/else.zip'") == Path("/somewhere/else.zip")
 
 
 
@@ -128,8 +130,8 @@ def test_dagster_ingest_needs_the_exact_file_name_as_confirmation():
 
 def test_dagster_entry_point_is_not_an_agent_tool():
     """The model must never be able to skip the human confirmation."""
-    assert "ingest_confirmed_file" not in k.TOOLS and "_ingest" not in k.TOOLS
-    assert set(k.TOOLS) == {"get_dataset_info", "list_inbox", "verify_dataset",
+    assert "ingest_confirmed_file" not in agent.TOOLS and "ingest" not in agent.TOOLS
+    assert set(agent.TOOLS) == {"get_dataset_info", "list_inbox", "verify_dataset",
                             "ingest_verified_dataset", "list_batches"}
 
 
@@ -139,7 +141,7 @@ def test_dagster_entry_point_is_not_an_agent_tool():
 def agent_ingest(path, typed, monkeypatch):
     """ingest_verified_dataset as the model calls it; `typed` is what the person types."""
     monkeypatch.setattr("builtins.input", lambda prompt="": typed)
-    return json.loads(k.ingest_verified_dataset(str(path)))
+    return json.loads(agent.ingest_verified_dataset(str(path)))
 
 
 def test_the_agent_cannot_ingest_a_file_that_was_not_verified(monkeypatch):
@@ -150,7 +152,7 @@ def test_the_agent_cannot_ingest_a_file_that_was_not_verified(monkeypatch):
 
 def test_nothing_is_written_unless_the_person_types_yes(monkeypatch):
     path = inbox_zip("kvk.zip")
-    assert json.loads(k.verify_dataset(str(path)))["status"] == "PASSED"
+    assert json.loads(agent.verify_dataset(str(path)))["status"] == "PASSED"
     for typed in ("yes", "ja", "", "YES please"):
         assert agent_ingest(path, typed, monkeypatch)["status"] == "CANCELLED", typed
     assert not k.DATA_TABLE.exists()
@@ -159,7 +161,7 @@ def test_nothing_is_written_unless_the_person_types_yes(monkeypatch):
 
 def test_a_file_changed_after_verification_is_refused(monkeypatch):
     path = inbox_zip("kvk.zip")
-    assert json.loads(k.verify_dataset(str(path)))["status"] == "PASSED"
+    assert json.loads(agent.verify_dataset(str(path)))["status"] == "PASSED"
     inbox_zip("kvk.zip", rows=REAL_ROWS[:1])           # replaced after it was checked
     result = agent_ingest(path, "YES", monkeypatch)
     assert result["status"] == "REFUSED" and "changed" in result["reason"]
@@ -177,7 +179,7 @@ def dated_zip(path, when=(2026, 10, 1, 23, 34, 22), rows=REAL_ROWS):
 
 
 def test_the_file_date_comes_from_the_zip(tmp_path):
-    report = json.loads(k.verify_dataset(str(dated_zip(tmp_path / "kvk.zip"))))
+    report = k.verify(str(dated_zip(tmp_path / "kvk.zip")))
     assert report["file_date"] == "2026-10-01"
     assert report["newest_start_date"] == "2006-07-21" and report["warnings"] == []
 
@@ -185,14 +187,14 @@ def test_the_file_date_comes_from_the_zip(tmp_path):
 def test_no_file_date_in_a_loose_csv_or_an_undated_zip(tmp_path):
     csv = tmp_path / "kvk.csv"
     csv.write_text("\r\n".join([REAL_HEADER, *REAL_ROWS]) + "\r\n")
-    assert "file_date" not in json.loads(k.verify_dataset(str(csv)))
-    undated = json.loads(k.verify_dataset(str(dated_zip(tmp_path / "u.zip", (1980, 1, 1, 0, 0, 0)))))
+    assert "file_date" not in k.verify(str(csv))
+    undated = k.verify(str(dated_zip(tmp_path / "u.zip", (1980, 1, 1, 0, 0, 0))))
     assert "file_date" not in undated and "no file date in the zip" in undated["warnings"][0]
 
 
 def test_a_start_date_after_the_file_date_makes_it_doubtful(tmp_path):
     rows = [*REAL_ROWS, '"20261015";"J";"";"BV";"30";"6420";"6420";"NL"']
-    report = json.loads(k.verify_dataset(str(dated_zip(tmp_path / "kvk.zip", rows=rows))))
+    report = k.verify(str(dated_zip(tmp_path / "kvk.zip", rows=rows)))
     assert report["status"] == "PASSED"                    # a warning, not a rejection
     assert any("start dates after the file date" in w for w in report["warnings"])
 
@@ -200,7 +202,7 @@ def test_a_start_date_after_the_file_date_makes_it_doubtful(tmp_path):
 def test_a_file_older_than_the_newest_snapshot_gets_a_warning():
     dated_zip(k.INBOX / "nov.zip", when=(2026, 11, 12, 0, 0, 0))
     assert k.ingest_confirmed_file("nov.zip", "nov.zip", confirmed_by="t")["status"] == "INGESTED"
-    report = json.loads(k.verify_dataset(str(dated_zip(k.INBOX / "oct.zip", rows=REAL_ROWS[:2]))))
+    report = k.verify(str(dated_zip(k.INBOX / "oct.zip", rows=REAL_ROWS[:2])))
     assert report["status"] == "PASSED"                    # bronze keeps it as history
     assert any("older than the newest snapshot" in w for w in report["warnings"])
 

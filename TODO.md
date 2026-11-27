@@ -71,7 +71,7 @@ Run order (from the project folder, with the virtualenv):
 
     .venv/bin/python -m pipeline.bronze.cbs                # CBS API -> bronze (only new data)
     .venv/bin/python -m pipeline.bronze.reference          # SBI crosswalk (skips a known file)
-    .venv/bin/python -m pipeline.bronze.kvk_agent --inbox  # newest new KVK file in inbox/kvk/
+    .venv/bin/python -m pipeline.bronze.kvk --inbox        # newest new KVK file in inbox/kvk/
     .venv/bin/python -m pipeline.silver.cbs
     .venv/bin/python -m pipeline.silver.kvk  # needs silver CBS (crosswalk)
     .venv/bin/python -m pipeline.gold.build
@@ -371,13 +371,31 @@ examples of dependency inversion already in the code, worth naming in the report
 `build_all(read=..., read_ref=...)`, `run_pipeline(..., root, run_log)`, dashboard
 `read_table(..., root=None)`, `build_risk_index(t, settings_=None)`.
 Open, most valuable first (the author decides):
-- [ ] **Worth doing: split `pipeline/bronze/kvk_agent.py`** (single responsibility). It
+- [x] **Worth doing: split `pipeline/bronze/kvk_agent.py`** (single responsibility). It
       holds the Ollama chat loop, the LLM tool definitions, the keyboard confirmation,
       path cleanup, Delta writes and the command line. Dagster calls
       `ingest_confirmed_file` from a module named "agent". Idea: an ingest module
       (verify, `_ingest`, `write_batch`, `write_log`, `VERIFIED`) and a thin agent module
       that only wraps it as LLM tools. Keep the test that the model can't call
-      `ingest_confirmed_file`
+      `ingest_confirmed_file`.
+      Done (2026-11-27, at the author's request): new `pipeline/bronze/kvk.py` (named like
+      `cbs.py` and `reference.py`) holds the config, verification (`verify`, returns a
+      dict), the human gate (`confirm_at_keyboard`, was `_confirm`), `ingest` (was
+      `_ingest`; still takes `confirm` as a parameter), `ingest_confirmed_file`, the Delta
+      writes, the batch-log helpers and the command line without an LLM.
+      `kvk_agent.py` (208 lines, was 536; `kvk.py` 406) keeps only the five tools (JSON wrappers around
+      `kvk`), `TOOLS`, `SYSTEM_PROMPT`, the chat loop and `--model`. Dependencies now run
+      one way: the agent imports `kvk`, `kvk` doesn't know the agent; Dagster, silver KVK
+      and maintenance import `kvk` only, so they no longer load the agent module.
+      **Command changed:** `python -m pipeline.bronze.kvk --inbox` / `--file <path>`
+      (was `kvk_agent --inbox` / `--file`); the chat is still `python -m
+      pipeline.bronze.kvk_agent` (also in docker-compose, unchanged). Updated:
+      INSTRUCTIONS.md, README.md (layout, diagram, quick start), pipeline/bronze/README.md,
+      docs/PROJECT.md, docs/qa_practice.md (evidence names), docs/requirements.md (FR-4),
+      the run order above. Not in the slides or the report (checked). Tests: the
+      ingest tests call `kvk` directly, the tool and gate tests go through `kvk_agent`;
+      the safety net in conftest checks both modules. Still 420 tests, all passing; ruff
+      clean; Dagster's definitions load
 - [ ] **Worth doing: share the batch-log helpers** (duplication). `ingested_hashes` and
       `remove_orphan_rows` exist in both `pipeline/bronze/reference.py` and
       `kvk_agent.py`; the SHA-256 and header-normalising helpers also in `checks/kvk.py`

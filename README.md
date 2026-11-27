@@ -82,7 +82,7 @@ same data twice: every bronze script logs what it loaded and skips it next time.
 ```
 cbs-kvk-lakehouse/
 ├── pipeline/       the data flow, one subfolder per layer
-│   ├── bronze/     sources -> bronze: cbs.py, reference.py (SBI crosswalk), kvk_agent.py
+│   ├── bronze/     sources -> bronze: cbs.py, reference.py (SBI crosswalk), kvk.py, kvk_agent.py
 │   ├── silver/     bronze -> silver: cbs.py, kvk.py
 │   ├── gold/       silver -> gold: build.py (incl. the risk index)
 │   └── common/     config.py (settings), publish.py (all-or-nothing publishing), runlog.py
@@ -106,7 +106,7 @@ cbs-kvk-lakehouse/
  CBS crosswalk xlsx ─► bronze/reference.py ─┘    facts, SBI crosswalk   ├──► gold/build.py ──► dashboard/
  (SBI 2008 -> 2025)       bronze/reference/            │                 │    tables            (Streamlit)
                                                        │ crosswalk       │
- KVK zip in inbox/kvk ─► bronze/kvk_agent.py ──────► silver/kvk.py ─────┘
+ KVK zip in inbox/kvk ─► bronze/kvk.py ────────────► silver/kvk.py ─────┘
  (1.9M companies)         bronze/kvk/              kvk_company
                           (Ollama agent or --inbox)
 ```
@@ -312,7 +312,7 @@ python3 -m venv .venv
 
 .venv/bin/python -m pipeline.bronze.cbs                # CBS API -> bronze
 .venv/bin/python -m pipeline.bronze.reference          # SBI crosswalk -> bronze
-.venv/bin/python -m pipeline.bronze.kvk_agent --inbox  # KVK zip in inbox/kvk/ -> bronze (asks YES)
+.venv/bin/python -m pipeline.bronze.kvk --inbox        # KVK zip in inbox/kvk/ -> bronze (asks YES)
 .venv/bin/python -m pipeline.silver.cbs                # -> silver
 .venv/bin/python -m pipeline.silver.kvk                # -> silver (needs silver CBS)
 .venv/bin/python -m pipeline.gold.build                # -> gold

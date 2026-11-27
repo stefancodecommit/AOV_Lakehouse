@@ -238,7 +238,7 @@ silver `map_sbi2008_sbi2025` uses the newest version only.
   field, typed from the table's DataProperties, values unchanged (decided 2026-10-08, so
   bronze can be queried directly; cleaning stays in silver).
 
-### Bronze KVK — `pipeline/bronze/kvk_agent.py` (built)
+### Bronze KVK — `pipeline/bronze/kvk.py` and `kvk_agent.py` (built)
 
 - An AI agent (local Ollama model with tool calling) gives the user the download link and
   asks them to upload the zip.
@@ -248,6 +248,8 @@ silver `map_sbi2008_sbi2025` uses the newest version only.
   The model can't bypass either gate.
 - Each upload gets a `batch_id`, is written in one Delta commit, and is recorded in
   `kvk/_batch_log` with its timestamp, file hash, row count and verification report.
+- Verifying, confirming and writing live in `kvk.py`; `kvk_agent.py` holds only the chat
+  and the tools the model may call (split 2026-11-27).
 
 ### Silver CBS — `pipeline/silver/cbs.py` (built)
 
@@ -510,7 +512,8 @@ Compose profile, because Dagster can load KVK files without them. Ports are publ
 ```
 pipeline/                the data flow, one subpackage per layer; run as python -m pipeline.<layer>.<script>
   bronze/cbs.py          CBS API -> bronze
-  bronze/kvk_agent.py    KVK zip -> bronze, via the agent
+  bronze/kvk.py          KVK zip -> bronze (verify, confirm, write)
+  bronze/kvk_agent.py    the optional chat agent around bronze/kvk.py
   bronze/reference.py    CBS SBI 2008 -> SBI 2025 crosswalk -> bronze
   silver/cbs.py          bronze CBS -> silver
   silver/kvk.py          bronze KVK -> silver kvk_company

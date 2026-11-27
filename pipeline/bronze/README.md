@@ -7,7 +7,7 @@ keeps the original, every later step can be rebuilt without asking a source agai
 ```
  CBS OData API ──► cbs.py ───────► lakehouse/bronze/<table>_<entity>/      (one Delta table per endpoint)
  CBS crosswalk ──► reference.py ─► lakehouse/bronze/reference/sbi2008_sbi2025/
- KVK zip file  ──► kvk_agent.py ─► lakehouse/bronze/kvk/basis_bedrijfsgegevens/
+ KVK zip file  ──► kvk.py ───────► lakehouse/bronze/kvk/basis_bedrijfsgegevens/
                                    + a log per source: what was loaded, when, from where
 ```
 
@@ -17,7 +17,7 @@ keeps the original, every later step can be rebuilt without asking a source agai
 |---|---|---|---|
 | [`cbs.py`](cbs.py) | CBS StatLine: absence (80072NED, 86009NED), businesses (81589NED), their code lists and metadata | pulled from the OData API, monthly | one request per period; only periods not yet loaded; a revised provisional period replaces its old rows |
 | [`reference.py`](reference.py) | the CBS SBI 2008 → SBI 2025 crosswalk (Excel) | downloaded when CBS publishes a new version | a file already loaded (same content) is skipped |
-| [`kvk_agent.py`](kvk_agent.py) | the KVK open dataset (zip, ~13 MB, ~1.9M companies) | placed in `inbox/kvk/` by a person | verified, then loaded only after the person confirms; never the same file twice |
+| [`kvk.py`](kvk.py) | the KVK open dataset (zip, ~13 MB, ~1.9M companies) | placed in `inbox/kvk/` by a person | verified, then loaded only after the person confirms; never the same file twice. [`kvk_agent.py`](kvk_agent.py) is the optional chat agent around it |
 
 ## Design decisions
 
@@ -43,8 +43,9 @@ keeps the original, every later step can be rebuilt without asking a source agai
 - **A human confirms the KVK load.** An AI agent (a local LLM via Ollama) helps the user
   find and verify the file, but it can't write: loading happens only after the user
   types `YES` (or, in Dagster, the file name). The LLM chooses *which* tool to call; the
-  checks and the load are ordinary code. This is the AI part of the ingestion
-  (*model integration*, see [silver's README](../silver/README.md#phase-5--model-integration)).
+  checks and the load are ordinary code, in `kvk.py`; `kvk_agent.py` holds only the
+  chat and its tools, so Dagster and the command line load files without it. This is
+  the AI part of the ingestion (*model integration*, see [silver's README](../silver/README.md#phase-5--model-integration)).
 - **Source lifecycle.** CBS sometimes stops a table (83130NED ended in 2023). Every run
   reads each table's status and warns when it is stopped or not updated for too long.
 
@@ -59,7 +60,7 @@ From the project folder:
 .venv/bin/python -m pipeline.bronze.cbs --dry-run           # what would be requested
 .venv/bin/python -m pipeline.bronze.cbs                     # fetch what is new
 .venv/bin/python -m pipeline.bronze.reference               # the crosswalk
-.venv/bin/python -m pipeline.bronze.kvk_agent --inbox       # the newest new KVK file (type YES)
+.venv/bin/python -m pipeline.bronze.kvk --inbox             # the newest new KVK file (type YES)
 ```
 
 All options: [INSTRUCTIONS.md](../../INSTRUCTIONS.md#bronze-get-the-data).

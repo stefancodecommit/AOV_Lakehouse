@@ -156,7 +156,7 @@ niets naar buiten.
 en het model kost ~5 GB geheugen. Het laat zien hoe je een taalmodel veilig in een
 pijplijn zet (fase 5, modelintegratie): het model kiest, de code en de mens beslissen.
 Bij een verzekeraar zou het een collega zonder technische kennis door de upload helpen.
-*Evidence:* `pipeline/bronze/kvk_agent.py` (`TOOLS`, `SYSTEM_PROMPT`, `_confirm`,
-`_ingest`); `tests/test_kvk_logic.py` ("the agent's gates": not verified, no YES, file
+*Evidence:* `pipeline/bronze/kvk_agent.py` (`TOOLS`, `SYSTEM_PROMPT`) and
+`pipeline/bronze/kvk.py` (`confirm_at_keyboard`, `ingest`); `tests/test_kvk_logic.py` ("the agent's gates": not verified, no YES, file
 changed; each test fails when its gate is removed); report 3.4; [bronze's
 README](../pipeline/bronze/README.md#design-decisions).

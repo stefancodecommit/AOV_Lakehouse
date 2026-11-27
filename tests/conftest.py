@@ -13,7 +13,8 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from pipeline.bronze import cbs as cbs_bronze  # noqa: E402
-from pipeline.bronze import kvk_agent as kvk_bronze_agent  # noqa: E402
+from pipeline.bronze import kvk as kvk_bronze  # noqa: E402
+from pipeline.bronze import kvk_agent  # noqa: E402
 from pipeline.gold import build as gold  # noqa: E402
 from pipeline.silver import cbs as cbs_silver  # noqa: E402
 
@@ -59,11 +60,11 @@ def isolated_lakehouse(tmp_path, monkeypatch):
     monkeypatch.setattr(reference_bronze, "LOG_TABLE", ref / "_batch_log")
     monkeypatch.setattr(reference_bronze, "DOWNLOAD_DIR", tmp_path / "inbox")
     monkeypatch.setattr(reference_bronze, "QUARANTINE_ROOT", tmp_path / "quarantine")
-    monkeypatch.setattr(kvk_bronze_agent, "KVK_ROOT", tmp_path / "bronze" / "kvk")
-    monkeypatch.setattr(kvk_bronze_agent, "DATA_TABLE", tmp_path / "bronze" / "kvk" / "basis_bedrijfsgegevens")
-    monkeypatch.setattr(kvk_bronze_agent, "LOG_TABLE", tmp_path / "bronze" / "kvk" / "_batch_log")
-    monkeypatch.setattr(kvk_bronze_agent, "QUARANTINE_ROOT", tmp_path / "quarantine")
-    monkeypatch.setattr(kvk_bronze_agent, "INBOX", tmp_path / "inbox" / "kvk")
+    monkeypatch.setattr(kvk_bronze, "KVK_ROOT", tmp_path / "bronze" / "kvk")
+    monkeypatch.setattr(kvk_bronze, "DATA_TABLE", tmp_path / "bronze" / "kvk" / "basis_bedrijfsgegevens")
+    monkeypatch.setattr(kvk_bronze, "LOG_TABLE", tmp_path / "bronze" / "kvk" / "_batch_log")
+    monkeypatch.setattr(kvk_bronze, "QUARANTINE_ROOT", tmp_path / "quarantine")
+    monkeypatch.setattr(kvk_bronze, "INBOX", tmp_path / "inbox" / "kvk")
     monkeypatch.setattr(maintenance, "LAKEHOUSE", tmp_path)
     monkeypatch.setattr(maintenance, "QUARANTINE_ROOT", tmp_path / "quarantine")
     monkeypatch.setattr(maintenance, "KVK_ROOT", tmp_path / "bronze" / "kvk")
@@ -96,7 +97,7 @@ def _real_data() -> list[Path]:
 
 def _check_no_real_paths(when: str) -> None:
     real = _real_data()
-    for mod in (cbs_bronze, cbs_silver, reference_bronze, kvk_bronze_agent, maintenance, runlog,
+    for mod in (cbs_bronze, cbs_silver, reference_bronze, kvk_bronze, kvk_agent, maintenance, runlog,
                 kvk_silver, gold, dashboard_data, backup):
         for name, value in vars(mod).items():
             values = value.values() if isinstance(value, dict) else [value]

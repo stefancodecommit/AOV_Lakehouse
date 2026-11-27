@@ -17,7 +17,7 @@ cbs_bronze      cbs_bronze.run(): monthly. Materialises only when CBS had new da
                 run, after the good data of the same run was recorded.
 sbi_crosswalk   reference_bronze: the SBI 2008 -> 2025 file, monthly. Materialises
                 only when a new version of the file was loaded.
-kvk_bronze      kvk_bronze_agent: started by a person in the UI ("Materialize", with
+kvk_bronze      kvk_ingest: started by a person in the UI ("Materialize", with
                 the file name typed as confirmation, like typing YES). Never scheduled.
 silver_cbs      after new cbs_bronze or sbi_crosswalk data
 silver_kvk      after new kvk_bronze data or a new silver_cbs (it uses the crosswalk).
@@ -78,7 +78,7 @@ import checks.layers  # noqa: E402,F401
 import checks.quarantine  # noqa: E402,F401
 from checks import CheckResult  # noqa: E402
 from pipeline.bronze import cbs as cbs_bronze  # noqa: E402
-from pipeline.bronze import kvk_agent as kvk_bronze_agent  # noqa: E402
+from pipeline.bronze import kvk as kvk_ingest  # noqa: E402  (kvk_bronze is the asset)
 from pipeline.bronze import reference as reference_bronze  # noqa: E402
 from pipeline.common import (
     publish,  # noqa: E402,F401
@@ -157,10 +157,10 @@ class KvkUpload(dg.Config):
 @dg.asset(group_name="bronze", description="KVK zip in inbox/kvk/ -> bronze. Started by a "
           "person; type the file name in confirm_file_name to confirm the write.")
 def kvk_bronze(context: dg.AssetExecutionContext, config: KvkUpload) -> dg.MaterializeResult:
-    name = config.file_name or kvk_bronze_agent.newest_new_inbox_file()
+    name = config.file_name or kvk_ingest.newest_new_inbox_file()
     if not name:
-        raise dg.Failure(f"No new KVK file in {kvk_bronze_agent.INBOX}")
-    result = kvk_bronze_agent.ingest_confirmed_file(
+        raise dg.Failure(f"No new KVK file in {kvk_ingest.INBOX}")
+    result = kvk_ingest.ingest_confirmed_file(
         name, config.confirm_file_name, confirmed_by=f"dagster:{getpass.getuser()}")
     if result["status"] != "INGESTED":
         raise dg.Failure(f"KVK file {name} not loaded: {result['status']}",
@@ -293,8 +293,8 @@ def bronze_cbs_state() -> tuple[dict[str, str], set[str]]:
 def latest_kvk_snapshot():
     """Date of the newest KVK snapshot, or None: KVK's own file date where the batch log
     has it (how old the data is), otherwise the day it was loaded. The newest by that
-    date, not the last one loaded (kvk_agent.by_snapshot_date)."""
-    return kvk_bronze_agent.newest_snapshot_date()
+    date, not the last one loaded (pipeline/bronze/kvk.py, by_snapshot_date)."""
+    return kvk_ingest.newest_snapshot_date()
 
 
 # =========================================================================== maintenance
@@ -392,7 +392,7 @@ def register_existing_bronze(context: dg.OpExecutionContext) -> None:
     existing = {
         "cbs_bronze": cbs_bronze.LOG_TABLE,
         "sbi_crosswalk": reference_bronze.LOG_TABLE,
-        "kvk_bronze": kvk_bronze_agent.LOG_TABLE,
+        "kvk_bronze": kvk_ingest.LOG_TABLE,
     }
     for key, log_table in existing.items():
         if (log_table / "_delta_log").exists():

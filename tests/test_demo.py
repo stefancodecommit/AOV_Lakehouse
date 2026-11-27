@@ -6,7 +6,7 @@ from urllib.parse import parse_qs, urlparse
 
 from streamlit.testing.v1 import AppTest
 
-from pipeline.bronze import kvk_agent
+from pipeline.bronze import kvk as kvk_bronze
 from tools import demo, lineage
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -46,8 +46,8 @@ def test_every_link_points_at_something_that_exists():
         elif u.port == 3000 and u.path.startswith("/assets/"):
             assert u.path.split("/")[2] in assets, url
     # the KVK table the viewer opens is where bronze KVK writes it
-    lakehouse = kvk_agent.DATA_TABLE.parents[2]           # .../bronze/kvk/<table>
-    assert demo.KVK_TABLE == str(kvk_agent.DATA_TABLE.relative_to(lakehouse))
+    lakehouse = kvk_bronze.DATA_TABLE.parents[2]           # .../bronze/kvk/<table>
+    assert demo.KVK_TABLE == str(kvk_bronze.DATA_TABLE.relative_to(lakehouse))
 
 
 def demo_layers():
