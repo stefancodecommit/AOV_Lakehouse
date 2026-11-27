@@ -5,7 +5,7 @@ Open work, in the order of `docs/PROJECT.md`. Each phase builds on the one befor
 Rule for every phase: run each new layer on real data and check it before building the
 next layer on top of it.
 
-## Where to continue (status 2026-11-20)
+## Where to continue (status 2026-11-27)
 
 Built and run on real data: bronze (CBS, KVK, SBI crosswalk) with checks and quarantine
 (CBS bronze with a column per field next to `raw_json`),
@@ -13,7 +13,7 @@ silver (CBS, KVK), gold (7 tables, with the risk index), the Streamlit dashboard
 Docker Compose (including the KVK chat agent), column lineage, config, run log, the
 lakehouse viewer with data quality statistics (`python -m tools.lakehouse_viewer`),
 silver KVK (newest upload only, 2026-11-11), backup, log retention and vulnerability scanning
-(2026-10-17), 380 tests. Code is organised in `pipeline/` (per
+(2026-10-17), 380 tests (422 since 2026-11-27). Code is organised in `pipeline/` (per
 layer) and `tools/` (2026-10-08), with a README per phase. Requirements in
 docs/requirements.md (every Must met; open: FR-19 alerts, NFR-15 default password, left
 open on purpose), Azure design in docs/cloud_design.md (not built). All committed; no containers or servers left running. See the README for how to start
@@ -37,7 +37,14 @@ date (2026-10-26); the author's reflection (2026-11-05); the demo launcher, the 
 with simplifications (2026-11-11 to 11-13, section "Code review"); a second review
 (2026-11-20, same section): small KVK groups can no longer be worked out by subtraction,
 and silver KVK takes the newest file date instead of the last file loaded; then all nine
-of its nice-to-have items (407 tests).
+of its nice-to-have items (407 tests). A third review (2026-11-26, optimizations: silver
+KVK skips a rebuild when nothing changed, less memory and time in silver KVK and gold;
+420 tests). A fourth review (2026-11-27, SOLID principles; section "Code review"): the
+KVK agent split from the ingest, shared batch-log helpers, folders as parameters and one
+place for the lakehouse layout (`pipeline/common/paths.py`), explicit inputs for the gold
+builders, `_risk_row`, the HTTP part in `pipeline/bronze/odata.py`, an empty optional
+table with its columns, and three tests (422 tests). The same day: a CBS update, the data
+now runs to 2026 Q3, and the report, slides and demo follow it.
 
 Still open: nothing for the assignment except the author's part below. The code review
 is finished (section "Code review", 2026-11-11 to 11-13; ERD added 2026-11-19). The second
@@ -46,7 +53,10 @@ section under "Nice to have"; all nine are done (the same day). Because of that 
 before submitting: the Word report must be exported again
 (`rapport.md` changed: test count and lineage columns). A fourth review (2026-11-27,
 SOLID principles) logged optional design items in section "Code review"; none is needed
-for the assignment.
+for the assignment. Status 2026-11-27: every item of the fourth review is done, and the
+report was exported again after the Q3 update (4,945 words); what is left is the
+author's part below and the checks under "Before submitting" (section "Code review"),
+which stay open until the report is handed in.
 
 Optional work removed from this list on 2026-11-19 (the author's decision: not needed
 for the assignment): a backup on another disk, pandas 3, checking for a new SBI
@@ -60,7 +70,7 @@ next steps.
    Word document is now 4,945 words). Not in docs/genai_use.md (the author's choice);
    its placeholder section 6 was removed
 2. **Title page** of the report: name and student number filled in (2026-11-11; the whole
-   Word document is now 4,942 words). Still open: the **date** of submission; then
+   Word document is now 4,942 words; 4,945 since the Q3 update of 2026-11-27). Still open: the **date** of submission; then
    export again (`python -m tools.export_report`) and tick the Report item in section
    "Assignment"
 3. **Presentation:** practise the Q&A (docs/qa_practice.md), rehearse the demo
