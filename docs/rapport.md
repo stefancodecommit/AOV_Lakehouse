@@ -27,7 +27,7 @@ verzuim is dan landelijk, hoe stabiel dat is en of het stijgt.
 
 **Resultaat.**
 
-- De **zorg** heeft 40% meer verzuim dan landelijk; daar verzuimen meer mensen, langer en
+- De **zorg** heeft 41% meer verzuim dan landelijk; daar verzuimen meer mensen, langer en
   vaker door het werk (besmetting, emotioneel zwaar werk). Horeca en landbouw liggen
   ongeveer 40% lager.
 - Het verzuim **stijgt met de bedrijfsgrootte**: kleine bedrijven zitten op de helft van
@@ -412,13 +412,13 @@ bevinding met vertrouwen aan de manager door te geven.
 
 ### 5.1 Resultaten en hun betekenis
 
-**Sectoren.** Over de laatste vier kwartalen (tot en met het tweede kwartaal van 2026) ligt
+**Sectoren.** Over de laatste vier kwartalen (tot en met het derde kwartaal van 2026) ligt
 het verzuim in 5 van de 19 SBI-secties duidelijk boven landelijk (5,5%), in alle acht
-kwartalen. De gezondheids- en welzijnszorg springt eruit met een relatief risico van 1,40
-(7,7%), gevolgd door water en afval (1,24), openbaar bestuur (1,17), vervoer en opslag
-(1,15) en industrie (1,15). Het laagst zijn horeca (0,61), landbouw (0,61) en
-specialistische zakelijke dienstverlening (0,64). Alleen "overige dienstverlening" stijgt
-(+0,06 per jaar), al ligt die sectie nog onder landelijk.
+kwartalen. De gezondheids- en welzijnszorg springt eruit met een relatief risico van 1,41
+(7,8%), gevolgd door water en afval (1,23), openbaar bestuur (1,18), vervoer en opslag
+(1,16) en industrie (1,15). Het laagst zijn horeca (0,60), landbouw (0,62) en
+specialistische zakelijke dienstverlening (0,64). Alleen "delfstoffenwinning" stijgt
+(+0,05 per jaar), al ligt die sectie nog rond landelijk.
 
 **Wat erachter zit.** De jaarenquête van 2025 laat voor de zorg zien waaróm het risico hoger
 is, en dat is relevant voor een inkomensverzekeraar: meer werknemers verzuimen (54,3% tegen
@@ -447,9 +447,9 @@ verklaring:
   voor 13 eerdere kwartalen met alleen de definitieve cijfers tot dat moment (494
   combinaties): een sector die *hoger* of *lager* scoorde, lag een jaar later in alle
   gevallen nog aan dezelfde kant van landelijk. Een stijgende trend zette zich niet vaker
-  voort dan een stabiele (44% tegen 45%), en met alleen definitieve cijfers stijgt niet
-  "overige dienstverlening" maar "delfstoffenwinning". Een trend is een aanleiding om te
-  kijken, geen voorspelling.
+  voort dan een stabiele (44% tegen 45%), en met alleen definitieve cijfers dalen ineens
+  landbouw en cultuur, sport en recreatie, die met alle cijfers stabiel zijn. Een trend is
+  een aanleiding om te kijken, geen voorspelling.
 - **Datakwaliteit KVK.** Bij 90% van de actieve bedrijven is de sector eenduidig; de rest
   is gemarkeerd. De 381.513 identieke rijen zijn bewaard: zonder KVK-nummer is niet vast te
   stellen of het dubbelingen zijn.
@@ -544,7 +544,7 @@ dwingt om vooraf vast te leggen hoe je het resultaat toetst.
 **Hoofdvraag.** Zowel sector als bedrijfsgrootte gaan duidelijk samen met hoger verzuim.
 De antwoorden op de deelvragen:
 
-1. **Hoogste en laagste sectoren:** de zorg ligt 40% boven landelijk, horeca en landbouw
+1. **Hoogste en laagste sectoren:** de zorg ligt 41% boven landelijk, horeca en landbouw
    ongeveer 40% eronder; vijf van de negentien secties liggen in elk kwartaal boven
    landelijk.
 2. **Bedrijfsgrootte:** het verzuim stijgt met de grootte, van ongeveer de helft van
@@ -556,7 +556,7 @@ De antwoorden op de deelvragen:
 5. **Echt of toeval:** voor de zorg wijken 23 van de 65 enquêtematen buiten de foutmarge
    af van landelijk; de rest niet. De index toont de stabiliteit per sector.
 6. **Omvang:** per sector is het aantal bedrijven bekend, ook het aandeel zelfstandigen
-   (in de zorg 88% van ruim 233.000 bedrijven), wat de cijfers bruikbaar maakt voor
+   (in de zorg 87% van ruim 233.000 bedrijven), wat de cijfers bruikbaar maakt voor
    producten voor zelfstandigen, met de kanttekening dat het verzuim dat van werknemers is.
 
 Als dataproduct voldoet de oplossing aan alle *must*-eisen: zij haalt de gegevens

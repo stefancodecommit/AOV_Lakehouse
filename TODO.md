@@ -662,7 +662,33 @@ words counted per paragraph from the .docx text, unchanged)
       Set again on 2026-11-27: 422 (the tests of the fourth review; rendered and checked)
 - [ ] If the data or the code changed since: the measured results quoted in the report and
       the Q&A (silver KVK's memory, 1.9M companies, 90% with a sector, 440 backtest cases)
-      still match docs/requirements.md (NFR-7) and gold's README ("Backtest")
+      still match docs/requirements.md (NFR-7) and gold's README ("Backtest").
+      **CBS update on 2026-11-27** (at the author's request): backup first
+      (`backups/backup_20261127T091106Z.tar.gz`, 139 MB, verified; `keep: 3` removed the
+      one of 2026-10-26); `pipeline.bronze.cbs`: 11 requests (80072NED 2026 Q1–Q3 again,
+      CBS revised them and its TableInfos; 81589NED 2025 Q1 – 2026 Q4), 0 failed, 0
+      quarantined; silver CBS, silver KVK (rebuilt: the code changed since its last run)
+      and gold published; `tools.inspect_lakehouse`: no warnings, no problems. The risk
+      index now runs to **2026 Q3** (three provisional quarters). Unchanged: the backtest
+      (final figures only: 494 pairs, 221 + 219 = 440), 1.9M companies, 90% with a
+      sector, 5 of 19 sections above national (5.5%), size 0.48 / 1.16, the survey (2025).
+      Changed, and updated everywhere (the author chose "update all to Q3"): healthcare
+      1.40 -> 1.41 (7.7% -> 7.8%, 40% -> 41% more), water and waste 1.24 -> 1.23, public
+      administration 1.17 -> 1.18, transport 1.15 -> 1.16, hospitality 0.61 -> 0.60,
+      agriculture 0.61 -> 0.62, natural persons in healthcare 88% -> 87% (CBS 2026 Q4);
+      **the rising section** is now B Delfstoffenwinning (+0.05/yr, around national), not
+      S Overige dienstverlening (now stable, +0.04); and **"final figures only"** no longer
+      switches the rising sector: it turns A Landbouw and R Cultuur, sport en recreatie
+      from stable to falling and B from around national to lower. Updated: report
+      (summary, 5.1, the trend remark in 5.2, conclusion 1, the 87%), slide 6 (number,
+      text, "t/m 2026 Q3", and its bar chart: values, order, colours and the embedded
+      sheet), slide 6 notes (1,41; three provisional quarters), slide 7 notes (the final
+      figures example), slide 10 (41%), the demo script (the switch, what to say, the
+      explanation sentence), gold's README (validation, rechecked on the new data:
+      healthcare 7.80% in both tables, every relative risk inside its band). Slides 6 and
+      10 rendered and checked; report exported (4,945 words, per paragraph). Not changed:
+      the worked examples of 2026 Q2 records in docs/bronze_to_silver.md and the lineage
+      label example (still real records in bronze)
 - [ ] Export the report again (`python -m tools.export_report`) and check the word count
       (≤5000) in the Word document. Last exported 2026-11-26, after the third review
       (420 tests, 1.5 GB): ~4,938 words (counted from the .docx text, not by Word); open

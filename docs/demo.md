@@ -55,20 +55,21 @@ locally: no internet needed during the demo.
 **Show:** the dashboard page *Risk index*, sector level *Sections*.
 - Point at the counts: 5 of 19 sections above national; 1 rising.
 - The chart: red above national in every quarter, blue below, the band per sector.
-- Switch on **Final figures only** in the sidebar: the rising sector changes from
-  *S Overige dienstverlening* to *B Delfstoffenwinning*. Switch it off again.
+- Switch on **Final figures only** in the sidebar: *A Landbouw* and *R Cultuur, sport en
+  recreatie* turn from stable to falling, and *B Delfstoffenwinning* drops from around
+  national to below. Switch it off again.
 
 **Zeggen:** "Dit is wat de data-analist ziet: per sector het relatieve risico tegenover
 landelijk, met de bandbreedte over acht kwartalen. Rood ligt in elk kwartaal boven
-landelijk. Kijk wat er gebeurt als ik alleen definitieve cijfers toon: een andere sector
-stijgt. En een terugtoets op de historie laat zien dat het oordeel hoger of lager een jaar
+landelijk. Kijk wat er gebeurt als ik alleen definitieve cijfers toon: twee sectoren dalen
+ineens, en delfstoffenwinning zakt onder landelijk. En een terugtoets op de historie laat zien dat het oordeel hoger of lager een jaar
 later standhoudt, maar dat een trend niet voorspelt. Een trend is dus een reden om te
 kijken, geen voorspelling."
 
 ### 2. One sector explained (1 min) · button *Sector Q*
 
 **Show:** under *One group in detail*, choose **Q Gezondheids- en welzijnszorg**.
-- Read the explanation sentence aloud (40% more absence, stable, 88% run by natural
+- Read the explanation sentence aloud (41% more absence, stable, 87% run by natural
   persons).
 - The chart below: the quarterly relative risk around 1.4, with the national line at 1.00.
 - Optional, if time: page *Behind the numbers*, sector Q: what differs beyond the margin

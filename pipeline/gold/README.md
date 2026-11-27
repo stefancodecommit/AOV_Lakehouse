@@ -62,10 +62,10 @@ and the analyst, not the model, draws the conclusion (human in command).
 - Tests on made-up data where the right answer is known in advance: relative risk and
   band, the assessment rule, the window, a trend with and without a season, the final
   basis, the business counts and the explanation sentence.
-- On the real data: healthcare's 4-quarter average (7.68%) equals the one in
-  `gold_absence_by_sector`; the relative risk lies inside its band for every group; the
-  ranking matches the published sector differences (healthcare 1.40 highest, hospitality
-  0.61 lowest; size 1–9 at 0.48, 100+ at 1.16).
+- On the real data (to 2026 Q3, checked 2026-11-27): healthcare's 4-quarter average
+  (7.80%) equals the one in `gold_absence_by_sector`; the relative risk lies inside its
+  band for every group; the ranking matches the published sector differences (healthcare
+  1.41 highest, hospitality 0.60 lowest; size 1–9 at 0.48, 100+ at 1.16).
 
 **Backtest: does a verdict still hold a year later?** (`python -m tools.backtest_risk`,
 [`tools/backtest_risk.py`](../../tools/backtest_risk.py), 2026-10-26.) For each quarter
