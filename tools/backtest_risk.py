@@ -47,14 +47,16 @@ def backtest(t: dict, settings_: dict | None = None, horizon: int = HORIZON) -> 
     rate = rate[rate["period_status"] == gold.FINAL]
     t = {**t, "fct_absence_rate": rate,
          "fct_business_count": t.get("fct_business_count", pd.DataFrame())}
-    history = gold._relative_risk(t)
+    history = gold.build(gold._relative_risk, t)
     quarters = sorted(history["_q"].unique())
     out = []
     for anchor in quarters:
         if anchor - window + 1 < quarters[0] or anchor + horizon > quarters[-1]:
             continue
         seen = history.loc[history["_q"] <= anchor, "period_key"].unique()
-        index = gold.build_risk_index({**t, "fct_absence_rate": rate[rate["period_key"].isin(seen)]}, s)
+        index = gold.build(gold.build_risk_index,
+                           {**t, "fct_absence_rate": rate[rate["period_key"].isin(seen)]},
+                           settings_=s)
         index = index[(index["basis"] == "all") & (index["assessment"] != "too few quarters")]
         later = history[(history["_q"] > anchor) & (history["_q"] <= anchor + horizon)]
         nxt = (later.groupby(["group_type", "group_key"])

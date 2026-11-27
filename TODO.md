@@ -369,7 +369,8 @@ Done well, no action: open/closed (CBS endpoints from config, `run_pipeline` tak
 examples of dependency inversion already in the code, worth naming in the report:
 `_ingest(path, confirm, confirmed_by)` (the human gate passed in), silver CBS
 `build_all(read=..., read_ref=...)`, `run_pipeline(..., root, run_log)`, dashboard
-`read_table(..., root=None)`, `build_risk_index(t, settings_=None)`.
+`read_table(..., root=None)`, `build_risk_index(t, settings_=None)` (since the same
+day `build_risk_index(*, <tables>, settings_=None)`).
 Open, most valuable first (the author decides):
 - [x] **Worth doing: split `pipeline/bronze/kvk_agent.py`** (single responsibility). It
       holds the Ollama chat loop, the LLM tool definitions, the keyboard confirmation,
@@ -456,10 +457,26 @@ Open, most valuable first (the author decides):
         (the copy's crosswalk is the same, so the answer is too)
       Next, when bronze is touched anyway: `pipeline/bronze/kvk.py` (16 uses of its
       folder constants), `reference.py`, `cbs.py`; `batchlog.py` already takes its tables
-- [ ] **Optional: explicit inputs for the gold builders** (interface segregation). Each
+- [x] **Optional: explicit inputs for the gold builders** (interface segregation). Each
       `build_*` in `pipeline/gold/build.py` takes `t` (all silver tables), so what it
       really reads is hidden; silver CBS builders already name theirs
-      (`build_fct_absence_rate(data, mapping)`)
+      (`build_fct_absence_rate(data, mapping)`).
+      Done (2026-11-27, at the author's request): every builder (and `_relative_risk`,
+      `_survey_headline`, `_business_counts`) names the silver tables it reads as its
+      parameters, each called after its table and keyword-only (so two DataFrames can't
+      be swapped by position), e.g. `build_absence_by_sector(*, fct_absence_rate,
+      dim_sector, dim_period)`. `kvk_company` defaults to None (optional table).
+      `BUILDERS` maps each gold table to its builder; `build(builder, t, **options)` picks
+      from `t` the tables a builder's parameters name (as Dagster does with asset
+      parameters); `build_all` is now one line over `BUILDERS`. A missing table raises a
+      TypeError that names it. Callers: the tests, `tools/backtest_risk.py` (via `build`);
+      one test calls `build_kvk_context(kvk_company=..., dim_sector=...)` directly, which
+      shows the explicit form. Checked: 420 tests pass, ruff clean; on the real silver
+      (read-only, in memory) all seven gold tables from the old and the new code are
+      identical (`assert_frame_equal`; 936 to 166,544 rows).
+      Possible later (not done: it would add a test and change the counted 420): check
+      that each builder's parameters match the silver tables named in
+      `tools/lineage.py` for its gold table
 - [ ] **Optional: a `_risk_row` helper in `build_risk_index`** (single responsibility):
       windowing, scoring, trend fit, merge and explanation are one function; one row per
       group in its own function is easier to read and test

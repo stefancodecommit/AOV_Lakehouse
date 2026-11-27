@@ -202,17 +202,18 @@ def add_comparisons(df: pd.DataFrame, group: list[str], value: str, *, quarterly
 
 
 # =========================================================================== tables
-def build_absence_by_sector(t: dict) -> pd.DataFrame:
+def build_absence_by_sector(*, fct_absence_rate: pd.DataFrame, dim_sector: pd.DataFrame,
+                            dim_period: pd.DataFrame) -> pd.DataFrame:
     """gold_absence_by_sector: 80072NED absence % per sector and quarter, compared with
     the national total, last year and a rolling four-quarter average.
 
     All CBS sector levels are kept (section C, division 47, section group B-F, ...);
     ranks are only within one level, because comparing a section with one of its own
     divisions makes no sense. The dashboard shows sections by default."""
-    rate, sectors = t["fct_absence_rate"], t["dim_sector"]
+    rate, sectors = fct_absence_rate, dim_sector
     df = rate[rate["member_type"].isin(["sector", "total"])].merge(
         sectors[["sector_key", "sbi_code", "sbi_level", "sector_name"]], on="sector_key", how="left")
-    df = df.merge(_periods(t["dim_period"]), on="period_key", how="left")
+    df = df.merge(_periods(dim_period), on="period_key", how="left")
     national = (df[df["member_type"] == "total"][["period_key", "absence_pct"]]
                 .rename(columns={"absence_pct": "national_value"}))
     df = add_comparisons(df, ["sector_key"], "absence_pct", quarterly=True,
@@ -230,17 +231,19 @@ def build_absence_by_sector(t: dict) -> pd.DataFrame:
             .sort_values(["period_key", "sbi_level", "sector_key"]).reset_index(drop=True))
 
 
-def _survey_headline(t: dict) -> str:
+def _survey_headline(dim_survey_measure: pd.DataFrame) -> str:
     """Key of the 86009NED measure used per size class: the share of employees who were
     absent at least once in the year (the survey has no absence percentage)."""
-    m = t["dim_survey_measure"]
+    m = dim_survey_measure
     m = m[(m["source_table"] == "86009NED") & (m["measure_name"] == "aandeel_werknemers_die_hebben_verzuimd")]
     if m.empty:
         raise ValueError("86009NED measure 'aandeel_werknemers_die_hebben_verzuimd' not found")
     return m["measure_key"].iloc[0]
 
 
-def build_absence_by_size(t: dict) -> pd.DataFrame:
+def build_absence_by_size(*, fct_absence_rate: pd.DataFrame, fct_absence_survey: pd.DataFrame,
+                          dim_survey_measure: pd.DataFrame, dim_company_size: pd.DataFrame,
+                          dim_period: pd.DataFrame) -> pd.DataFrame:
     """gold_absence_by_size: absence per size class from two sources, side by side.
 
     - 80072NED, quarterly: absence % per class of persons employed (1-9, 10-99, 100+)
@@ -248,19 +251,19 @@ def build_absence_by_size(t: dict) -> pd.DataFrame:
     The units and measures differ, so the rows are never mixed: `source_table` and
     `measure` say which is which. Survey classes that contain others (1-9 contains 1-4
     and 5-9) are kept but not ranked."""
-    sizes, periods = t["dim_company_size"], _periods(t["dim_period"])
+    sizes, periods = dim_company_size, _periods(dim_period)
     size_cols = ["size_key", "size_range", "size_unit", "lower_bound", "size_band"]
 
     # quarterly absence % (persons employed)
-    rate = t["fct_absence_rate"]
+    rate = fct_absence_rate
     q = rate[rate["member_type"].isin(["size", "total"])].copy()
     q["value"], q["lower_95"], q["upper_95"] = q["absence_pct"], np.nan, np.nan
     q["size_is_aggregate"] = False
     q["source_table"], q["measure"] = "80072NED", "absence_pct"
 
     # yearly share of employees absent (employees), with 95% bounds
-    s = t["fct_absence_survey"]
-    s = s[(s["source_table"] == "86009NED") & (s["measure_key"] == _survey_headline(t))
+    s = fct_absence_survey
+    s = s[(s["source_table"] == "86009NED") & (s["measure_key"] == _survey_headline(dim_survey_measure))
           & s["member_type"].isin(["size", "total"])].copy()
     # empty for the total row; the total is not a size class, so not an aggregate
     s["size_is_aggregate"] = s["size_is_aggregate"].astype("boolean").fillna(False).astype(bool)
@@ -294,7 +297,9 @@ def build_absence_by_size(t: dict) -> pd.DataFrame:
             .reset_index(drop=True))
 
 
-def build_absence_profile(t: dict) -> pd.DataFrame:
+def build_absence_profile(*, fct_absence_survey: pd.DataFrame, dim_survey_measure: pd.DataFrame,
+                          dim_sector: pd.DataFrame, dim_company_size: pd.DataFrame,
+                          dim_period: pd.DataFrame) -> pd.DataFrame:
     """gold_absence_profile: every 86009NED survey measure per sector and size class.
 
     For each value: its 95% interval, the national value, and differs_from_national.
@@ -302,9 +307,9 @@ def build_absence_profile(t: dict) -> pd.DataFrame:
     value; a point estimate that differs but whose interval includes the national
     value may be sampling noise (question 5 in docs/PROJECT.md). rank_in_topic ranks the
     measures inside one topic group, e.g. which complaint is most common."""
-    s = t["fct_absence_survey"]
+    s = fct_absence_survey
     s = s[s["source_table"] == "86009NED"].copy()
-    m = t["dim_survey_measure"]
+    m = dim_survey_measure
     m = m[m["source_table"] == "86009NED"][["measure_key", "title", "topic_group", "unit"]]
     df = s.merge(m, on="measure_key", how="left")
     national = (df[df["member_type"] == "total"][["period_key", "measure_key", "value"]]
@@ -320,11 +325,11 @@ def build_absence_profile(t: dict) -> pd.DataFrame:
     df["rank_in_topic"] = (df[df["value"].notna()]
                            .groupby(["period_key", "characteristic_key", "topic_group"])["value"]
                            .rank(ascending=False, method="min").astype("Int64"))
-    df = df.merge(t["dim_sector"][["sector_key", "sbi_code", "sbi_level", "sector_name"]],
+    df = df.merge(dim_sector[["sector_key", "sbi_code", "sbi_level", "sector_name"]],
                   on="sector_key", how="left")
-    df = df.merge(t["dim_company_size"][["size_key", "size_range", "size_unit", "lower_bound"]],
+    df = df.merge(dim_company_size[["size_key", "size_range", "size_unit", "lower_bound"]],
                   on="size_key", how="left")
-    df = df.merge(_periods(t["dim_period"])[["period_key", "year"]], on="period_key", how="left")
+    df = df.merge(_periods(dim_period)[["period_key", "year"]], on="period_key", how="left")
     df["is_provisional"] = df["period_status"] != FINAL
     df["size_is_aggregate"] = df["size_is_aggregate"].astype("boolean")
     cols = ["period_key", "year", "period_status", "is_provisional", "member_type",
@@ -338,7 +343,8 @@ def build_absence_profile(t: dict) -> pd.DataFrame:
             .reset_index(drop=True))
 
 
-def build_business_context(t: dict) -> pd.DataFrame:
+def build_business_context(*, fct_business_count: pd.DataFrame, dim_sector: pd.DataFrame,
+                           dim_period: pd.DataFrame) -> pd.DataFrame:
     """gold_business_context: number of businesses (81589NED) per sector, quarter and
     size band, plus the CBS total as band 'all'.
 
@@ -347,7 +353,7 @@ def build_business_context(t: dict) -> pd.DataFrame:
     band is left empty rather than undercounted."""
     # empty counts per group, summed like the others: a Python function per group
     # (c.isna().sum(), ~166,000 groups) took 8 of gold's ~14 s until 2026-11-26
-    b = t["fct_business_count"].assign(_missing=lambda d: d["count"].isna())
+    b = fct_business_count.assign(_missing=lambda d: d["count"].isna())
     total = b[b["breakdown"] == "total"].assign(size_band="all")
     sized = b[(b["breakdown"] == "size") & (b["size_is_aggregate"] == False)]  # noqa: E712
     keys = ["period_key", "sector_key", "size_band"]
@@ -355,9 +361,9 @@ def build_business_context(t: dict) -> pd.DataFrame:
            "data_as_of": ("ingested_at", "max"), "missing_counts": ("_missing", "sum")}
     df = pd.concat([total.groupby(keys).agg(**agg), sized.groupby(keys).agg(**agg)]).reset_index()
     df["businesses"] = df["businesses"].where(df["missing_counts"] == 0).astype("Int64")
-    df = df.merge(t["dim_sector"][["sector_key", "sbi_code", "sbi_level", "sector_name"]],
+    df = df.merge(dim_sector[["sector_key", "sbi_code", "sbi_level", "sector_name"]],
                   on="sector_key", how="left")
-    df = df.merge(_periods(t["dim_period"]), on="period_key", how="left")
+    df = df.merge(_periods(dim_period), on="period_key", how="left")
     df["is_provisional"] = df["period_status"] != FINAL
     cols = ["period_key", "period_label", "year", "quarter", "period_status", "is_provisional",
             "sector_key", "sbi_code", "sbi_level", "sector_name", "size_band", "businesses",
@@ -394,7 +400,7 @@ def suppress_small_groups(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def build_kvk_context(t: dict) -> pd.DataFrame:
+def build_kvk_context(*, dim_sector: pd.DataFrame, kvk_company: pd.DataFrame | None = None) -> pd.DataFrame:
     """gold_kvk_context: from the KVK snapshot in silver (the newest upload), active companies per SBI 2008
     section and legal form ('all' = BV and NV together), with median company age.
 
@@ -403,7 +409,7 @@ def build_kvk_context(t: dict) -> pd.DataFrame:
     re-identification rule); their numbers are left empty here, in gold, and so are those
     of the groups that would give them away (suppress_small_groups). A median age of
     fewer than 10 companies is left empty as well."""
-    k = t.get("kvk_company", pd.DataFrame())
+    k = kvk_company if kvk_company is not None else pd.DataFrame()
     if k.empty:
         return pd.DataFrame()
     k = k[k["is_active"] == True].copy()  # noqa: E712
@@ -424,7 +430,7 @@ def build_kvk_context(t: dict) -> pd.DataFrame:
             median_age_years=("age_years", "median"))
         rows.append(stats.reset_index().assign(legal_form=legal_form))
     df = pd.concat(rows, ignore_index=True)
-    names = t["dim_sector"]
+    names = dim_sector
     names = names[names["sbi_level"] == "section"][["sbi_code", "sector_name"]]
     df = df.merge(names, left_on="section", right_on="sbi_code", how="left").drop(columns="sbi_code")
     df.loc[df["section"] == "unknown", "sector_name"] = "Sector not determined (see sbi_mapping)"
@@ -452,10 +458,11 @@ def build_kvk_context(t: dict) -> pd.DataFrame:
 #   trend          = slope of a straight line through the window's quarterly relative risks,
 #                    per year. Dividing by the national figure of the same quarter removes
 #                    the season, so quarters can be compared directly
-def _relative_risk(t: dict) -> pd.DataFrame:
+def _relative_risk(*, fct_absence_rate: pd.DataFrame, dim_sector: pd.DataFrame, dim_company_size: pd.DataFrame,
+                   dim_period: pd.DataFrame) -> pd.DataFrame:
     """Per quarter, sector and size class: absence %, the national absence % of the same
     quarter, and their ratio (the quarterly relative risk)."""
-    rate = t["fct_absence_rate"]
+    rate = fct_absence_rate
     national = (rate[rate["member_type"] == "total"][["period_key", "absence_pct"]]
                 .rename(columns={"absence_pct": "national_pct"}))
     df = rate[rate["member_type"].isin(["sector", "size"])].merge(national, on="period_key")
@@ -463,22 +470,24 @@ def _relative_risk(t: dict) -> pd.DataFrame:
     df["relative_risk"] = (df["absence_pct"] / df["national_pct"]).round(3)
     df["group_type"] = df["member_type"]
     df["group_key"] = df["sector_key"].where(df["group_type"] == "sector", df["size_key"])
-    df = df.merge(t["dim_sector"][["sector_key", "sbi_code", "sbi_level", "sector_name"]],
+    df = df.merge(dim_sector[["sector_key", "sbi_code", "sbi_level", "sector_name"]],
                   on="sector_key", how="left")
-    df = df.merge(t["dim_company_size"][["size_key", "size_range"]], on="size_key", how="left")
+    df = df.merge(dim_company_size[["size_key", "size_range"]], on="size_key", how="left")
     df["group_name"] = df["sector_name"].where(df["group_type"] == "sector",
                                                df["size_range"] + " persons employed")
     df["sbi_code"] = df["sbi_code"].where(df["group_type"] == "sector")
     df["sbi_level"] = df["sbi_level"].where(df["group_type"] == "sector")
-    df = df.merge(_periods(t["dim_period"]), on="period_key", how="left")
+    df = df.merge(_periods(dim_period), on="period_key", how="left")
     df["is_provisional"] = df["period_status"] != FINAL
     df["_q"] = df["year"] * 4 + df["quarter"] - 1       # quarters numbered consecutively
     return df
 
 
-def build_risk_index_history(t: dict) -> pd.DataFrame:
+def build_risk_index_history(*, fct_absence_rate: pd.DataFrame, dim_sector: pd.DataFrame,
+                             dim_company_size: pd.DataFrame, dim_period: pd.DataFrame) -> pd.DataFrame:
     """gold_risk_index_history: the quarterly relative risk per sector and size class."""
-    df = _relative_risk(t)
+    df = _relative_risk(fct_absence_rate=fct_absence_rate, dim_sector=dim_sector,
+                        dim_company_size=dim_company_size, dim_period=dim_period)
     cols = ["period_key", "period_label", "year", "quarter", "period_status", "is_provisional",
             "group_type", "group_key", "sbi_code", "sbi_level", "group_name", "absence_pct",
             "national_pct", "relative_risk", "ingested_at"]
@@ -486,14 +495,14 @@ def build_risk_index_history(t: dict) -> pd.DataFrame:
             .sort_values(["group_type", "group_key", "period_key"]).reset_index(drop=True))
 
 
-def _business_counts(t: dict, final_only: bool = False) -> pd.DataFrame:
+def _business_counts(fct_business_count: pd.DataFrame, final_only: bool = False) -> pd.DataFrame:
     """Per sector_key, from CBS 81589NED's latest quarter (`final_only`: the latest final
     quarter, for the risk index's 'final' basis): all businesses, those run by
     natural persons (sole traders, partnerships: the self-employed), and those with one
     person employed. The KVK open data has no sole traders, so these come from CBS.
     Keyed by sector_key, which the CBS tables share (silver dim_sector), not by SBI code:
     aggregates such as "B-N excl. K" have no SBI code, and one SBI code can have two keys."""
-    b = t["fct_business_count"]
+    b = fct_business_count
     if final_only and not b.empty:
         b = b[b["period_status"] == FINAL]
     if b.empty:
@@ -539,13 +548,16 @@ def _explain(r) -> str:
     return text
 
 
-def build_risk_index(t: dict, settings_: dict | None = None) -> pd.DataFrame:
+def build_risk_index(*, fct_absence_rate: pd.DataFrame, dim_sector: pd.DataFrame, dim_company_size: pd.DataFrame,
+                     dim_period: pd.DataFrame, fct_business_count: pd.DataFrame,
+                     settings_: dict | None = None) -> pd.DataFrame:
     """gold_risk_index: one row per sector and size class, for two bases: 'all' (the
     latest quarter, provisional figures included) and 'final' (the latest final quarter,
     final figures only), so the dashboard's "final figures only" switch works here too."""
     s = settings_ or RISK
     window, minimum, rising = int(s["window_quarters"]), int(s["min_quarters"]), float(s["rising_per_year"])
-    history = _relative_risk(t)
+    history = _relative_risk(fct_absence_rate=fct_absence_rate, dim_sector=dim_sector,
+                             dim_company_size=dim_company_size, dim_period=dim_period)
     rows = []
     for basis, part in (("all", history), ("final", history[~history["is_provisional"]])):
         if part.empty:
@@ -585,7 +597,7 @@ def build_risk_index(t: dict, settings_: dict | None = None) -> pd.DataFrame:
     # sector rows only: a size class's key is no sector_key (and its units differ)
     # per basis: 'final' takes the latest final count quarter too, so it holds no
     # provisional figure at all (until 2026-11-20 both used the newest, provisional one)
-    counts = pd.concat([_business_counts(t, final_only=basis == "final").assign(basis=basis)
+    counts = pd.concat([_business_counts(fct_business_count, final_only=basis == "final").assign(basis=basis)
                         for basis in ("all", "final")], ignore_index=True)
     counts = counts.rename(columns={"sector_key": "group_key"}).assign(group_type="sector")
     df = df.merge(counts, on=["basis", "group_type", "group_key"], how="left")
@@ -602,17 +614,34 @@ def build_risk_index(t: dict, settings_: dict | None = None) -> pd.DataFrame:
             .reset_index(drop=True))
 
 
+# =========================================================================== all tables
+# Every builder names the silver tables it reads as its parameters, each called after
+# its table (keyword-only, so two DataFrames can't be swapped by position). So the
+# signature says what a gold table is built from, and build() can pass the right tables.
+# (Dagster's assets work the same way: a parameter's name is the asset it needs.)
+BUILDERS = {
+    "gold_absence_by_sector": build_absence_by_sector,
+    "gold_absence_by_size": build_absence_by_size,
+    "gold_absence_profile": build_absence_profile,
+    "gold_business_context": build_business_context,
+    "gold_kvk_context": build_kvk_context,
+    "gold_risk_index": build_risk_index,
+    "gold_risk_index_history": build_risk_index_history,
+}
+
+
+def build(builder, t: dict, **options):
+    """Call `builder` with the tables of `t` that its parameters name, plus `options`
+    (e.g. settings_). A table the builder needs but `t` lacks raises a TypeError that
+    names it; tables it doesn't name are not passed."""
+    import inspect
+    names = inspect.signature(builder).parameters
+    return builder(**{n: df for n, df in t.items() if n in names}, **options)
+
+
 def build_all(t: dict) -> dict[str, pd.DataFrame]:
     """Build all gold tables from the silver tables in `t` (as read by read_inputs)."""
-    return {
-        "gold_absence_by_sector": build_absence_by_sector(t),
-        "gold_absence_by_size": build_absence_by_size(t),
-        "gold_absence_profile": build_absence_profile(t),
-        "gold_business_context": build_business_context(t),
-        "gold_kvk_context": build_kvk_context(t),
-        "gold_risk_index": build_risk_index(t),
-        "gold_risk_index_history": build_risk_index_history(t),
-    }
+    return {name: build(builder, t) for name, builder in BUILDERS.items()}
 
 
 def read_inputs(inputs: dict | None = None, silver_root: Path | None = None) -> dict:

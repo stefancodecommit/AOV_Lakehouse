@@ -174,8 +174,8 @@ def test_risk_page_shows_the_analyst_what_is_above_national_and_rising():
     from test_gold import SETTINGS, F, V, risk_inputs
     t = risk_inputs({"total": [5.0] * 8, "Q": [7.0] * 8, "I": [3.0] * 8,
                      "S": [5.0 * (0.85 + 0.02 * i) for i in range(8)]}, [F] * 6 + [V, V])
-    for name, df in {"gold_risk_index": g.build_risk_index(t, SETTINGS),
-                     "gold_risk_index_history": g.build_risk_index_history(t)}.items():
+    for name, df in {"gold_risk_index": g.build(g.build_risk_index, t, settings_=SETTINGS),
+                     "gold_risk_index_history": g.build(g.build_risk_index_history, t)}.items():
         publish.write_table(g.GOLD_ROOT / name, df.assign(run_id="gold_test"))
     at = run_page("risk")
     assert not at.exception, [e.value for e in at.exception]
@@ -217,8 +217,8 @@ def test_every_table_column_has_a_title_and_an_explanation(gold_lakehouse, monke
     # a risk index with enough quarters, from the same gold run as the other tables
     run_id = DeltaTable(str(g.GOLD_ROOT / "gold_absence_by_sector")).to_pandas()["run_id"].iloc[0]
     t = risk_inputs({"total": [5.0] * 8, "Q": [7.0] * 8}, [F] * 6 + [V, V])
-    for name, df in {"gold_risk_index": g.build_risk_index(t, SETTINGS),
-                     "gold_risk_index_history": g.build_risk_index_history(t)}.items():
+    for name, df in {"gold_risk_index": g.build(g.build_risk_index, t, settings_=SETTINGS),
+                     "gold_risk_index_history": g.build(g.build_risk_index_history, t)}.items():
         publish.write_table(g.GOLD_ROOT / name, df.assign(run_id=run_id))
     shown, real = [], common.table_view
 

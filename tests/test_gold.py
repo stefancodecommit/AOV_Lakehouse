@@ -72,7 +72,7 @@ def silver_tables(silver):
 
 
 def test_absence_by_sector(silver_tables):
-    df = g.build_absence_by_sector(silver_tables).set_index(["period_key", "sector_key"])
+    df = g.build(g.build_absence_by_sector, silver_tables).set_index(["period_key", "sector_key"])
     total, agri = df.loc[("2025KW01", "T001081")], df.loc[("2025KW01", "301000")]
     assert agri.national_pct == total.absence_pct
     assert agri.diff_from_national_pp == pytest.approx(agri.absence_pct - total.absence_pct)
@@ -81,7 +81,7 @@ def test_absence_by_sector(silver_tables):
 
 
 def test_absence_by_size_keeps_units_apart(silver_tables):
-    df = g.build_absence_by_size(silver_tables)
+    df = g.build(g.build_absence_by_size, silver_tables)
     assert set(df["measure"]) == {"absence_pct", "share_employees_absent"}
     survey = df[df["source_table"] == "86009NED"]
     assert set(survey["size_unit"].dropna()) == {"employees"}
@@ -109,7 +109,7 @@ def test_absence_profile_flags_values_outside_the_national_interval():
          "dim_company_size": pd.DataFrame(columns=["size_key", "size_range", "size_unit", "lower_bound"]),
          "dim_period": pd.DataFrame({"period_key": ["2025JJ00"], "period_label": ["2025"],
                                      "year": [2025], "quarter": [None], "start_date": [None]})}
-    df = g.build_absence_profile(t).set_index("characteristic_key")
+    df = g.build(g.build_absence_profile, t).set_index("characteristic_key")
     assert df.loc["A", "differs_from_national"] and df.loc["A", "direction"] == "above"
     assert df.loc["B", "differs_from_national"] and df.loc["B", "direction"] == "below"
     assert not df.loc["C", "differs_from_national"] and df.loc["C", "direction"] is None
@@ -118,7 +118,7 @@ def test_absence_profile_flags_values_outside_the_national_interval():
 
 
 def test_business_context_bands_and_missing_classes(silver_tables):
-    df = g.build_business_context(silver_tables)
+    df = g.build(g.build_business_context, silver_tables)
     row = df[(df["sector_key"] == "T001081")].set_index("size_band")["businesses"]
     b = silver_tables["fct_business_count"]
     tb = b[(b.sector_key == "T001081")]
@@ -129,7 +129,7 @@ def test_business_context_bands_and_missing_classes(silver_tables):
     t = dict(silver_tables)
     t["fct_business_count"] = b.assign(count=b["count"].where(
         ~((b.sector_key == "T001081") & (b.size_band == "<10")), None))
-    row = g.build_business_context(t).set_index(["sector_key", "size_band"])["businesses"]
+    row = g.build(g.build_business_context, t).set_index(["sector_key", "size_band"])["businesses"]
     assert pd.isna(row[("T001081", "<10")])                          # one class missing
 
 
@@ -141,7 +141,7 @@ def test_kvk_context(silver_tables):
         "legal_form": ["BV"] * 11 + ["NV"] * 2,
         "sbi2008_section": ["A"] * 11 + [None] * 2})
     t = {**silver_tables, "kvk_company": kvk}
-    df = g.build_kvk_context(t).set_index(["legal_form", "sbi2008_section"])
+    df = g.build(g.build_kvk_context, t).set_index(["legal_form", "sbi2008_section"])
     assert df.loc[("all", "A"), "active_companies"] == 11
     assert df.loc[("all", "A"), "median_age_years"] == 10.0
     assert not df.loc[("all", "A"), "is_small_group"]
@@ -161,7 +161,7 @@ def test_kvk_context_hides_what_subtraction_would_reveal(silver_tables):
         "is_active": True, "snapshot_date": pd.Timestamp("2026-10-01").date(), "batch_id": "b",
         "start_date": [pd.Timestamp("2016-10-01").date()] * 70 + [None] * 12,
         "legal_form": [f for _, f in rows], "sbi2008_section": [s for s, _ in rows]})
-    df = g.build_kvk_context({**silver_tables, "kvk_company": kvk}).set_index(
+    df = g.build(g.build_kvk_context, {**silver_tables, "kvk_company": kvk}).set_index(
         ["legal_form", "sbi2008_section"])
     assert df.loc[("NV", "A"), "is_small_group"] and df.loc[("NV", "A"), "is_suppressed"]
     assert not df.loc[("BV", "A"), "is_small_group"] and df.loc[("BV", "A"), "is_suppressed"]
@@ -180,7 +180,7 @@ def test_kvk_context_hides_what_subtraction_would_reveal(silver_tables):
 
 
 def test_kvk_context_empty_without_silver_kvk(silver_tables):
-    assert g.build_kvk_context(silver_tables).empty
+    assert g.build(g.build_kvk_context, silver_tables).empty
 
 
 # =========================================================================== end to end
@@ -244,8 +244,8 @@ def test_gold_reads_only_the_kvk_columns_and_rows_it_needs():
     assert list(df["sbi2008_section"]) == ["A"]                       # the active one only
     assert str(df["legal_form"].dtype) == "category"
     assert inputs["silver/kvk_company#run_id"] == "silver_kvk_1"      # the run check still works
-    assert g.build_kvk_context({"kvk_company": df, "dim_sector": pd.DataFrame(
-        {"sbi_code": ["A"], "sbi_level": ["section"], "sector_name": ["Landbouw"]})}
+    assert g.build_kvk_context(kvk_company=df, dim_sector=pd.DataFrame(
+        {"sbi_code": ["A"], "sbi_level": ["section"], "sector_name": ["Landbouw"]})
     )["active_companies"].dropna().empty                              # 1 company: suppressed
 
 
@@ -288,7 +288,7 @@ def risk_inputs(series: dict[str, list], statuses=None, start=(2024, 1), counts=
 
 def risk(series, statuses=None, basis="all", **kw) -> pd.DataFrame:
     """The risk index for one basis ('all' or 'final'); basis=None: both."""
-    df = g.build_risk_index(risk_inputs(series, statuses, **kw), SETTINGS)
+    df = g.build(g.build_risk_index, risk_inputs(series, statuses, **kw), settings_=SETTINGS)
     return df if basis is None else df[df["basis"] == basis].reset_index(drop=True)
 
 
@@ -350,7 +350,7 @@ def test_final_basis_takes_the_latest_final_business_counts():
     final = t["fct_business_count"]
     newer = final.assign(period_key="2026KW04", period_status=V, count=final["count"] + 5)
     t["fct_business_count"] = pd.concat([final, newer], ignore_index=True)
-    df = g.build_risk_index(t, SETTINGS).set_index("basis")
+    df = g.build(g.build_risk_index, t, settings_=SETTINGS).set_index("basis")
     assert (df.loc["all", "businesses"], df.loc["all", "businesses_period"]) == (1005, "2026KW04")
     assert (df.loc["final", "businesses"], df.loc["final", "businesses_period"]) == (1000, "2026KW03")
     assert "(CBS 2026KW03)" in df.loc["final", "explanation"]
@@ -368,13 +368,13 @@ def test_business_counts_follow_the_sector_key_not_the_sbi_code():
     totals = {"X1": 100, "X2": 200, "K1": 300, "K2": 400}
     b = t["fct_business_count"]
     b.loc[b["breakdown"] == "total", "count"] = b["sector_key"].map(totals)
-    df = g.build_risk_index(t, SETTINGS)
+    df = g.build(g.build_risk_index, t, settings_=SETTINGS)
     got = df[df["basis"] == "all"].set_index("group_key")["businesses"].to_dict()
     assert got == totals
 
 
 def test_risk_index_history_is_the_quarterly_ratio(silver_tables):
-    h = g.build_risk_index_history(silver_tables)
+    h = g.build(g.build_risk_index_history, silver_tables)
     assert set(h["group_type"]) <= {"sector", "size"}
     row = h.iloc[0]
     assert row.relative_risk == pytest.approx(row.absence_pct / row.national_pct, abs=1e-3)

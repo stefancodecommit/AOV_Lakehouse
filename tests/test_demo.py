@@ -61,8 +61,8 @@ def test_a_link_opens_one_sector_on_the_risk_page():
     from test_dashboard import APP
     from test_gold import SETTINGS, F, V, risk_inputs
     t = risk_inputs({"total": [5.0] * 8, "Q": [7.0] * 8, "I": [3.0] * 8}, [F] * 6 + [V, V])
-    for name, df in {"gold_risk_index": g.build_risk_index(t, SETTINGS),
-                     "gold_risk_index_history": g.build_risk_index_history(t)}.items():
+    for name, df in {"gold_risk_index": g.build(g.build_risk_index, t, settings_=SETTINGS),
+                     "gold_risk_index_history": g.build(g.build_risk_index_history, t)}.items():
         publish.write_table(g.GOLD_ROOT / name, df.assign(run_id="gold_test"))
     at = AppTest.from_file(APP, default_timeout=60)
     at.query_params["group"] = "I"          # not the first in the list (Q is highest)
