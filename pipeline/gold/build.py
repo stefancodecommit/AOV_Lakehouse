@@ -548,6 +548,37 @@ def _explain(r) -> str:
     return text
 
 
+def _risk_row(g: pd.DataFrame, latest: int, minimum: int, rising: float) -> dict:
+    """The risk index numbers of one group (a sector or size class): `g` holds its
+    quarters in the window (rows of _relative_risk), `latest` is the window's last quarter
+    (_q). Returns the 4-quarter averages and relative risk, the band, the number of
+    (provisional) quarters, the assessment and the trend (formulas: see above).
+
+    Too few quarters (fewer than `minimum` in the window, or not all of the last 4):
+    no assessment or trend; without all of the last 4 also no relative risk."""
+    last4 = g[g["_q"] > latest - 4]
+    n = len(g)
+    full_year = len(last4) == 4
+    row = {"absence_4q_pct": round(last4["absence_pct"].mean(), 2) if full_year else np.nan,
+           "national_4q_pct": round(last4["national_pct"].mean(), 2) if full_year else np.nan,
+           "band_low": g["relative_risk"].min(), "band_high": g["relative_risk"].max(),
+           "quarters_in_band": n,
+           "provisional_quarters": int(g["is_provisional"].sum()),
+           "data_as_of": g["ingested_at"].max()}
+    row["relative_risk"] = (round(row["absence_4q_pct"] / row["national_4q_pct"], 3)
+                            if full_year else np.nan)
+    if n < minimum or not full_year:
+        row.update(assessment="too few quarters", trend_per_year=np.nan, trend="unknown")
+        return row
+    row["assessment"] = ("higher" if row["band_low"] > 1 else
+                         "lower" if row["band_high"] < 1 else "around national")
+    slope = np.polyfit(g["_q"], g["relative_risk"], 1)[0] * 4    # per year
+    row["trend_per_year"] = round(float(slope), 3)
+    row["trend"] = ("rising" if slope > rising else
+                    "falling" if slope < -rising else "stable")
+    return row
+
+
 def build_risk_index(*, fct_absence_rate: pd.DataFrame, dim_sector: pd.DataFrame, dim_company_size: pd.DataFrame,
                      dim_period: pd.DataFrame, fct_business_count: pd.DataFrame,
                      settings_: dict | None = None) -> pd.DataFrame:
@@ -566,31 +597,11 @@ def build_risk_index(*, fct_absence_rate: pd.DataFrame, dim_sector: pd.DataFrame
         period = part.loc[part["_q"] == latest, ["period_key", "period_label"]].iloc[0]
         for (group_type, group_key), g in part[part["_q"] > latest - window].groupby(
                 ["group_type", "group_key"]):
-            last4 = g[g["_q"] > latest - 4]
-            n = len(g)
-            full_year = len(last4) == 4
-            row = {"basis": basis, "period_key": period["period_key"],
-                   "period_label": period["period_label"], "group_type": group_type,
-                   "group_key": group_key, "sbi_code": g["sbi_code"].iloc[0],
-                   "sbi_level": g["sbi_level"].iloc[0], "group_name": g["group_name"].iloc[0],
-                   "absence_4q_pct": round(last4["absence_pct"].mean(), 2) if full_year else np.nan,
-                   "national_4q_pct": round(last4["national_pct"].mean(), 2) if full_year else np.nan,
-                   "band_low": g["relative_risk"].min(), "band_high": g["relative_risk"].max(),
-                   "quarters_in_band": n,
-                   "provisional_quarters": int(g["is_provisional"].sum()),
-                   "data_as_of": g["ingested_at"].max()}
-            row["relative_risk"] = (round(row["absence_4q_pct"] / row["national_4q_pct"], 3)
-                                    if full_year else np.nan)
-            if n < minimum or not full_year:
-                row.update(assessment="too few quarters", trend_per_year=np.nan, trend="unknown")
-            else:
-                row["assessment"] = ("higher" if row["band_low"] > 1 else
-                                     "lower" if row["band_high"] < 1 else "around national")
-                slope = np.polyfit(g["_q"], g["relative_risk"], 1)[0] * 4    # per year
-                row["trend_per_year"] = round(float(slope), 3)
-                row["trend"] = ("rising" if slope > rising else
-                                "falling" if slope < -rising else "stable")
-            rows.append(row)
+            rows.append({"basis": basis, "period_key": period["period_key"],
+                         "period_label": period["period_label"], "group_type": group_type,
+                         "group_key": group_key, "sbi_code": g["sbi_code"].iloc[0],
+                         "sbi_level": g["sbi_level"].iloc[0], "group_name": g["group_name"].iloc[0],
+                         **_risk_row(g, latest, minimum, rising)})
     df = pd.DataFrame(rows)
     if df.empty:
         return df

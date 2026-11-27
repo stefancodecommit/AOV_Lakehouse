@@ -513,9 +513,22 @@ Open, most valuable first (the author decides):
       Possible later (not done: it would add a test and change the counted 420): check
       that each builder's parameters match the silver tables named in
       `tools/lineage.py` for its gold table
-- [ ] **Optional: a `_risk_row` helper in `build_risk_index`** (single responsibility):
+- [x] **Optional: a `_risk_row` helper in `build_risk_index`** (single responsibility):
       windowing, scoring, trend fit, merge and explanation are one function; one row per
-      group in its own function is easier to read and test
+      group in its own function is easier to read and test.
+      Done (2026-11-27, at the author's request): `_risk_row(g, latest, minimum, rising)`
+      (`pipeline/gold/build.py`) returns one group's numbers and verdict: the 4-quarter
+      averages and relative risk, the band, the (provisional) quarter counts, the
+      assessment and the trend; "too few quarters" returns early. `build_risk_index`
+      keeps the loop over the two bases and the groups in the window, the identity
+      columns (basis, period, group, SBI code, name), the business counts and the
+      explanation. Checked: 420 tests pass, ruff clean; on the real silver (read-only,
+      in memory) all seven gold tables and the backtest (494 anchor-group pairs) are
+      identical with the old and the new code. (Checked on the way: the Q&A's "440
+      cases" is the backtest's higher 221 + lower 219, so it still matches the 494 of the
+      report and gold's README.) No test of `_risk_row` on its own: the risk index tests
+      (`test_relative_risk_band_and_assessment` and others) cover it through
+      `build_risk_index`
 - [ ] **Optional: `pipeline/bronze/cbs.py` (665 lines)**: move the HTTP part
       (`make_session`, `fetch_all`) to its own module
 - [ ] **Optional (Liskov, small):** a missing optional table comes back as `pd.DataFrame()`
