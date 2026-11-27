@@ -126,7 +126,11 @@ cbs-kvk-lakehouse/
 
 **Silver** is star-schema-like: CBS facts point to shared dimensions; the mapping tables
 and KVK companies sit outside the star (KVK companies get an SBI 2008 code through the
-crosswalk). The diagram shows each table's key (PK), the
+crosswalk). Databricks usually puts the star schema in gold; here silver is the
+conformed layer Databricks describes ("matched, merged, conformed", with
+"cross-reference tables"), and gold holds the business logic and is the only layer the
+dashboard reads ([Databricks glossary](https://www.databricks.com/glossary/medallion-architecture)).
+The diagram shows each table's key (PK), the
 columns that point to another table (FK) and the main value; all columns are in
 [docs/lineage.md](docs/lineage.md).
 

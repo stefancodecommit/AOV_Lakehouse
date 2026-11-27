@@ -92,19 +92,23 @@ dat niet voor, maar het is gerepareerd (koppelen op de sectorsleutel) met een te
 op de oude code faalt. Een goed voorbeeld van waarom een tweede blik nuttig is.
 
 **13. Feiten en dimensies horen toch in gold? Waarom staan ze bij jou in silver?**
-*Antwoord:* Het medallion-patroon schrijft dat niet voor; er zijn twee gangbare lezingen.
-Databricks zet een sterschema vaak in gold. Ik gebruik de andere: silver is het
-opgeschoonde, op elkaar afgestemde model, gold is gemaakt voor één gebruik. Drie
-CBS-tabellen en KVK op dezelfde sleutels brengen (sector via de schakeltabel, periode,
-grootteklasse) is integratiewerk, en dat is precies silver. De feiten blijven op het
-niveau van de bron, zonder bedrijfsregels, dus herbruikbaar. In gold zit de logica:
-vergelijking met landelijk, rangorde, de risico-index en het verbergen van kleine
-KVK-groepen. Het dashboard leest alleen gold, dus gold is ook de laag die veilig te tonen
-is. Het is sterschema-*achtig*: de koppeltabellen en `kvk_company` vallen erbuiten. Komt er
-een BI-tool waarin analisten zelf willen snijden, dan bied ik het sterschema ook in gold
-aan, bijvoorbeeld als views op silver.
+*Antwoord:* Klopt, Databricks en Microsoft zetten het sterschema in gold; dat is de
+gangbare keuze. Mijn silver doet wat Databricks silver noemt: data die "matched, merged,
+conformed and cleansed" is, een "Enterprise view" van de kernbegrippen, met
+"cross-reference tables". Drie CBS-tabellen en KVK op dezelfde sleutels brengen (sector
+via de SBI-schakeltabel, periode, grootteklasse) is precies dat werk, en de dimensies
+zijn die gedeelde kernbegrippen. De feiten blijven op het niveau van de bron, zonder
+bedrijfsregels. In gold zit de logica: vergelijking met landelijk, rangorde, de
+risico-index en het verbergen van kleine KVK-groepen. Het dashboard leest alleen gold,
+dus gold is ook de laag die veilig te tonen is. Databricks noemt medallion zelf "a
+recommended best practice but not a requirement". Het is sterschema-*achtig*: de
+koppeltabellen en `kvk_company` vallen erbuiten. Komt er een BI-tool waarin analisten
+zelf willen snijden, dan bied ik het sterschema ook in gold aan, bijvoorbeeld als views
+op silver.
 *Evidence:* README.md, "The data model"; pipeline/silver/README.md; pipeline/gold/README.md;
-docs/rapport.md, 3.3.
+docs/rapport.md, 3.3; Databricks,
+[Medallion architecture](https://docs.databricks.com/aws/en/lakehouse/medallion) (docs) en
+[glossary](https://www.databricks.com/glossary/medallion-architecture).
 
 ## Business value and responsibility
 

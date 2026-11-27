@@ -714,6 +714,13 @@ words counted per paragraph from the .docx text, unchanged)
       while answering "why are facts and dimensions in silver?"): 4,944 words. That
       question is now Q&A question 13 (docs/qa_practice.md, "Data engineering"); the
       questions after it moved up one (21 in all)
+      Rewritten the same day: no longer "two common readings" (no source backs a star
+      schema in silver as a school of its own). It now says the star schema is usually
+      in gold (Databricks, Microsoft) and argues from Databricks' own silver wording
+      ("matched, merged, conformed", "Enterprise view", "cross-reference tables") and
+      "a recommended best practice but not a requirement". Not renamed: moving the
+      tables to gold touches pipeline, lineage, tests, docs and the report for little
+      gain. One sentence with the glossary link added to README "The data model"
 
 ## First real run (done 2026-10-05)
 
