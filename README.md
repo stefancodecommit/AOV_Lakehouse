@@ -85,7 +85,7 @@ cbs-kvk-lakehouse/
 │   ├── bronze/     sources -> bronze: cbs.py, reference.py (SBI crosswalk), kvk.py, kvk_agent.py
 │   ├── silver/     bronze -> silver: cbs.py, kvk.py
 │   ├── gold/       silver -> gold: build.py (incl. the risk index)
-│   └── common/     config.py (settings), publish.py (all-or-nothing publishing), runlog.py
+│   └── common/     config.py (settings), paths.py (folders), publish.py (all-or-nothing publishing), runlog.py
 ├── checks/         data checks before writing, layer checks, freshness, quarantine
 ├── dashboard/      the Streamlit app; reads the gold tables only
 ├── orchestration/  Dagster: schedules, automatic rebuilds, blocking checks

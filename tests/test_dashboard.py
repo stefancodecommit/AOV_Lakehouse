@@ -9,7 +9,7 @@ from deltalake import DeltaTable
 from streamlit.testing.v1 import AppTest
 
 from conftest import dashboard_data as data
-from pipeline.common import publish
+from pipeline.common import paths, publish
 from pipeline.gold import build as g
 from pipeline.silver import cbs as s
 from test_delta import bronze_delta  # noqa: F401  (fixture)
@@ -104,7 +104,7 @@ def test_overview_shows_the_latest_quarter(gold_lakehouse):
 def test_overview_without_last_years_figure_shows_no_change(gold_lakehouse):
     """A missing change vs last year is NaN or NA after loading, never None: the headline
     must then leave the change out, not show '<NA> pp' or '+nan pp'."""
-    path = g.GOLD_ROOT / "gold_absence_by_sector"
+    path = paths.lakehouse().gold / "gold_absence_by_sector"
     df = DeltaTable(str(path)).to_pandas()
     df.loc[df["sbi_level"] == "total", "change_vs_last_year_pp"] = float("nan")
     publish.write_table(path, df)
@@ -127,7 +127,7 @@ def test_pages_warn_without_gold():
 
 def test_pages_warn_when_gold_tables_come_from_different_runs(gold_lakehouse):
     sector = data.read_table("gold_absence_by_sector", 0)
-    publish.write_table(data.GOLD_ROOT / "gold_absence_by_sector", sector.assign(run_id="gold_old"))
+    publish.write_table(paths.lakehouse().gold / "gold_absence_by_sector", sector.assign(run_id="gold_old"))
     at = run_page("overview")
     assert any("different gold runs" in w.value for w in at.warning)
 
@@ -176,7 +176,7 @@ def test_risk_page_shows_the_analyst_what_is_above_national_and_rising():
                      "S": [5.0 * (0.85 + 0.02 * i) for i in range(8)]}, [F] * 6 + [V, V])
     for name, df in {"gold_risk_index": g.build(g.build_risk_index, t, settings_=SETTINGS),
                      "gold_risk_index_history": g.build(g.build_risk_index_history, t)}.items():
-        publish.write_table(g.GOLD_ROOT / name, df.assign(run_id="gold_test"))
+        publish.write_table(paths.lakehouse().gold / name, df.assign(run_id="gold_test"))
     at = run_page("risk")
     assert not at.exception, [e.value for e in at.exception]
     metrics = {m.label: m.value for m in at.metric}
@@ -215,11 +215,11 @@ def test_every_table_column_has_a_title_and_an_explanation(gold_lakehouse, monke
     import common
     from test_gold import SETTINGS, F, V, risk_inputs
     # a risk index with enough quarters, from the same gold run as the other tables
-    run_id = DeltaTable(str(g.GOLD_ROOT / "gold_absence_by_sector")).to_pandas()["run_id"].iloc[0]
+    run_id = DeltaTable(str(paths.lakehouse().gold / "gold_absence_by_sector")).to_pandas()["run_id"].iloc[0]
     t = risk_inputs({"total": [5.0] * 8, "Q": [7.0] * 8}, [F] * 6 + [V, V])
     for name, df in {"gold_risk_index": g.build(g.build_risk_index, t, settings_=SETTINGS),
                      "gold_risk_index_history": g.build(g.build_risk_index_history, t)}.items():
-        publish.write_table(g.GOLD_ROOT / name, df.assign(run_id=run_id))
+        publish.write_table(paths.lakehouse().gold / name, df.assign(run_id=run_id))
     shown, real = [], common.table_view
 
     def record(df, table=None, label="Show the numbers as a table", extra=None):

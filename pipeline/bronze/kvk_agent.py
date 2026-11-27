@@ -60,7 +60,7 @@ def get_dataset_info() -> str:
         "format": "zip containing one semicolon-separated CSV (too large for Excel)",
         "refreshed": "every working day",
         "license": kvk.LICENSE,
-        "inbox": str(kvk.INBOX),
+        "inbox": str(kvk.inbox_dir()),
         "next_step": "Ask the user to download the zip and save it in the inbox folder, "
                      "or give its file path (they can drag the file into the terminal).",
     })
@@ -82,7 +82,7 @@ def list_inbox() -> str:
     else:
         next_step = ("There is no new file (every file here is already ingested). Call "
                      "get_dataset_info and ask the user to download a new zip into the inbox.")
-    return json.dumps({"inbox": str(kvk.INBOX), "files": files, "new_files": new,
+    return json.dumps({"inbox": str(kvk.inbox_dir()), "files": files, "new_files": new,
                        "next_step": next_step})
 
 
@@ -137,7 +137,7 @@ Steps:
 1. Call list_inbox. If it has a file that is not already ingested, tell the user and
    offer to verify the newest one. Otherwise call get_dataset_info and tell the user,
    briefly, to download the zip from {kvk.DOWNLOAD_URL} and save it in the inbox folder
-   ({kvk.INBOX}), or give you the file path (they can drag the file into the terminal).
+   ({kvk.inbox_dir()}), or give you the file path (they can drag the file into the terminal).
 2. When the user gives a path or file name, or agrees to an inbox file, call
    verify_dataset with it (an inbox file name alone is enough). Summarise the report:
    status, row count, recognised columns, errors and warnings.

@@ -7,6 +7,7 @@ import pytest
 from deltalake import DeltaTable
 
 from pipeline.bronze import reference as r
+from pipeline.common import paths
 from pipeline.silver import cbs as s
 
 HEADER = ["SBI2008", "SBI2008_2digit", "SBI2008 Omschrijving", "SBI2025", "SBI2025_2digit",
@@ -35,11 +36,11 @@ def xlsx(path, rows=ROWS, header=HEADER, sheet="Schakeltabel v2.0", as_numbers=F
 
 
 def bronze():
-    return DeltaTable(str(r.DATA_TABLE)).to_pandas()
+    return DeltaTable(str(paths.lakehouse().crosswalk)).to_pandas()
 
 
 def batch_log():
-    return DeltaTable(str(r.LOG_TABLE)).to_pandas()
+    return DeltaTable(str(paths.lakehouse().reference_log)).to_pandas()
 
 
 # =========================================================================== loading
@@ -111,9 +112,9 @@ def test_invalid_file_is_rejected_and_nothing_written(tmp_path, kwargs, error):
     report = r.ingest(xlsx(tmp_path / "bad.xlsx", **kwargs))
     assert report["status"] == "FAILED"
     assert any(error in e for e in report["errors"]), report["errors"]
-    assert not (r.DATA_TABLE / "_delta_log").exists() and not (r.LOG_TABLE / "_delta_log").exists()
+    assert not (paths.lakehouse().crosswalk / "_delta_log").exists() and not (paths.lakehouse().reference_log / "_delta_log").exists()
     folder = r.Path(report["quarantine"])
-    assert folder.parent == r.QUARANTINE_ROOT / "reference" and (folder / "bad.xlsx").exists()
+    assert folder.parent == paths.lakehouse().quarantine / "reference" and (folder / "bad.xlsx").exists()
 
 
 def test_title_header_with_another_date_is_accepted(tmp_path):

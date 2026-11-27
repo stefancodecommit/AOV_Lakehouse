@@ -5,7 +5,7 @@ import sys
 import pandas as pd
 import pytest
 
-from pipeline.common import publish, runlog
+from pipeline.common import paths, publish, runlog
 from pipeline.gold import build as g
 from pipeline.silver import cbs as s
 from test_delta import bronze_delta  # noqa: F401  (fixture)
@@ -196,7 +196,7 @@ def test_gold_run_from_bronze_to_gold(bronze_delta, monkeypatch, tmp_path_factor
     monkeypatch.setattr(sys, "argv", ["pipeline/silver/cbs.py"])
     silver_run = s.run()
     run_id = g.run()
-    runs = runlog.read_runs(g.RUN_LOG)
+    runs = runlog.read_runs(paths.lakehouse().run_log)
     row = runs[runs.run_id == run_id].iloc[0]
     tables = json.loads(row.tables)
     assert row.status == "success"
@@ -204,14 +204,14 @@ def test_gold_run_from_bronze_to_gold(bronze_delta, monkeypatch, tmp_path_factor
     assert all(tables[n]["status"] == "published" for n in g.OPTIONAL_TABLES ^ set(tables))
     inputs = json.loads(row.inputs)
     assert inputs["silver/fct_absence_rate#run_id"] == silver_run      # which silver run
-    assert inspect_lakehouse.silver_run_problems(g.LAKEHOUSE, "gold")[1] == []
+    assert inspect_lakehouse.silver_run_problems(paths.lakehouse().root, "gold")[1] == []
 
     # run(lakehouse=...): silver and gold built in a copy read and write only the copy
     import shutil
     copy = tmp_path_factory.mktemp("copy") / "lakehouse"
-    shutil.copytree(g.LAKEHOUSE, copy)
+    shutil.copytree(paths.lakehouse().root, copy)
     copy_silver, copy_gold = s.run(lakehouse=copy), g.run(lakehouse=copy)
-    assert list(runlog.read_runs(g.RUN_LOG).run_id) == [silver_run, run_id]   # untouched
+    assert list(runlog.read_runs(paths.lakehouse().run_log).run_id) == [silver_run, run_id]   # untouched
     copy_runs = runlog.read_runs(copy / "_run_log")
     assert list(copy_runs.run_id) == [silver_run, run_id, copy_silver, copy_gold]
     assert set(copy_runs.status) == {"success"}
@@ -223,11 +223,11 @@ def test_gold_run_from_bronze_to_gold(bronze_delta, monkeypatch, tmp_path_factor
 def test_gold_refuses_silver_tables_from_different_runs(bronze_delta):
     s.run()
     from deltalake import DeltaTable
-    rate = DeltaTable(str(s.SILVER_ROOT / "fct_absence_rate")).to_pandas()
-    publish.write_table(s.SILVER_ROOT / "fct_absence_rate", rate.assign(run_id="silver_cbs_old"))
+    rate = DeltaTable(str(paths.lakehouse().silver / "fct_absence_rate")).to_pandas()
+    publish.write_table(paths.lakehouse().silver / "fct_absence_rate", rate.assign(run_id="silver_cbs_old"))
     with pytest.raises(publish.RunFailed, match="come from different runs"):
         g.run()
-    assert runlog.read_runs(g.RUN_LOG).iloc[-1].status == "failed"
+    assert runlog.read_runs(paths.lakehouse().run_log).iloc[-1].status == "failed"
 
 
 def test_gold_fails_when_silver_is_missing():
@@ -245,7 +245,7 @@ def test_gold_reads_only_the_kvk_columns_and_rows_it_needs():
                          "start_date": [None] * 3,
                          "legal_form": ["BV"] * 3, "sbi2008_section": ["A", "B", "C"],
                          "sbi_mapping": ["1:1"] * 3, "run_id": "silver_kvk_1"})
-    publish.write_table(g.SILVER_ROOT / "kvk_company", rows)
+    publish.write_table(paths.lakehouse().silver / "kvk_company", rows)
     inputs = {}
     df = g.read_silver(["kvk_company"], inputs)["kvk_company"]
     assert "sbi_mapping" not in df and set(g.PARTIAL_READS["kvk_company"]["columns"]) == set(df)

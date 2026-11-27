@@ -58,12 +58,9 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from pipeline.common.config import project_path, settings
+from pipeline.common import paths  # where the lakehouse is: paths.lakehouse()
+from pipeline.common.config import settings
 
-LAKEHOUSE = project_path(settings["paths"]["lakehouse"])
-SILVER_ROOT = LAKEHOUSE / "silver"
-GOLD_ROOT = LAKEHOUSE / "gold"
-RUN_LOG = LAKEHOUSE / "_run_log"
 PIPELINE = "gold"
 OPTIONAL_TABLES = {"gold_kvk_context"}      # empty until silver KVK exists
 SMALL_GROUP = 10                            # KVK re-identification rule
@@ -110,7 +107,7 @@ def read_silver(names: list[str], inputs: dict | None = None,
     from deltalake import DeltaTable
 
     from pipeline.common.publish import RunFailed
-    root = SILVER_ROOT if root is None else root
+    root = paths.lakehouse().silver if root is None else root
     out, run_ids = {}, {}
     for name in names:
         path = root / name
@@ -681,10 +678,8 @@ def run(lakehouse: Path | None = None) -> str:
     to try a change on): silver is read from, and gold and the run log are written to,
     that folder."""
     from pipeline.common.publish import run_pipeline
-    if lakehouse is None:
-        silver, gold, run_log = SILVER_ROOT, GOLD_ROOT, RUN_LOG
-    else:
-        silver, gold, run_log = lakehouse / "silver", lakehouse / "gold", lakehouse / "_run_log"
+    lh = paths.lakehouse(lakehouse)
+    silver, gold, run_log = lh.silver, lh.gold, lh.run_log
     return run_pipeline(PIPELINE, lambda inputs: build_all(read_inputs(inputs, silver)),
                         gold, run_log, OPTIONAL_TABLES)
 

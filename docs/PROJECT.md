@@ -521,6 +521,7 @@ pipeline/                the data flow, one subpackage per layer; run as python 
   silver/kvk.py          bronze KVK -> silver kvk_company
   gold/build.py          silver -> gold
   common/config.py       settings from config.yaml, with local and environment overrides
+  common/paths.py        where the data lives: the lakehouse layout, read from the settings
   common/publish.py      silver and gold: staging, then publishing all tables together
   common/runlog.py       the run log (one row per silver/gold run)
 checks/                  data checks (cbs.py, kvk.py) shared by ingestion, Dagster and pytest;

@@ -8,6 +8,7 @@ import pytest
 
 from pipeline.bronze import kvk as k
 from pipeline.bronze import kvk_agent as agent
+from pipeline.common import paths
 
 # Header and rows as in the real KVK file of 2026-10-01
 REAL_HEADER = ('"Datum aanvang";"Actief";"Insolventie";"Rechtsvorm";"Postcode regio";'
@@ -20,8 +21,7 @@ REAL_ROWS = [
 
 
 @pytest.fixture
-def kvk_zip(tmp_path, monkeypatch):
-    monkeypatch.setattr(k, "LOG_TABLE", tmp_path / "_batch_log")
+def kvk_zip(tmp_path):
     path = tmp_path / "kvk.zip"
     with zipfile.ZipFile(path, "w") as z:
         z.writestr("kvk.csv", "\r\n".join([REAL_HEADER, *REAL_ROWS]) + "\r\n")
@@ -48,7 +48,7 @@ def test_rejected_file_is_quarantined_with_its_report(tmp_path):
     report = k.verify(str(bad))
     assert report["status"] == "FAILED"
     folder = Path(report["quarantine"])
-    assert folder.parent == k.QUARANTINE_ROOT / "kvk"
+    assert folder.parent == paths.lakehouse().quarantine / "kvk"
     assert (folder / "kvk.csv").read_bytes() == bad.read_bytes()
     saved = json.loads((folder / "report.json").read_text())
     assert saved["status"] == "FAILED" and any("Required column missing" in e for e in saved["errors"])
@@ -59,14 +59,14 @@ def test_rejected_file_is_quarantined_with_its_report(tmp_path):
 def test_passed_file_is_not_quarantined(kvk_zip):
     report = k.verify(str(kvk_zip))
     assert report["status"] == "PASSED" and "quarantine" not in report
-    assert not k.QUARANTINE_ROOT.exists()
+    assert not paths.lakehouse().quarantine.exists()
 
 
 # =========================================================================== inbox
 def inbox_zip(name, rows=REAL_ROWS, age=0):
     import os
-    k.INBOX.mkdir(parents=True, exist_ok=True)
-    path = k.INBOX / name
+    k.inbox_dir().mkdir(parents=True, exist_ok=True)
+    path = k.inbox_dir() / name
     with zipfile.ZipFile(path, "w") as z:
         z.writestr("kvk.csv", "\r\n".join([REAL_HEADER, *rows]) + "\r\n")
     os.utime(path, (1_790_000_000 - age, 1_790_000_000 - age))
@@ -89,7 +89,7 @@ def test_list_inbox_tells_the_agent_which_file_is_new():
 def test_inbox_lists_newest_first_and_marks_ingested_files(monkeypatch):
     old = inbox_zip("old.zip", age=86_400)
     inbox_zip("new.zip", rows=REAL_ROWS[:2])
-    (k.INBOX / "notes.txt").write_text("ignored")
+    (k.inbox_dir() / "notes.txt").write_text("ignored")
     monkeypatch.setattr(k, "ingested_hashes", lambda log_table=None: {k.sha256(old): "kvk_batch_1"})
     files = json.loads(agent.list_inbox())["files"]
     assert [f["file"] for f in files] == ["new.zip", "old.zip"]
@@ -117,12 +117,12 @@ def test_bare_file_name_is_looked_up_in_the_inbox(tmp_path, monkeypatch):
 def test_dagster_ingest_needs_the_exact_file_name_as_confirmation(tmp_path_factory):
     inbox_zip("kvk.zip")
     wrong = k.ingest_confirmed_file("kvk.zip", "yes", confirmed_by="dagster:test")
-    assert wrong["status"] == "CANCELLED" and not k.DATA_TABLE.exists()
+    assert wrong["status"] == "CANCELLED" and not paths.lakehouse().kvk_data.exists()
 
     ok = k.ingest_confirmed_file("kvk.zip", "kvk.zip", confirmed_by="dagster:test")
     assert ok["status"] == "INGESTED" and ok["rows"] == 3
     from deltalake import DeltaTable
-    log = DeltaTable(str(k.LOG_TABLE)).to_pandas()
+    log = DeltaTable(str(paths.lakehouse().kvk_log)).to_pandas()
     assert list(log["confirmed_by"]) == ["dagster:test"]
     again = k.ingest_confirmed_file("kvk.zip", "kvk.zip", confirmed_by="dagster:test")
     assert again["status"] == "FAILED"                # already ingested
@@ -134,12 +134,12 @@ def test_dagster_ingest_needs_the_exact_file_name_as_confirmation(tmp_path_facto
     assert there["table"] == str(other / "bronze" / "kvk" / "basis_bedrijfsgegevens")
     assert len(DeltaTable(str(other / "bronze" / "kvk" / "_batch_log")).to_pandas()) == 1
     assert len(DeltaTable(there["table"]).to_pandas()) == 3            # the rows went there
-    assert len(DeltaTable(str(k.LOG_TABLE)).to_pandas()) == 1     # the configured ones untouched
-    assert len(DeltaTable(str(k.DATA_TABLE)).to_pandas()) == 3
+    assert len(DeltaTable(str(paths.lakehouse().kvk_log)).to_pandas()) == 1     # the configured ones untouched
+    assert len(DeltaTable(str(paths.lakehouse().kvk_data)).to_pandas()) == 3
     bad = other / "bad.csv"
     bad.write_text("just;one\n1;2\n")
     folder = Path(k.verify(str(bad), lakehouse=other)["quarantine"])
-    assert folder.parent == other / "quarantine" / "kvk" and not k.QUARANTINE_ROOT.exists()
+    assert folder.parent == other / "quarantine" / "kvk" and not paths.lakehouse().quarantine.exists()
 
 
 def test_dagster_entry_point_is_not_an_agent_tool():
@@ -161,7 +161,7 @@ def agent_ingest(path, typed, monkeypatch):
 def test_the_agent_cannot_ingest_a_file_that_was_not_verified(monkeypatch):
     path = inbox_zip("kvk.zip")
     result = agent_ingest(path, "YES", monkeypatch)
-    assert result["status"] == "REFUSED" and not k.DATA_TABLE.exists()
+    assert result["status"] == "REFUSED" and not paths.lakehouse().kvk_data.exists()
 
 
 def test_nothing_is_written_unless_the_person_types_yes(monkeypatch):
@@ -169,7 +169,7 @@ def test_nothing_is_written_unless_the_person_types_yes(monkeypatch):
     assert json.loads(agent.verify_dataset(str(path)))["status"] == "PASSED"
     for typed in ("yes", "ja", "", "YES please"):
         assert agent_ingest(path, typed, monkeypatch)["status"] == "CANCELLED", typed
-    assert not k.DATA_TABLE.exists()
+    assert not paths.lakehouse().kvk_data.exists()
     assert agent_ingest(path, "YES", monkeypatch)["status"] == "INGESTED"
 
 
@@ -179,7 +179,7 @@ def test_a_file_changed_after_verification_is_refused(monkeypatch):
     inbox_zip("kvk.zip", rows=REAL_ROWS[:1])           # replaced after it was checked
     result = agent_ingest(path, "YES", monkeypatch)
     assert result["status"] == "REFUSED" and "changed" in result["reason"]
-    assert not k.DATA_TABLE.exists()
+    assert not paths.lakehouse().kvk_data.exists()
 
 
 # =========================================================================== KVK's own file date
@@ -214,16 +214,16 @@ def test_a_start_date_after_the_file_date_makes_it_doubtful(tmp_path):
 
 
 def test_a_file_older_than_the_newest_snapshot_gets_a_warning():
-    dated_zip(k.INBOX / "nov.zip", when=(2026, 11, 12, 0, 0, 0))
+    dated_zip(k.inbox_dir() / "nov.zip", when=(2026, 11, 12, 0, 0, 0))
     assert k.ingest_confirmed_file("nov.zip", "nov.zip", confirmed_by="t")["status"] == "INGESTED"
-    report = k.verify(str(dated_zip(k.INBOX / "oct.zip", rows=REAL_ROWS[:2])))
+    report = k.verify(str(dated_zip(k.inbox_dir() / "oct.zip", rows=REAL_ROWS[:2])))
     assert report["status"] == "PASSED"                    # bronze keeps it as history
     assert any("older than the newest snapshot" in w for w in report["warnings"])
 
 
 def test_the_batch_log_records_the_file_date():
     from deltalake import DeltaTable
-    dated_zip(k.INBOX / "kvk.zip")
+    dated_zip(k.inbox_dir() / "kvk.zip")
     assert k.ingest_confirmed_file("kvk.zip", "kvk.zip", confirmed_by="t")["status"] == "INGESTED"
-    log = DeltaTable(str(k.LOG_TABLE)).to_pandas()
+    log = DeltaTable(str(paths.lakehouse().kvk_log)).to_pandas()
     assert str(log["file_date"].iloc[0]) == "2026-10-01"

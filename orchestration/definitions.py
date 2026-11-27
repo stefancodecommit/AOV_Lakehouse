@@ -81,6 +81,7 @@ from pipeline.bronze import cbs as cbs_bronze  # noqa: E402
 from pipeline.bronze import kvk as kvk_ingest  # noqa: E402  (kvk_bronze is the asset)
 from pipeline.bronze import reference as reference_bronze  # noqa: E402
 from pipeline.common import (
+    paths,  # noqa: E402
     publish,  # noqa: E402,F401
     runlog,  # noqa: E402,F401
 )
@@ -159,7 +160,7 @@ class KvkUpload(dg.Config):
 def kvk_bronze(context: dg.AssetExecutionContext, config: KvkUpload) -> dg.MaterializeResult:
     name = config.file_name or kvk_ingest.newest_new_inbox_file()
     if not name:
-        raise dg.Failure(f"No new KVK file in {kvk_ingest.INBOX}")
+        raise dg.Failure(f"No new KVK file in {kvk_ingest.inbox_dir()}")
     result = kvk_ingest.ingest_confirmed_file(
         name, config.confirm_file_name, confirmed_by=f"dagster:{getpass.getuser()}")
     if result["status"] != "INGESTED":
@@ -220,7 +221,7 @@ def silver_cbs_checks():
     key check per fact table and dimension. Those are merged here into one result,
     keys_in_dimensions. no_unknown_characteristics is a warning, so it doesn't block."""
     from checks.layers import SILVER_CBS_KEYS, check_silver_cbs
-    results = check_silver_cbs(_read(cbs_silver.SILVER_ROOT, SILVER_CBS_KEYS))
+    results = check_silver_cbs(_read(paths.lakehouse().silver, SILVER_CBS_KEYS))
     keys = [r for r in results if r.name.endswith(("_in_dim_period", "_in_dim_sector",
                                                    "_in_dim_company_size"))]
     merged = CheckResult("keys_in_dimensions", all(r.passed for r in keys),
@@ -236,7 +237,7 @@ def silver_cbs_checks():
                                        "valid_sbi_sections"]])
 def silver_kvk_checks():
     from checks.layers import check_silver_kvk
-    for r in check_silver_kvk(_read(kvk_silver.SILVER_ROOT, ["kvk_company"])["kvk_company"]):
+    for r in check_silver_kvk(_read(paths.lakehouse().silver, ["kvk_company"])["kvk_company"]):
         yield check_result(r, "silver_kvk")
 
 
@@ -244,7 +245,7 @@ def silver_kvk_checks():
                              for n in ["tables_not_empty", "one_run_id", "unique_keys"]])
 def gold_checks():
     from checks.layers import GOLD_KEYS, check_gold
-    for r in check_gold(_read(gold_layer.GOLD_ROOT, GOLD_KEYS)):
+    for r in check_gold(_read(paths.lakehouse().gold, GOLD_KEYS)):
         yield check_result(r, "gold")
 
 
@@ -275,13 +276,13 @@ def bronze_cbs_state() -> tuple[dict[str, str], set[str]]:
     from checks.cbs import check_table_lifecycle
     latest, stopped = {}, set()
     for ep in cbs_bronze.ENDPOINTS:
-        path = cbs_bronze.BRONZE_ROOT / ep.name
+        path = paths.lakehouse().bronze / ep.name
         if not ep.split_by_period or not (path / "_delta_log").exists():
             continue
         periods = DeltaTable(str(path)).to_pandas(columns=["_period"])["_period"].dropna()
         if not periods.empty:
             latest[ep.table_id] = periods.max()
-        infos = cbs_bronze.BRONZE_ROOT / cbs_bronze.Endpoint(ep.table_id, "TableInfos").name
+        infos = paths.lakehouse().bronze / cbs_bronze.Endpoint(ep.table_id, "TableInfos").name
         if (infos / "_delta_log").exists():
             df = DeltaTable(str(infos)).to_pandas().sort_values("_ingested_at")
             if any(w.name == "table_not_stopped" for w in
@@ -364,7 +365,7 @@ def dagster_history_retention(context: dg.OpExecutionContext) -> None:
 
 @dg.op(ins=AFTER)
 def backup_lakehouse(context: dg.OpExecutionContext) -> None:
-    if backup.same_disk(backup.BACKUP_DIR, backup.LAKEHOUSE) and not backup.REQUIRE_OTHER_DISK:
+    if backup.same_disk(paths.backup_dir(), paths.lakehouse().root) and not backup.REQUIRE_OTHER_DISK:
         context.log.warning("Backup on the same disk as the lakehouse: it protects against "
                             "mistakes, not against losing the disk (backup.path in config.yaml)")
     path = backup.create()
@@ -390,9 +391,9 @@ def register_existing_bronze(context: dg.OpExecutionContext) -> None:
     counts as "missing", which would block silver forever; run this job once to record
     that data as materialized. Assets without data are left alone."""
     existing = {
-        "cbs_bronze": cbs_bronze.LOG_TABLE,
-        "sbi_crosswalk": reference_bronze.LOG_TABLE,
-        "kvk_bronze": kvk_ingest.LOG_TABLE,
+        "cbs_bronze": paths.lakehouse().cbs_log,
+        "sbi_crosswalk": paths.lakehouse().reference_log,
+        "kvk_bronze": paths.lakehouse().kvk_log,
     }
     for key, log_table in existing.items():
         if (log_table / "_delta_log").exists():

@@ -24,7 +24,7 @@ from pipeline.silver import cbs as cbs_silver  # noqa: E402
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "dashboard"))
 import data as dashboard_data  # noqa: E402  (dashboard/data.py)
 from pipeline.bronze import reference as reference_bronze  # noqa: E402
-from pipeline.common import runlog  # noqa: E402
+from pipeline.common import config, paths, runlog  # noqa: E402
 from pipeline.silver import kvk as kvk_silver  # noqa: E402
 from tools import (
     backup,  # noqa: E402
@@ -38,53 +38,22 @@ MARGES = ["MW00000", "MOG0095", "MBG0095"]
 # --------------------------------------------------------------------------- safety
 @pytest.fixture(autouse=True)
 def isolated_lakehouse(tmp_path, monkeypatch):
-    """Point every lakehouse path at a temp folder so tests never touch real data."""
-    monkeypatch.setattr(cbs_bronze, "BRONZE_ROOT", tmp_path / "bronze")
-    monkeypatch.setattr(cbs_bronze, "LOG_TABLE", tmp_path / "bronze" / "_ingestion_log")
-    monkeypatch.setattr(cbs_bronze, "QUARANTINE_ROOT", tmp_path / "quarantine")
+    """Point the lakehouse, the inbox and the backup folder at a temp folder, so tests
+    never touch real data. Every module asks pipeline/common/paths.py for its folders when
+    it runs (none keeps a path from import time), so these three settings move them all.
+    Until 2026-11-27 this patched about 40 path constants, module by module."""
+    monkeypatch.setitem(config.settings["paths"], "lakehouse", str(tmp_path))
+    monkeypatch.setitem(config.settings["paths"], "inbox", str(tmp_path / "inbox"))
+    monkeypatch.setitem(config.settings["backup"], "path", str(tmp_path / "backups"))
     monkeypatch.setattr(odata, "PAUSE_SECONDS", 0)          # pipeline/bronze/odata.py
-    monkeypatch.setattr(cbs_silver, "BRONZE_ROOT", tmp_path / "bronze")
-    monkeypatch.setattr(cbs_silver, "SILVER_ROOT", tmp_path / "silver")
-    monkeypatch.setattr(cbs_silver, "LAKEHOUSE", tmp_path)
-    monkeypatch.setattr(cbs_silver, "RUN_LOG", tmp_path / "_run_log")
-    monkeypatch.setattr(runlog, "RUN_LOG", tmp_path / "_run_log")
-    monkeypatch.setattr(kvk_silver, "LAKEHOUSE", tmp_path)
-    monkeypatch.setattr(kvk_silver, "KVK_BRONZE", tmp_path / "bronze" / "kvk")
-    monkeypatch.setattr(kvk_silver, "SILVER_ROOT", tmp_path / "silver")
-    monkeypatch.setattr(kvk_silver, "RUN_LOG", tmp_path / "_run_log")
-    monkeypatch.setattr(gold, "LAKEHOUSE", tmp_path)
-    monkeypatch.setattr(gold, "SILVER_ROOT", tmp_path / "silver")
-    monkeypatch.setattr(gold, "GOLD_ROOT", tmp_path / "gold")
-    monkeypatch.setattr(gold, "RUN_LOG", tmp_path / "_run_log")
-    monkeypatch.setattr(dashboard_data, "GOLD_ROOT", tmp_path / "gold")
-    ref = tmp_path / "bronze" / "reference"
-    monkeypatch.setattr(reference_bronze, "REF_ROOT", ref)
-    monkeypatch.setattr(reference_bronze, "DATA_TABLE", ref / "sbi2008_sbi2025")
-    monkeypatch.setattr(reference_bronze, "LOG_TABLE", ref / "_batch_log")
-    monkeypatch.setattr(reference_bronze, "DOWNLOAD_DIR", tmp_path / "inbox")
-    monkeypatch.setattr(reference_bronze, "QUARANTINE_ROOT", tmp_path / "quarantine")
-    monkeypatch.setattr(kvk_bronze, "KVK_ROOT", tmp_path / "bronze" / "kvk")
-    monkeypatch.setattr(kvk_bronze, "DATA_TABLE", tmp_path / "bronze" / "kvk" / "basis_bedrijfsgegevens")
-    monkeypatch.setattr(kvk_bronze, "LOG_TABLE", tmp_path / "bronze" / "kvk" / "_batch_log")
-    monkeypatch.setattr(kvk_bronze, "QUARANTINE_ROOT", tmp_path / "quarantine")
-    monkeypatch.setattr(kvk_bronze, "INBOX", tmp_path / "inbox" / "kvk")
-    monkeypatch.setattr(maintenance, "LAKEHOUSE", tmp_path)
-    monkeypatch.setattr(maintenance, "QUARANTINE_ROOT", tmp_path / "quarantine")
-    monkeypatch.setattr(maintenance, "KVK_ROOT", tmp_path / "bronze" / "kvk")
-    monkeypatch.setattr(maintenance, "BATCH_LOGS", {
-        "cbs": tmp_path / "bronze" / "_ingestion_log",
-        "kvk": tmp_path / "bronze" / "kvk" / "_batch_log",
-        "reference": tmp_path / "bronze" / "reference" / "_batch_log"})
-    monkeypatch.setattr(backup, "LAKEHOUSE", tmp_path)
-    monkeypatch.setattr(backup, "INBOX_KVK", tmp_path / "inbox" / "kvk")
-    monkeypatch.setattr(backup, "BACKUP_DIR", tmp_path / "backups")
     # a fixed, committed code version: the real one ends in '-dirty' while files are being
     # edited, which changes whether silver KVK may skip a rebuild (kvk.unchanged_since)
     monkeypatch.setattr(runlog, "code_version", lambda: "abc1234")
 
-    # Safety net: no module-level path may still point into the real lakehouse or inbox,
-    # at the start of the test and again at its end (a test that calls monkeypatch.undo()
-    # also undoes the lines above, and from then on would work on the real data)
+    # Safety net: the folders the code uses, and any module-level path, must be outside
+    # the real lakehouse, inbox and backups, at the start of the test and again at its
+    # end (a test that calls monkeypatch.undo() also undoes the lines above, and from then
+    # on would work on the real data)
     _check_no_real_paths("at the start of the test")
     yield
     _check_no_real_paths("at the end of the test (monkeypatch.undo() undoes the isolation "
@@ -92,20 +61,33 @@ def isolated_lakehouse(tmp_path, monkeypatch):
 
 
 def _real_data() -> list[Path]:
-    from pipeline.common import config
     return [config.project_path(p).resolve() for p in (
         config.settings["paths"]["lakehouse"], config.settings["paths"]["inbox"],
         config.settings["backup"]["path"])]
 
 
+# the real folders, read before any test changes the settings
+REAL_DATA = _real_data()
+
+
+def _is_real(path: Path) -> bool:
+    path = Path(path).resolve()
+    return any(path == r or r in path.parents for r in REAL_DATA)
+
+
 def _check_no_real_paths(when: str) -> None:
-    real = _real_data()
+    for name, path in (("paths.lakehouse()", paths.lakehouse().root), ("paths.inbox()", paths.inbox()),
+                       ("paths.backup_dir()", paths.backup_dir())):
+        if _is_real(path):
+            pytest.fail(f"{name} points at real data {when}: {path}")
+    # and no module may hold a path of its own into the real data (a folder constant
+    # added later would bypass the settings above)
     for mod in (cbs_bronze, cbs_silver, reference_bronze, kvk_bronze, kvk_agent, maintenance, runlog,
                 kvk_silver, gold, dashboard_data, backup):
         for name, value in vars(mod).items():
             values = value.values() if isinstance(value, dict) else [value]
             for v in values:
-                if isinstance(v, Path) and any(v == r or r in v.parents for r in real):
+                if isinstance(v, Path) and _is_real(v):
                     pytest.fail(f"{mod.__name__}.{name} points at real data {when}: {v}")
 
 
@@ -116,7 +98,7 @@ def no_writes_to_real_data():
     purpose: monkeypatch.undo() in a test can't remove it."""
     import deltalake
 
-    real = _real_data()
+    real = REAL_DATA
 
     def refuse(target) -> None:
         uri = str(getattr(target, "table_uri", target)).removeprefix("file://")

@@ -7,7 +7,7 @@ from deltalake import write_deltalake
 from streamlit.testing.v1 import AppTest
 
 from pipeline.bronze import cbs as b
-from pipeline.silver import cbs as s
+from pipeline.common import paths
 from test_delta import ABSENCE, period_request, records
 from tools import lakehouse_viewer as v
 
@@ -22,7 +22,7 @@ def two_versions():
 def silver_table():
     """A small silver table with one of each problem: a repeated key, an identical row,
     padded and blank text, a missing number, a flag."""
-    write_deltalake(str(s.SILVER_ROOT / "dim_sector"), pa.table({
+    write_deltalake(str(paths.lakehouse().silver / "dim_sector"), pa.table({
         "sector_key": ["A", "B", "B", "C"],
         "sector_name": ["Landbouw", "Bouw ", "Bouw ", ""],
         "value": [1.5, None, None, 3.0],
@@ -34,16 +34,16 @@ def silver_table():
 def test_finds_tables_per_layer():
     two_versions()
     silver_table()
-    (b.BRONZE_ROOT / "kvk" / "basis_bedrijfsgegevens" / "_delta_log").mkdir(parents=True)
-    (s.LAKEHOUSE / "_run_log" / "_delta_log").mkdir(parents=True)
-    assert v.lakehouse_tables(s.LAKEHOUSE) == {
+    (paths.lakehouse().bronze / "kvk" / "basis_bedrijfsgegevens" / "_delta_log").mkdir(parents=True)
+    (paths.lakehouse().root / "_run_log" / "_delta_log").mkdir(parents=True)
+    assert v.lakehouse_tables(paths.lakehouse().root) == {
         "bronze": ["bronze/80072ned_typeddataset", "bronze/kvk/basis_bedrijfsgegevens"],
         "silver": ["silver/dim_sector"], "gold": [], "other": ["_run_log"]}
 
 
 def test_filter_searches_the_whole_table_and_versions_travel_back():
     two_versions()
-    path = b.BRONZE_ROOT / ABSENCE.name
+    path = paths.lakehouse().bronze / ABSENCE.name
     rows, matching = v.read(path, None, ["Perioden"], "_period", "kw01", limit=1)
     assert matching == 1 and rows.column("Perioden").to_pylist() == ["2026KW01"]
     rows, matching = v.read(path, None, None, None, "", limit=1)
@@ -56,7 +56,7 @@ def test_filter_searches_the_whole_table_and_versions_travel_back():
 def test_quality_statistics():
     silver_table()
     from deltalake import DeltaTable
-    q = v.quality(DeltaTable(str(s.SILVER_ROOT / "dim_sector")).to_pyarrow_table(), "silver/dim_sector")
+    q = v.quality(DeltaTable(str(paths.lakehouse().silver / "dim_sector")).to_pyarrow_table(), "silver/dim_sector")
     prof = q["profile"].set_index("column")
     assert q["rows"] == 4
     assert q["key"] == ["sector_key"] and q["duplicate_keys"] == 1

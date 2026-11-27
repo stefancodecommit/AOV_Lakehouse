@@ -8,7 +8,7 @@ import pytest
 from deltalake import DeltaTable, write_deltalake
 
 from checks import layers
-from pipeline.common import publish, runlog
+from pipeline.common import config, paths, publish, runlog
 from pipeline.silver import kvk as k
 from tools import inspect_lakehouse
 
@@ -115,21 +115,21 @@ def test_kvk_company_types_and_flags():
 def kvk_lakehouse():
     """Bronze KVK (one logged batch, one orphan) and the silver crosswalk, as Delta."""
     df = bronze((("kvk_b1", "2026-10-01"), ("kvk_orphan", "2026-10-02")))
-    write_deltalake(str(k.KVK_BRONZE / "basis_bedrijfsgegevens"), pa.Table.from_pandas(df))
-    write_deltalake(str(k.KVK_BRONZE / "_batch_log"), pa.table({
+    write_deltalake(str(paths.lakehouse().kvk_bronze / "basis_bedrijfsgegevens"), pa.Table.from_pandas(df))
+    write_deltalake(str(paths.lakehouse().kvk_bronze / "_batch_log"), pa.table({
         "batch_id": ["kvk_b1"], "status": ["success"],
         "ingested_at": pa.array([pd.Timestamp("2026-10-01", tz="UTC")],
                                 pa.timestamp("us", tz="UTC")),
         "file_date": pa.array([None], pa.date32())}))        # no file date: upload date used
-    publish.write_table(k.SILVER_ROOT / "map_sbi2008_sbi2025", SILVER_CROSSWALK)
+    publish.write_table(paths.lakehouse().silver / "map_sbi2008_sbi2025", SILVER_CROSSWALK)
 
 
 def test_run_publishes_kvk_company_with_run_id_and_log(kvk_lakehouse):
     run_id = k.run()
-    df = DeltaTable(str(k.SILVER_ROOT / "kvk_company")).to_pandas()
+    df = DeltaTable(str(paths.lakehouse().silver / "kvk_company")).to_pandas()
     assert len(df) == 3 and set(df.batch_id) == {"kvk_b1"}         # orphan batch left out
     assert set(df.run_id) == {run_id}
-    row = runlog.read_runs(k.RUN_LOG).iloc[-1]
+    row = runlog.read_runs(paths.lakehouse().run_log).iloc[-1]
     assert row.pipeline == "silver_kvk" and row.status == "success"
     assert json.loads(row.tables) == {"kvk_company": {"rows": 3, "status": "published"}}
     inputs = json.loads(row.inputs)
@@ -138,13 +138,13 @@ def test_run_publishes_kvk_company_with_run_id_and_log(kvk_lakehouse):
                            "silver/map_sbi2008_sbi2025#batch_id"}
     assert inputs["bronze/kvk/_batch_log#batch_id"] == "kvk_b1"
     assert inputs["silver/map_sbi2008_sbi2025#batch_id"] == "ref_v20"
-    assert inspect_lakehouse.silver_run_problems(k.LAKEHOUSE, "silver_kvk")[1] == []
+    assert inspect_lakehouse.silver_run_problems(paths.lakehouse().root, "silver_kvk")[1] == []
 
 
 def test_types_after_reading_back(kvk_lakehouse):
     k.run()
     schema = {f.name: f.type for f in pa.schema(
-        DeltaTable(str(k.SILVER_ROOT / "kvk_company")).schema().to_arrow())}
+        DeltaTable(str(paths.lakehouse().silver / "kvk_company")).schema().to_arrow())}
     assert schema["start_date"] == pa.date32() and schema["snapshot_date"] == pa.date32()
     assert schema["is_active"] == pa.bool_() and "is_latest" not in schema
     assert schema["main_activity_count"] == pa.int64()
@@ -154,7 +154,7 @@ def test_types_after_reading_back(kvk_lakehouse):
 def test_missing_bronze_fails_the_run_and_is_logged():
     with pytest.raises(publish.RunFailed, match="no KVK batches in bronze"):
         k.run()
-    assert runlog.read_runs(k.RUN_LOG).iloc[-1].status == "failed"
+    assert runlog.read_runs(paths.lakehouse().run_log).iloc[-1].status == "failed"
 
 
 def test_reader_returns_a_fixed_order_and_only_needed_columns(kvk_lakehouse):
@@ -174,21 +174,21 @@ def upload(batch_id, day, rows=ROWS, file_date=None):
     """A KVK upload as the bronze agent writes it: rows plus a success entry in the log.
     `file_date`: KVK's export date; None = no file date (the upload day is used)."""
     df = bronze(((batch_id, day),), rows)
-    write_deltalake(str(k.KVK_BRONZE / "basis_bedrijfsgegevens"), pa.Table.from_pandas(df), mode="append")
-    write_deltalake(str(k.KVK_BRONZE / "_batch_log"), pa.table({
+    write_deltalake(str(paths.lakehouse().kvk_bronze / "basis_bedrijfsgegevens"), pa.Table.from_pandas(df), mode="append")
+    write_deltalake(str(paths.lakehouse().kvk_bronze / "_batch_log"), pa.table({
         "batch_id": [batch_id], "status": ["success"],
         "ingested_at": pa.array([pd.Timestamp(day, tz="UTC")], pa.timestamp("us", tz="UTC")),
         "file_date": pa.array([file_date], pa.date32())}), mode="append")
 
 
 def silver_kvk():
-    return (DeltaTable(str(k.SILVER_ROOT / "kvk_company")).to_pandas()
+    return (DeltaTable(str(paths.lakehouse().silver / "kvk_company")).to_pandas()
             .sort_values(["batch_id", "source_row_number"], ignore_index=True))
 
 
 @pytest.fixture
 def crosswalk():
-    publish.write_table(k.SILVER_ROOT / "map_sbi2008_sbi2025", SILVER_CROSSWALK)
+    publish.write_table(paths.lakehouse().silver / "map_sbi2008_sbi2025", SILVER_CROSSWALK)
 
 
 def test_a_run_builds_only_the_newest_upload(crosswalk, monkeypatch, tmp_path_factory):
@@ -204,21 +204,21 @@ def test_a_run_builds_only_the_newest_upload(crosswalk, monkeypatch, tmp_path_fa
     df = silver_kvk()
     assert set(df.batch_id) == {"kvk_2026_10"} and len(df) == 2 and set(df.run_id) == {run_id}
     assert all(r.passed for r in layers.check_silver_kvk(df))
-    assert inspect_lakehouse.silver_run_problems(k.LAKEHOUSE, "silver_kvk")[1] == []
+    assert inspect_lakehouse.silver_run_problems(paths.lakehouse().root, "silver_kvk")[1] == []
 
     # run(lakehouse=...): a copy with a newer upload of its own is read and written; the
     # configured lakehouse isn't
     import shutil
     copy = tmp_path_factory.mktemp("copy") / "lakehouse"
-    shutil.copytree(k.LAKEHOUSE, copy)
+    shutil.copytree(paths.lakehouse().root, copy)
     assert k.unchanged_since(copy) == run_id              # the copy's log, batch and table
-    with monkeypatch.context() as m:                       # upload() writes to KVK_BRONZE
-        m.setattr(k, "KVK_BRONZE", copy / "bronze" / "kvk")
+    with monkeypatch.context() as m:              # upload() writes to the configured lakehouse
+        m.setitem(config.settings["paths"], "lakehouse", str(copy))
         upload("kvk_2026_11", "2026-11-01", rows=ROWS[:1])
     assert k.unchanged_since(copy) is None and k.unchanged_since() == run_id
     copy_run = k.run(lakehouse=copy)
     assert reads[-1] == ["kvk_2026_11"]                    # the copy's newest upload
-    assert list(runlog.read_runs(k.RUN_LOG).run_id) == [run_id]              # untouched
+    assert list(runlog.read_runs(paths.lakehouse().run_log).run_id) == [run_id]              # untouched
     assert set(silver_kvk().run_id) == {run_id}
     assert list(runlog.read_runs(copy / "_run_log").run_id) == [run_id, copy_run]
     copy_df = DeltaTable(str(copy / "silver" / "kvk_company")).to_pandas()
@@ -246,7 +246,7 @@ def test_an_older_file_loaded_later_does_not_replace_the_newest_snapshot(crosswa
 def test_batches_that_did_not_succeed_are_not_used(crosswalk):
     upload("kvk_2026_09", "2026-09-01")
     upload("kvk_2026_10", "2026-10-01")
-    DeltaTable(str(k.KVK_BRONZE / "_batch_log")).update(
+    DeltaTable(str(paths.lakehouse().kvk_bronze / "_batch_log")).update(
         new_values={"status": "retired"}, predicate="batch_id = 'kvk_2026_10'")
     k.run()
     assert set(silver_kvk().batch_id) == {"kvk_2026_09"}
@@ -266,17 +266,17 @@ def test_a_failed_publish_leaves_the_live_table_untouched(crosswalk, monkeypatch
     with monkeypatch.context() as m, pytest.raises(OSError):
         m.setattr(publish, "_overwrite", power_cut)
         k.run()
-    assert runlog.read_runs(k.RUN_LOG).iloc[-1].status == "failed"
+    assert runlog.read_runs(paths.lakehouse().run_log).iloc[-1].status == "failed"
     df = silver_kvk()
     assert set(df.batch_id) == {"kvk_2026_09"} and set(df.run_id) == {first}
-    assert not (k.SILVER_ROOT / "_staging").exists()
+    assert not (paths.lakehouse().silver / "_staging").exists()
     k.run()                                        # a clean rerun publishes the new upload
     assert set(silver_kvk().batch_id) == {"kvk_2026_10"}
 
 
 # =========================================================================== skip when nothing changed
 def kvk_version():
-    return DeltaTable(str(k.SILVER_ROOT / "kvk_company")).version()
+    return DeltaTable(str(paths.lakehouse().silver / "kvk_company")).version()
 
 
 def test_a_run_with_the_same_inputs_rebuilds_nothing(crosswalk):
@@ -284,13 +284,13 @@ def test_a_run_with_the_same_inputs_rebuilds_nothing(crosswalk):
     with the same upload, crosswalk and code there is nothing to rebuild."""
     upload("kvk_2026_10", "2026-10-01")
     first = k.run()
-    version, runs = kvk_version(), len(runlog.read_runs(k.RUN_LOG))
+    version, runs = kvk_version(), len(runlog.read_runs(paths.lakehouse().run_log))
     # silver CBS rewrites the crosswalk (a new Delta version) with the same content
-    publish.write_table(k.SILVER_ROOT / "map_sbi2008_sbi2025", SILVER_CROSSWALK)
+    publish.write_table(paths.lakehouse().silver / "map_sbi2008_sbi2025", SILVER_CROSSWALK)
     assert k.run() == first
     assert kvk_version() == version                          # nothing written
-    assert len(runlog.read_runs(k.RUN_LOG)) == runs          # and no run logged
-    assert inspect_lakehouse.silver_run_problems(k.LAKEHOUSE, "silver_kvk")[1] == []
+    assert len(runlog.read_runs(paths.lakehouse().run_log)) == runs          # and no run logged
+    assert inspect_lakehouse.silver_run_problems(paths.lakehouse().root, "silver_kvk")[1] == []
 
 
 def test_force_rebuilds_anyway(crosswalk):
@@ -303,7 +303,7 @@ def test_force_rebuilds_anyway(crosswalk):
 def test_a_new_crosswalk_batch_rebuilds(crosswalk):
     upload("kvk_2026_10", "2026-10-01")
     first = k.run()
-    publish.write_table(k.SILVER_ROOT / "map_sbi2008_sbi2025",
+    publish.write_table(paths.lakehouse().silver / "map_sbi2008_sbi2025",
                         SILVER_CROSSWALK.assign(batch_id="ref_v21"))
     assert k.run() != first
 
@@ -322,7 +322,7 @@ def test_changed_or_unknown_code_rebuilds(crosswalk, monkeypatch, now):
 def test_a_table_that_no_longer_holds_the_run_is_rebuilt(crosswalk):
     upload("kvk_2026_10", "2026-10-01")
     first = k.run()
-    publish.write_table(k.SILVER_ROOT / "kvk_company", silver_kvk().assign(run_id="other"))
+    publish.write_table(paths.lakehouse().silver / "kvk_company", silver_kvk().assign(run_id="other"))
     second = k.run()
     assert second != first and set(silver_kvk().run_id) == {second}
 
@@ -331,11 +331,11 @@ def test_a_run_logged_without_the_crosswalk_batch_is_rebuilt_once(crosswalk):
     """Runs logged before 2026-11-26 don't say which crosswalk batch they read."""
     upload("kvk_2026_10", "2026-10-01")
     first = k.run()
-    runs = runlog.read_runs(k.RUN_LOG)
+    runs = runlog.read_runs(paths.lakehouse().run_log)
     inputs = json.loads(runs.iloc[-1]["inputs"])
     del inputs[k.CROSSWALK_BATCH]
     runs.loc[runs.index[-1], "inputs"] = json.dumps(inputs)
-    write_deltalake(str(k.RUN_LOG), pa.Table.from_pandas(runs, schema=runlog.schema(),
+    write_deltalake(str(paths.lakehouse().run_log), pa.Table.from_pandas(runs, schema=runlog.schema(),
                                                          preserve_index=False), mode="overwrite")
     second = k.run()
     assert second != first
@@ -344,12 +344,12 @@ def test_a_run_logged_without_the_crosswalk_batch_is_rebuilt_once(crosswalk):
 
 def test_an_older_partitioned_table_is_replaced_by_an_unpartitioned_one(crosswalk):
     """Until 2026-11 kvk_company kept every snapshot, partitioned by batch_id."""
-    write_deltalake(str(k.SILVER_ROOT / "kvk_company"), pa.table({
+    write_deltalake(str(paths.lakehouse().silver / "kvk_company"), pa.table({
         "batch_id": ["old1", "old2"], "is_latest": [False, True], "run_id": ["r1", "r2"]}),
         partition_by=["batch_id"])
     upload("kvk_2026_10", "2026-10-01")
     k.run()
-    dt = DeltaTable(str(k.SILVER_ROOT / "kvk_company"))
+    dt = DeltaTable(str(paths.lakehouse().silver / "kvk_company"))
     assert dt.metadata().partition_columns == []
     assert set(silver_kvk().batch_id) == {"kvk_2026_10"} and "is_latest" not in silver_kvk()
 

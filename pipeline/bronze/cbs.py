@@ -76,13 +76,11 @@ import requests
 
 from checks.cbs import DIMENSION_TYPES, NUMERIC_DATATYPES
 from pipeline.bronze.odata import fetch_all, make_session  # HTTP: session with retries, paging
-from pipeline.common.config import project_path, settings
+from pipeline.common import paths  # where the lakehouse is: paths.lakehouse()
+from pipeline.common.config import settings
 
 _CFG = settings["cbs"]
 BASE_URL = _CFG["base_url"]
-BRONZE_ROOT = project_path(settings["paths"]["lakehouse"]) / "bronze"
-LOG_TABLE = BRONZE_ROOT / "_ingestion_log"
-QUARANTINE_ROOT = project_path(settings["paths"]["lakehouse"]) / "quarantine"
 
 log = logging.getLogger("cbs_bronze")
 
@@ -131,9 +129,8 @@ def _folders(lakehouse: Path | None) -> tuple[Path, Path, Path]:
     """(bronze folder, ingestion log, quarantine folder) of `lakehouse`, or the configured
     ones for None. run() and cleanup_scope() take a lakehouse (e.g. a copy to try a
     change on) and pass these down."""
-    if lakehouse is None:
-        return BRONZE_ROOT, LOG_TABLE, QUARANTINE_ROOT
-    return lakehouse / "bronze", lakehouse / "bronze" / "_ingestion_log", lakehouse / "quarantine"
+    lh = paths.lakehouse(lakehouse)
+    return lh.bronze, lh.cbs_log, lh.quarantine
 
 
 # --------------------------------------------------------------------------- schemas
@@ -253,7 +250,7 @@ def plan_requests(session: requests.Session, ep: Endpoint,
 def done_keys(log_table: Path | None = None) -> set[str]:
     """Request keys already in bronze (from bronze/_ingestion_log, or `log_table`); run()
     skips these."""
-    log_table = LOG_TABLE if log_table is None else log_table
+    log_table = paths.lakehouse().cbs_log if log_table is None else log_table
     if not (log_table / "_delta_log").exists():
         return set()
     from deltalake import DeltaTable
@@ -364,7 +361,7 @@ def write_bronze(req: Request, records: list[dict], dataprops: list[dict] | None
     without it they are inferred. `root`: the bronze folder (default: the configured one)."""
     from deltalake import DeltaTable, write_deltalake
     ep = req.endpoint
-    path = (BRONZE_ROOT if root is None else root) / ep.name
+    path = (paths.lakehouse().bronze if root is None else root) / ep.name
     now = datetime.now(timezone.utc)
     exists = (path / "_delta_log").exists()
     pred = (f"_period = '{req.period}'" if req.period
@@ -397,7 +394,8 @@ def log_success(req: Request, row_count: int, pages: int, log_table: Path | None
         "row_count": [row_count], "pages": [pages],
         "ingested_at": [datetime.now(timezone.utc)],
     }, schema=log_schema())
-    write_deltalake(str(LOG_TABLE if log_table is None else log_table), row, mode="append")
+    write_deltalake(str(paths.lakehouse().cbs_log if log_table is None else log_table), row,
+                    mode="append")
 
 
 # --------------------------------------------------------------------------- checks
@@ -470,7 +468,7 @@ def quarantine_batch(req: Request, records: list[dict], results: list, pages: in
               "period_status": req.period_status, "source_url": req.display_url,
               "row_count": len(records), "pages": pages,
               "checks": [r.as_dict() for r in results]}
-    root = QUARANTINE_ROOT if quarantine_root is None else quarantine_root
+    root = paths.lakehouse().quarantine if quarantine_root is None else quarantine_root
     return quarantine(root, "cbs", req.endpoint.name + (f"_{req.period}" if req.period else ""),
                       report, records=records)
 

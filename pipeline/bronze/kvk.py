@@ -60,15 +60,11 @@ from checks.files import sha256
 from checks.kvk import check_file
 from checks.kvk import iter_rows as _iter_rows
 from pipeline.bronze import batchlog
-from pipeline.common.config import project_path, settings
+from pipeline.common import paths  # where the lakehouse is: paths.lakehouse()
+from pipeline.common.config import settings
 
 # --------------------------------------------------------------------------- config
 _CFG = settings["kvk"]
-KVK_ROOT = project_path(settings["paths"]["lakehouse"]) / "bronze" / "kvk"
-DATA_TABLE = KVK_ROOT / "basis_bedrijfsgegevens"
-LOG_TABLE = KVK_ROOT / "_batch_log"
-QUARANTINE_ROOT = project_path(settings["paths"]["lakehouse"]) / "quarantine"
-INBOX = project_path(settings["paths"]["inbox"]) / "kvk"     # uploads land here (Docker volume)
 
 DATASET = "KVK Handelsregister Open Dataset Basis Bedrijfsgegevens"
 DATASET_PAGE = _CFG["dataset_page"]
@@ -108,11 +104,14 @@ def _folders(lakehouse: Path | None) -> tuple[Path, Path, Path]:
     """(data table, batch log, quarantine folder) of `lakehouse`, or the configured ones
     for None. verify(), ingest() and ingest_confirmed_file() take a lakehouse (e.g. a
     copy to try a change on) and pass these down. The inbox is a setting of its own
-    (paths.inbox), not part of the lakehouse, so it stays INBOX."""
-    if lakehouse is None:
-        return DATA_TABLE, LOG_TABLE, QUARANTINE_ROOT
-    kvk = lakehouse / "bronze" / "kvk"
-    return kvk / DATA_TABLE.name, kvk / LOG_TABLE.name, lakehouse / "quarantine"
+    (paths.inbox), not part of the lakehouse: inbox_dir()."""
+    lh = paths.lakehouse(lakehouse)
+    return lh.kvk_data, lh.kvk_log, lh.quarantine
+
+
+def inbox_dir() -> Path:
+    """Where KVK uploads land: inbox/kvk/ (a Docker volume shared with the computer)."""
+    return paths.inbox() / "kvk"
 
 
 # --------------------------------------------------------------------------- files and the batch log
@@ -122,18 +121,19 @@ def resolve_path(file_path: str) -> Path:
     # dragging a file into a terminal often adds quotes or escaped spaces
     cleaned = file_path.strip().strip("'\"").replace("\\ ", " ")
     path = Path(cleaned).expanduser()
-    if not path.exists() and path.name == cleaned and (INBOX / cleaned).exists():
-        path = INBOX / cleaned                       # a bare file name: look in the inbox
+    if not path.exists() and path.name == cleaned and (inbox_dir() / cleaned).exists():
+        path = inbox_dir() / cleaned                 # a bare file name: look in the inbox
     return path.resolve()
 
 
 def inbox_files(log_table: Path | None = None) -> list[dict]:
     """Zip and CSV files in the inbox, newest first, marked when already ingested
     (according to `log_table`, default: the configured batch log)."""
-    if not INBOX.is_dir():
+    inbox = inbox_dir()
+    if not inbox.is_dir():
         return []
     done = ingested_hashes(log_table)
-    files = sorted((f for f in INBOX.iterdir()
+    files = sorted((f for f in inbox.iterdir()
                     if f.is_file() and f.suffix.lower() in {".zip", ".csv"}),
                    key=lambda f: f.stat().st_mtime, reverse=True)
     out = []
@@ -168,7 +168,7 @@ def by_snapshot_date(batches):
 
 def newest_snapshot_date(log_table: Path | None = None) -> date | None:
     """KVK file date (or upload day) of the newest snapshot in bronze, or None."""
-    log_table = LOG_TABLE if log_table is None else log_table
+    log_table = paths.lakehouse().kvk_log if log_table is None else log_table
     if not (log_table / "_delta_log").exists():
         return None
     from deltalake import DeltaTable
@@ -179,13 +179,13 @@ def newest_snapshot_date(log_table: Path | None = None) -> date | None:
 
 def ingested_hashes(log_table: Path | None = None) -> dict[str, str]:
     """file_sha256 -> batch_id of every successful KVK batch (pipeline/bronze/batchlog.py)."""
-    return batchlog.ingested_hashes(LOG_TABLE if log_table is None else log_table)
+    return batchlog.ingested_hashes(paths.lakehouse().kvk_log if log_table is None else log_table)
 
 
 def list_batches(log_table: Path | None = None) -> list[dict]:
     """The batches in the batch log, oldest first: batch_id, ingested_at (ISO text),
     source_file, row_count, status."""
-    log_table = LOG_TABLE if log_table is None else log_table
+    log_table = paths.lakehouse().kvk_log if log_table is None else log_table
     if not (log_table / "_delta_log").exists():
         return []
     from deltalake import DeltaTable
@@ -307,8 +307,8 @@ def write_batch(v: Verification, batch_id: str, now: datetime, data_table: Path 
     import pyarrow as pa
     from deltalake import write_deltalake
 
-    data_table = DATA_TABLE if data_table is None else data_table
-    log_table = LOG_TABLE if log_table is None else log_table
+    data_table = paths.lakehouse().kvk_data if data_table is None else data_table
+    log_table = paths.lakehouse().kvk_log if log_table is None else log_table
     batchlog.remove_orphan_rows(data_table, log_table)   # a crash before an earlier log
     seen: set[str] = set()
     cols = [_clean_name(h, seen) for h in v.header]
@@ -376,7 +376,7 @@ def write_log(v: Verification, batch_id: str, now: datetime, rows: int,
         ("verified_at", pa.timestamp("us", tz="UTC")), ("verification_report", pa.string()),
         ("confirmed_by", pa.string()), ("status", pa.string()), ("file_date", pa.date32())]))
     # "merge": a column added to the log later is added to the table (empty for old rows)
-    write_deltalake(str(LOG_TABLE if log_table is None else log_table), table, mode="append",
+    write_deltalake(str(paths.lakehouse().kvk_log if log_table is None else log_table), table, mode="append",
                     schema_mode="merge")
 
 
@@ -404,7 +404,7 @@ def main() -> None:
     if args.inbox:
         newest = newest_new_inbox_file()
         if newest is None:
-            sys.exit(f"No new KVK file in {INBOX}. Download it from {DOWNLOAD_URL}")
+            sys.exit(f"No new KVK file in {inbox_dir()}. Download it from {DOWNLOAD_URL}")
         run_direct(newest)
     else:
         run_direct(args.file)

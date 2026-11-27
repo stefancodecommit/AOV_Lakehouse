@@ -8,6 +8,7 @@ import pandas as pd
 from checks.quarantine import cleanup, list_entries, quarantine
 from conftest import table_info
 from pipeline.bronze import cbs as b
+from pipeline.common import paths
 from test_bronze_logic import periods
 from test_delta import ABSENCE, DP_80072, records
 from tools import maintenance as m
@@ -108,21 +109,21 @@ def test_quarantined_period_is_cleaned_up_after_cbs_fixes_it(monkeypatch, tmp_pa
 
     monkeypatch.setattr(b, "fetch_all", fetch_all)
     b.run(None, False, False)
-    assert len(list_entries(m.QUARANTINE_ROOT)) == 1
+    assert len(list_entries(paths.lakehouse().quarantine)) == 1
     assert m.clean_quarantine() == []              # not resolved, not old: stays
 
     state["value"] = 5.4
     b.run(None, False, False)
     removed = m.clean_quarantine()
     assert len(removed) == 1 and removed[0][1].startswith("resolved: 80072NED/TypedDataSet")
-    assert list_entries(m.QUARANTINE_ROOT) == []
+    assert list_entries(paths.lakehouse().quarantine) == []
 
     # run(lakehouse=...): another lakehouse gets its own data, log and quarantine
     other = tmp_path_factory.mktemp("other")
     before = b.done_keys()
     state["value"] = "5,4"
     b.run(None, False, False, lakehouse=other)
-    assert len(list_entries(other / "quarantine")) == 1 and list_entries(m.QUARANTINE_ROOT) == []
+    assert len(list_entries(other / "quarantine")) == 1 and list_entries(paths.lakehouse().quarantine) == []
     state["value"] = 5.4
     b.run(None, False, False, lakehouse=other)
     assert (other / "bronze" / ABSENCE.name / "_delta_log").exists()
@@ -139,10 +140,10 @@ def kvk_batches(days, file_dates=None):
     from deltalake import write_deltalake
     for i, day in enumerate(days):
         ts = pd.Timestamp(day, tz="UTC")
-        write_deltalake(str(m.KVK_ROOT / "basis_bedrijfsgegevens"), pa.table({
+        write_deltalake(str(paths.lakehouse().kvk_bronze / "basis_bedrijfsgegevens"), pa.table({
             "Actief": ["J", "N"], "_batch_id": [f"b{i}"] * 2,
             "_ingested_at": pa.array([ts] * 2, pa.timestamp("us", tz="UTC"))}), mode="append")
-        write_deltalake(str(m.KVK_ROOT / "_batch_log"), pa.table({
+        write_deltalake(str(paths.lakehouse().kvk_bronze / "_batch_log"), pa.table({
             "batch_id": [f"b{i}"], "status": ["success"], "file_sha256": [f"sha{i}"],
             "ingested_at": pa.array([ts], pa.timestamp("us", tz="UTC")),
             "file_date": pa.array([file_dates[i] if file_dates else None], pa.date32())}),
@@ -153,12 +154,12 @@ def test_kvk_retention_keeps_newest_and_first_of_each_month():
     from deltalake import DeltaTable
     kvk_batches(["2026-08-03", "2026-08-20", "2026-09-01", "2026-09-15", "2026-10-02"])
     assert m.kvk_retention(dry_run=True) == ["b1", "b3"]
-    assert len(DeltaTable(str(m.KVK_ROOT / "basis_bedrijfsgegevens")).to_pandas()) == 10
+    assert len(DeltaTable(str(paths.lakehouse().kvk_bronze / "basis_bedrijfsgegevens")).to_pandas()) == 10
 
     assert m.kvk_retention() == ["b1", "b3"]
-    rows = DeltaTable(str(m.KVK_ROOT / "basis_bedrijfsgegevens")).to_pandas()
+    rows = DeltaTable(str(paths.lakehouse().kvk_bronze / "basis_bedrijfsgegevens")).to_pandas()
     assert sorted(rows["_batch_id"].unique()) == ["b0", "b2", "b4"]
-    log = DeltaTable(str(m.KVK_ROOT / "_batch_log")).to_pandas().set_index("batch_id")
+    log = DeltaTable(str(paths.lakehouse().kvk_bronze / "_batch_log")).to_pandas().set_index("batch_id")
     assert log.loc["b1", "status"] == "retired" and log.loc["b4", "status"] == "success"
     assert m.kvk_retention() == []                   # nothing left to do
 
@@ -187,7 +188,7 @@ def upload_log(rows):
     """A KVK batch log with (batch_id, ingested_at, confirmed_by, report file) rows."""
     import pyarrow as pa
     from deltalake import write_deltalake
-    write_deltalake(str(m.KVK_ROOT / "_batch_log"), pa.table({
+    write_deltalake(str(paths.lakehouse().kvk_bronze / "_batch_log"), pa.table({
         "batch_id": [r[0] for r in rows],
         "ingested_at": pa.array([pd.Timestamp(r[1], tz="UTC") for r in rows],
                                 pa.timestamp("us", tz="UTC")),
@@ -198,7 +199,7 @@ def upload_log(rows):
 
 def read_upload_log():
     from deltalake import DeltaTable
-    return DeltaTable(str(m.KVK_ROOT / "_batch_log")).to_pandas().set_index("batch_id")
+    return DeltaTable(str(paths.lakehouse().kvk_bronze / "_batch_log")).to_pandas().set_index("batch_id")
 
 
 def test_personal_data_is_removed_from_old_rows_and_paths_from_all(monkeypatch):
@@ -230,7 +231,7 @@ def test_optimize_and_vacuum_removes_files_old_versions_no_longer_need(monkeypat
     import pyarrow as pa
     from deltalake import DeltaTable, write_deltalake
     monkeypatch.setitem(m.settings, "delta", {"vacuum_retention_hours": 0})
-    path = m.LAKEHOUSE / "silver" / "t"
+    path = paths.lakehouse().root / "silver" / "t"
     for i in range(3):                               # three overwrites: two stale files
         write_deltalake(str(path), pa.table({"v": [i]}), mode="overwrite")
     assert m.optimize_and_vacuum(dry_run=True) == {"silver/t": 2}
@@ -242,6 +243,6 @@ def test_optimize_and_vacuum_removes_files_old_versions_no_longer_need(monkeypat
 def test_delta_tables_skips_staging():
     import pyarrow as pa
     from deltalake import write_deltalake
-    write_deltalake(str(m.LAKEHOUSE / "silver" / "a"), pa.table({"v": [1]}))
-    write_deltalake(str(m.LAKEHOUSE / "silver" / "_staging" / "run" / "b"), pa.table({"v": [1]}))
+    write_deltalake(str(paths.lakehouse().root / "silver" / "a"), pa.table({"v": [1]}))
+    write_deltalake(str(paths.lakehouse().root / "silver" / "_staging" / "run" / "b"), pa.table({"v": [1]}))
     assert [p.name for p in m.delta_tables()] == ["a"]

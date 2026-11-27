@@ -493,6 +493,41 @@ Open, most valuable first (the author decides):
       folder constants per module, so the ~40 patches in `tests/conftest.py` could go.
       The tools (`tools/maintenance.py`, `backup.py`, `inspect_lakehouse.py`) and
       `dashboard/data.py` were not part of this item
+      **Step 2 done** (2026-11-27, at the author's request):
+      - new `pipeline/common/paths.py`: the lakehouse layout in one place. `Lakehouse(root)`
+        (frozen dataclass) has the folders and tables as properties (`bronze`, `silver`,
+        `gold`, `run_log`, `quarantine`, `cbs_log`, `kvk_bronze`, `kvk_data`, `kvk_log`,
+        `reference_bronze`, `crosswalk`, `reference_log`); `lakehouse(root=None)` gives
+        it for a folder, or for the configured one (paths.lakehouse) **read from the
+        settings each time it is called**; `inbox()` and `backup_dir()` likewise
+      - no module keeps a folder constant any more: gone from bronze (cbs, reference,
+        kvk), silver (cbs, kvk), gold, `runlog`, `dashboard/data.py`, `tools/maintenance.py`
+        (`BATCH_LOGS` is now `batch_logs()`), `tools/backup.py`; the viewer and Dagster's
+        definitions use `paths` too. Step 1's `lakehouse=None` parameters and `_folders`
+        helpers now resolve through `paths.lakehouse(lakehouse)`. KVK's inbox is
+        `kvk.inbox_dir()` (was `INBOX`)
+      - `tests/conftest.py`: three settings (lakehouse, inbox, backup path) instead of ~40
+        `monkeypatch.setattr` calls; a module added later can't be forgotten. Safety nets:
+        the real folders are read once when conftest loads (`REAL_DATA`), before any test
+        changes the settings; before and after every test, `paths.lakehouse()`,
+        `paths.inbox()` and `paths.backup_dir()` must be outside them, and so must any
+        Path a module holds (the old scan, kept, so a folder constant added back is
+        caught); the session-wide refusal of Delta writes to real data is unchanged
+        (now from `REAL_DATA`). Checked with a temporary probe test (deleted): inside a
+        test every folder is the temp folder; `monkeypatch.undo()` and a module path
+        into real data are both reported
+      - tests: ~130 references (`g.GOLD_ROOT`, `k.DATA_TABLE`, ...) now read
+        `paths.lakehouse().gold`, `.kvk_data`, ...; two tests that patched a constant by
+        name: the KVK fixture's leftover `LOG_TABLE` patch removed (conftest isolates),
+        and the silver KVK copy check points the setting at the copy for its upload.
+        Still 420 tests, all passing first time; ruff clean
+      - checked outside the tests: Dagster's definitions load; `python -m
+        tools.inspect_lakehouse` reads the real lakehouse ("problems: none"); all seven
+        gold tables built in memory from the real silver are identical to before. A
+        `LAKEHOUSE__PATHS__LAKEHOUSE` override (Docker) works as before, now also after
+        import
+      Docs: tests/README.md (safety nets), docs/PROJECT.md, README.md and
+      `pipeline/__init__.py` / `pipeline/common/__init__.py` (layout)
 - [x] **Optional: explicit inputs for the gold builders** (interface segregation). Each
       `build_*` in `pipeline/gold/build.py` takes `t` (all silver tables), so what it
       really reads is hidden; silver CBS builders already name theirs

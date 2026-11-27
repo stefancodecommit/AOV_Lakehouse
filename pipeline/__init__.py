@@ -4,7 +4,8 @@
               kvk_agent), SBI crosswalk (reference)
     silver/   bronze -> silver: CBS tables (cbs), KVK companies (kvk)
     gold/     silver -> gold: the tables the dashboard reads (build)
-    common/   shared by all layers: settings (config), publishing (publish), run log (runlog)
+    common/   shared by all layers: settings (config), folders (paths), publishing (publish),
+              run log (runlog)
 
 Run a step from the project folder, e.g. `python -m pipeline.bronze.cbs`.
 """

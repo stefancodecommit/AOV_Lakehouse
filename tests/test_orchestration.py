@@ -8,7 +8,7 @@ import pytest
 
 from conftest import table_info
 from pipeline.bronze import cbs as b
-from pipeline.common import publish
+from pipeline.common import paths, publish
 from test_bronze_logic import DP_81589_FULL, business_record, periods
 from test_delta import bronze_delta  # noqa: F401  (fixture)
 
@@ -164,10 +164,10 @@ def test_freshness_checks_warn_without_failing(bronze_delta):   # noqa: F811
 
 # =========================================================================== maintenance job
 def test_maintenance_job_runs(bronze_delta):   # noqa: F811
-    publish.write_table(b.BRONZE_ROOT.parent / "silver" / "x", __import__("pandas").DataFrame({"v": [1]}))
+    publish.write_table(paths.lakehouse().bronze.parent / "silver" / "x", __import__("pandas").DataFrame({"v": [1]}))
     result = d.defs.resolve_job_def("maintenance_job").execute_in_process()
     assert result.success
-    assert len(list((b.BRONZE_ROOT.parent / "backups").glob("backup_*.tar.gz"))) == 1
+    assert len(list((paths.lakehouse().bronze.parent / "backups").glob("backup_*.tar.gz"))) == 1
 
 
 def test_maintenance_steps_run_one_after_the_other():
@@ -298,14 +298,13 @@ def test_kvk_freshness_uses_the_file_date_when_known():
     import pyarrow as pa
     from deltalake import write_deltalake
 
-    from pipeline.bronze import kvk as kvk_bronze
     ts = pa.array([__import__("pandas").Timestamp("2026-10-05", tz="UTC")] * 1, pa.timestamp("us", tz="UTC"))
-    write_deltalake(str(kvk_bronze.LOG_TABLE), pa.table({
+    write_deltalake(str(paths.lakehouse().kvk_log), pa.table({
         "batch_id": ["b1"], "ingested_at": ts, "status": ["success"],
         "file_date": pa.array([date(2026, 10, 1)], pa.date32())}))
     assert d.latest_kvk_snapshot() == date(2026, 10, 1)     # the data's age, not the upload's
     # an older file loaded later doesn't make the data look older
-    write_deltalake(str(kvk_bronze.LOG_TABLE), pa.table({
+    write_deltalake(str(paths.lakehouse().kvk_log), pa.table({
         "batch_id": ["b0"], "status": ["success"],
         "ingested_at": pa.array([__import__("pandas").Timestamp("2026-10-20", tz="UTC")],
                                 pa.timestamp("us", tz="UTC")),

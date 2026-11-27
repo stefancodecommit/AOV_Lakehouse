@@ -6,17 +6,18 @@ import pyarrow as pa
 import pytest
 from deltalake import DeltaTable, write_deltalake
 
+from pipeline.common import paths
 from tools import backup as bk
 
 
 def some_data():
     """Two small Delta tables (one with two versions), a staging table and a KVK upload."""
-    write_deltalake(str(bk.LAKEHOUSE / "silver" / "t"), pa.table({"v": [1]}))
-    write_deltalake(str(bk.LAKEHOUSE / "silver" / "t"), pa.table({"v": [2]}), mode="append")
-    write_deltalake(str(bk.LAKEHOUSE / "gold" / "g"), pa.table({"w": ["x"]}))
-    write_deltalake(str(bk.LAKEHOUSE / "silver" / "_staging" / "run" / "s"), pa.table({"v": [9]}))
-    bk.INBOX_KVK.mkdir(parents=True)
-    (bk.INBOX_KVK / "kvk.zip").write_bytes(b"zip")
+    write_deltalake(str(paths.lakehouse().root / "silver" / "t"), pa.table({"v": [1]}))
+    write_deltalake(str(paths.lakehouse().root / "silver" / "t"), pa.table({"v": [2]}), mode="append")
+    write_deltalake(str(paths.lakehouse().root / "gold" / "g"), pa.table({"w": ["x"]}))
+    write_deltalake(str(paths.lakehouse().root / "silver" / "_staging" / "run" / "s"), pa.table({"v": [9]}))
+    (paths.inbox() / "kvk").mkdir(parents=True)
+    ((paths.inbox() / "kvk") / "kvk.zip").write_bytes(b"zip")
 
 
 def members(archive):
@@ -62,9 +63,9 @@ def test_verify_finds_a_missing_data_file(tmp_path):
 
 def test_only_the_newest_backups_are_kept():
     some_data()
-    bk.BACKUP_DIR.mkdir()
+    paths.backup_dir().mkdir()
     for stamp in ("20260101T000000Z", "20260201T000000Z", "20260301T000000Z"):
-        (bk.BACKUP_DIR / f"backup_{stamp}.tar.gz").write_bytes(b"old")
+        (paths.backup_dir() / f"backup_{stamp}.tar.gz").write_bytes(b"old")
     new = bk.create(keep=2)
     assert [p.name for p in bk.backups()] == [new.name, "backup_20260301T000000Z.tar.gz"]
 
@@ -72,8 +73,8 @@ def test_only_the_newest_backups_are_kept():
 def test_keep_zero_is_refused_before_anything_is_written():
     """keep: 0 would delete the new archive along with the old ones: no backup at all."""
     some_data()
-    bk.BACKUP_DIR.mkdir()
-    (bk.BACKUP_DIR / "backup_20260301T000000Z.tar.gz").write_bytes(b"old")
+    paths.backup_dir().mkdir()
+    (paths.backup_dir() / "backup_20260301T000000Z.tar.gz").write_bytes(b"old")
     with pytest.raises(ValueError, match="at least 1"):
         bk.create(keep=0)
     assert [p.name for p in bk.backups()] == ["backup_20260301T000000Z.tar.gz"]
@@ -89,9 +90,9 @@ def test_restore_into_an_empty_folder_only(tmp_path_factory):
     with pytest.raises(ValueError, match="not empty"):
         bk.restore(archive, target)
     with pytest.raises(ValueError, match="not over the lakehouse"):
-        bk.restore(archive, bk.LAKEHOUSE)
+        bk.restore(archive, paths.lakehouse().root)
     with pytest.raises(ValueError, match="not over the lakehouse"):
-        bk.restore(archive, bk.LAKEHOUSE / "silver" / "new")
+        bk.restore(archive, paths.lakehouse().root / "silver" / "new")
 
 
 def test_backup_of_an_empty_lakehouse():
@@ -101,10 +102,10 @@ def test_backup_of_an_empty_lakehouse():
 
 def test_a_backup_on_the_lakehouse_disk_warns_or_refuses(caplog):
     some_data()
-    assert bk.same_disk(bk.BACKUP_DIR, bk.LAKEHOUSE)       # both in tmp_path
+    assert bk.same_disk(paths.backup_dir(), paths.lakehouse().root)       # both in tmp_path
     bk.create(require_other_disk=False)
     assert "same disk as the lakehouse" in caplog.text
-    unplugged = bk.LAKEHOUSE / "media" / "usb" / "backups"  # a drive that isn't there
+    unplugged = paths.lakehouse().root / "media" / "usb" / "backups"  # a drive that isn't there
     with pytest.raises(RuntimeError, match="same disk"):
         bk.create(unplugged, require_other_disk=True)
     assert not unplugged.exists()                          # nothing created on this disk

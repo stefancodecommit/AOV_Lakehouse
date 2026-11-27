@@ -35,7 +35,7 @@ import pyarrow.compute as pc
 # pipeline and checks packages
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from checks.layers import GOLD_KEYS, SILVER_CBS_KEYS  # noqa: E402
-from pipeline.silver import cbs as cbs_silver  # noqa: E402
+from pipeline.common import paths  # noqa: E402
 
 PORT = 8502
 LAYERS = ["bronze", "silver", "gold", "other"]
@@ -160,7 +160,7 @@ def main() -> None:
         return quality(DeltaTable(path, version=version).to_pyarrow_table(), rel)
 
     st.set_page_config(page_title="Lakehouse viewer", layout="wide")
-    root = cbs_silver.LAKEHOUSE
+    root = paths.lakehouse().root
     tables = lakehouse_tables(root)
 
     # a link can open a table and view directly (the demo start page does), e.g.

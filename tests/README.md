@@ -38,10 +38,12 @@ same suite runs on every push in GitHub Actions, on a clean Python 3.12.
 
 ## Safety nets
 
-- **Tests never touch the real data.** [`conftest.py`](conftest.py) points every
-  lakehouse and inbox path at a temporary folder, checks that before *and* after every
-  test, and refuses every Delta write to the real `lakehouse/` or `inbox/` for the whole
-  session.
+- **Tests never touch the real data.** [`conftest.py`](conftest.py) points the
+  lakehouse, inbox and backup settings at a temporary folder; every module asks
+  [`pipeline/common/paths.py`](../pipeline/common/paths.py) for its folders when it runs,
+  so that moves all of them. It checks before *and* after every test that those folders,
+  and any path a module holds, are outside the real data, and refuses every Delta write
+  to the real `lakehouse/` or `inbox/` for the whole session.
 - **The tests are tested.** Several were checked by breaking the code on purpose (e.g. the
   delete-before-write in bronze; also, before silver KVK was simplified to the newest
   upload, its `is_latest` flag and the redo of failed KVK runs): each time the right

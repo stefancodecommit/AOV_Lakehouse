@@ -12,7 +12,7 @@ from deltalake import DeltaTable
 from conftest import CROSSWALK_BATCH, INGESTED_AT, sample_bronze, sample_crosswalk, table_info
 from pipeline.bronze import cbs as b
 from pipeline.bronze import reference as r
-from pipeline.common import publish, runlog
+from pipeline.common import paths, publish, runlog
 from pipeline.silver import cbs as s
 from test_bronze_logic import periods
 from tools import inspect_lakehouse
@@ -35,7 +35,7 @@ def records(period, *values):
 
 
 def bronze_rows(ep=ABSENCE):
-    return DeltaTable(str(b.BRONZE_ROOT / ep.name)).to_pandas().sort_values(["_period", "_record_index"])
+    return DeltaTable(str(paths.lakehouse().bronze / ep.name)).to_pandas().sort_values(["_period", "_record_index"])
 
 
 # =========================================================================== bronze writes
@@ -52,7 +52,7 @@ def test_revised_period_replaces_its_rows_and_keeps_other_periods():
 
 def test_a_revision_is_one_commit_so_no_reader_sees_the_period_missing():
     b.write_bronze(period_request("2026KW01", "Voorlopig"), records("2026KW01", 6.0))
-    path = str(b.BRONZE_ROOT / ABSENCE.name)
+    path = str(paths.lakehouse().bronze / ABSENCE.name)
     before = DeltaTable(path).version()
     b.write_bronze(period_request("2026KW01", "Definitief"), records("2026KW01", 6.2))
     assert DeltaTable(path).version() == before + 1           # not a delete, then an append
@@ -81,7 +81,7 @@ def test_non_split_request_is_replaced_by_request_key():
 def test_bronze_schema_and_lineage():
     req = period_request("2026KW01", "Voorlopig")
     b.write_bronze(req, records("2026KW01", 6.0))
-    dt = DeltaTable(str(b.BRONZE_ROOT / ABSENCE.name))
+    dt = DeltaTable(str(paths.lakehouse().bronze / ABSENCE.name))
     schema = pa.schema(dt.schema().to_arrow())
     fixed = b.bronze_schema()
     assert pa.schema(list(schema)[:len(fixed)]) == fixed          # lineage + raw_json first
@@ -95,7 +95,7 @@ def test_bronze_schema_and_lineage():
 
 # =========================================================================== structured bronze
 def bronze_types(ep=ABSENCE):
-    dt = DeltaTable(str(b.BRONZE_ROOT / ep.name))
+    dt = DeltaTable(str(paths.lakehouse().bronze / ep.name))
     return {f.name: str(f.type) for f in pa.schema(dt.schema().to_arrow())}
 
 
@@ -168,7 +168,7 @@ def test_done_keys_reads_back_what_log_success_wrote():
     for req in reqs:
         b.log_success(req, row_count=39, pages=1)
     assert b.done_keys() == {req.key for req in reqs}
-    log = DeltaTable(str(b.LOG_TABLE)).to_pandas()
+    log = DeltaTable(str(paths.lakehouse().cbs_log)).to_pandas()
     assert list(log.row_count) == [39, 39] and set(log.period) == {"2025KW04", "2026KW01"}
 
 
@@ -274,7 +274,7 @@ def bronze_delta():
 
 
 def silver_table(name):
-    return DeltaTable(str(s.SILVER_ROOT / name))
+    return DeltaTable(str(paths.lakehouse().silver / name))
 
 
 def test_silver_end_to_end_matches_the_in_memory_build(bronze_delta, silver, monkeypatch):
@@ -284,7 +284,7 @@ def test_silver_end_to_end_matches_the_in_memory_build(bronze_delta, silver, mon
 
     for name, expected in silver.items():
         if expected.empty:
-            assert not (s.SILVER_ROOT / name).exists(), name
+            assert not (paths.lakehouse().silver / name).exists(), name
             continue
         got = silver_table(name).to_pandas()
         assert list(got.columns) == list(expected.columns) + ["run_id"], name
@@ -381,18 +381,18 @@ def test_cleanup_scope_removes_tables_no_longer_configured(cbs_api, monkeypatch)
     actions = b.cleanup_scope(dry_run=False)
     assert sorted(actions) == ["remove table bronze/80072ned_tableinfos (not in config.yaml)",
                                "remove table bronze/80072ned_typeddataset (not in config.yaml)"]
-    assert not (b.BRONZE_ROOT / "80072ned_typeddataset").exists()
-    assert (b.BRONZE_ROOT / "80072ned_perioden").exists()
+    assert not (paths.lakehouse().bronze / "80072ned_typeddataset").exists()
+    assert (paths.lakehouse().bronze / "80072ned_perioden").exists()
     assert b.done_keys() == {"80072NED/Perioden"}
 
 
 def test_cleanup_scope_leaves_kvk_and_reference_alone(tmp_path):
     import pyarrow as pa
     from deltalake import write_deltalake
-    write_deltalake(str(b.BRONZE_ROOT / "kvk" / "basis_bedrijfsgegevens"), pa.table({"a": [1]}))
-    write_deltalake(str(b.BRONZE_ROOT / "reference" / "sbi2008_sbi2025"), pa.table({"a": [1]}))
+    write_deltalake(str(paths.lakehouse().bronze / "kvk" / "basis_bedrijfsgegevens"), pa.table({"a": [1]}))
+    write_deltalake(str(paths.lakehouse().bronze / "reference" / "sbi2008_sbi2025"), pa.table({"a": [1]}))
     assert b.cleanup_scope(session=object(), dry_run=False) == []
-    assert (b.BRONZE_ROOT / "kvk" / "basis_bedrijfsgegevens").exists()
+    assert (paths.lakehouse().bronze / "kvk" / "basis_bedrijfsgegevens").exists()
 
 
 # =========================================================================== silver runs and run log
@@ -404,7 +404,7 @@ def run_ids(name):
 
 def test_successful_run_is_logged_and_joinable(bronze_delta):
     run_id = s.run()
-    runs = runlog.read_runs(s.RUN_LOG)
+    runs = runlog.read_runs(paths.lakehouse().run_log)
     assert list(runs.run_id) == [run_id] and list(runs.status) == ["success"]
     row = runs.iloc[0]
     assert row.pipeline == "silver_cbs" and row.finished_at >= row.started_at
@@ -420,7 +420,7 @@ def test_successful_run_is_logged_and_joinable(bronze_delta):
 
     joined = silver_table("fct_absence_rate").to_pandas().merge(runs, on="run_id")
     assert len(joined) == tables["fct_absence_rate"]["rows"]
-    assert not (s.SILVER_ROOT / "_staging").exists()           # staging cleaned up
+    assert not (paths.lakehouse().silver / "_staging").exists()           # staging cleaned up
 
 
 def test_failed_build_leaves_live_tables_untouched(bronze_delta, monkeypatch):
@@ -428,7 +428,7 @@ def test_failed_build_leaves_live_tables_untouched(bronze_delta, monkeypatch):
     monkeypatch.setattr(s, "build_all", lambda **kw: (_ for _ in ()).throw(ValueError("boom")))
     with pytest.raises(ValueError):
         s.run()
-    runs = runlog.read_runs(s.RUN_LOG)
+    runs = runlog.read_runs(paths.lakehouse().run_log)
     assert list(runs.status) == ["success", "failed"]
     assert runs.iloc[1].error == "ValueError: boom"
     assert run_ids("fct_absence_rate") == {first}
@@ -440,8 +440,8 @@ def test_empty_required_table_fails_before_anything_is_written(bronze_delta, mon
     monkeypatch.setattr(s, "build_all", lambda **kw: {**real(**kw), "dim_company_size": pd.DataFrame()})
     with pytest.raises(publish.RunFailed, match="required tables came out empty: dim_company_size"):
         s.run()
-    assert not (s.SILVER_ROOT / "fct_absence_rate").exists()
-    assert runlog.read_runs(s.RUN_LOG).iloc[0].status == "failed"
+    assert not (paths.lakehouse().silver / "fct_absence_rate").exists()
+    assert runlog.read_runs(paths.lakehouse().run_log).iloc[0].status == "failed"
 
 
 def test_empty_optional_table_is_skipped(bronze_delta, monkeypatch):
@@ -449,7 +449,7 @@ def test_empty_optional_table_is_skipped(bronze_delta, monkeypatch):
     monkeypatch.setattr(s, "build_all",
                         lambda **kw: {**real(**kw), "map_sbi2008_sbi2025": pd.DataFrame()})
     s.run()
-    row = runlog.read_runs(s.RUN_LOG).iloc[0]
+    row = runlog.read_runs(paths.lakehouse().run_log).iloc[0]
     assert row.status == "success"
     assert json.loads(row.tables)["map_sbi2008_sbi2025"] == {"rows": 0, "status": "skipped"}
 
@@ -470,7 +470,7 @@ def test_staging_failure_leaves_live_tables_untouched(bronze_delta, monkeypatch)
         s.run()
     for name in ("dim_period", "fct_absence_rate", "map_sbi2008_sbi2025"):
         assert run_ids(name) == {first}, name
-    assert not (s.SILVER_ROOT / "_staging").exists()
+    assert not (paths.lakehouse().silver / "_staging").exists()
 
 
 def test_publish_stopping_halfway_is_logged_and_detected(bronze_delta, monkeypatch):
@@ -488,10 +488,10 @@ def test_publish_stopping_halfway_is_logged_and_detected(bronze_delta, monkeypat
     monkeypatch.setattr(publish, "_overwrite", fail_on_third)
     with pytest.raises(publish.RunFailed, match="publish incomplete after 2 tables"):
         s.run()
-    runs = runlog.read_runs(s.RUN_LOG)
+    runs = runlog.read_runs(paths.lakehouse().run_log)
     assert runs.iloc[1].status == "failed" and "power cut" in runs.iloc[1].error
 
-    _, problems = inspect_lakehouse.silver_run_problems(s.LAKEHOUSE)
+    _, problems = inspect_lakehouse.silver_run_problems(paths.lakehouse().root)
     assert any("latest silver_cbs run" in p and "failed" in p for p in problems)
     mixed = [p for p in problems if "is not the latest successful run" in p]
     assert len(mixed) == 2                         # the two tables already replaced
@@ -499,7 +499,7 @@ def test_publish_stopping_halfway_is_logged_and_detected(bronze_delta, monkeypat
 
     monkeypatch.setattr(publish, "_overwrite", real)
     s.run()                                        # a clean rerun fixes it
-    assert inspect_lakehouse.silver_run_problems(s.LAKEHOUSE)[1] == []
+    assert inspect_lakehouse.silver_run_problems(paths.lakehouse().root)[1] == []
 
 
 # =========================================================================== inspect_lakehouse

@@ -59,12 +59,8 @@ from pathlib import Path
 
 import pandas as pd
 
-from pipeline.common.config import project_path, settings
+from pipeline.common import paths  # where the lakehouse is: paths.lakehouse()
 
-LAKEHOUSE = project_path(settings["paths"]["lakehouse"])
-BRONZE_ROOT = LAKEHOUSE / "bronze"
-SILVER_ROOT = LAKEHOUSE / "silver"
-RUN_LOG = LAKEHOUSE / "_run_log"
 PIPELINE = "silver_cbs"
 OPTIONAL_TABLES = {"map_sbi2008_sbi2025"}   # empty until pipeline/bronze/reference.py has run
 
@@ -96,7 +92,7 @@ def read_bronze(table_id: str, entity: str, versions: dict | None = None,
     """Bronze table as a DataFrame: one column per CBS field, plus the period status and
     ingest time. `versions` (optional) collects the Delta version read, for the run log;
     `root` is the bronze folder (default: the configured one)."""
-    path = (BRONZE_ROOT if root is None else root) / f"{table_id}_{entity}".lower()
+    path = (paths.lakehouse().bronze if root is None else root) / f"{table_id}_{entity}".lower()
     if not (path / "_delta_log").exists():
         log.warning("Bronze table missing: %s (run pipeline/bronze/cbs.py first)", path)
         return pd.DataFrame()
@@ -121,7 +117,7 @@ def read_reference(dataset: str, versions: dict | None = None,
     """Rows of the latest successful batch of a reference table (pipeline/bronze/reference.py).
     Bronze keeps every file version; silver uses only the newest one. `root` is the
     bronze folder (default: the configured one)."""
-    root = (BRONZE_ROOT if root is None else root) / "reference"
+    root = (paths.lakehouse().bronze if root is None else root) / "reference"
     if not (root / dataset / "_delta_log").exists() or not (root / "_batch_log" / "_delta_log").exists():
         log.warning("Reference table missing: %s (run pipeline/bronze/reference.py first)", root / dataset)
         return pd.DataFrame()
@@ -674,10 +670,8 @@ def run(lakehouse: Path | None = None) -> str:
     from functools import partial
 
     from pipeline.common.publish import run_pipeline
-    if lakehouse is None:
-        bronze, silver, run_log = BRONZE_ROOT, SILVER_ROOT, RUN_LOG
-    else:
-        bronze, silver, run_log = lakehouse / "bronze", lakehouse / "silver", lakehouse / "_run_log"
+    lh = paths.lakehouse(lakehouse)
+    bronze, silver, run_log = lh.bronze, lh.silver, lh.run_log
 
     def build(inputs: dict) -> dict:
         return build_all(read=partial(read_bronze, versions=inputs, root=bronze),

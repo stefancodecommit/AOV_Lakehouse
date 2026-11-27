@@ -47,11 +47,9 @@ import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
-from pipeline.common.config import project_path, settings
+from pipeline.common import paths  # lakehouse, inbox and backup folder, from the settings
+from pipeline.common.config import settings
 
-LAKEHOUSE = project_path(settings["paths"]["lakehouse"])
-INBOX_KVK = project_path(settings["paths"]["inbox"]) / "kvk"
-BACKUP_DIR = project_path(settings["backup"]["path"])
 KEEP = int(settings["backup"]["keep"])
 REQUIRE_OTHER_DISK = bool(settings["backup"]["require_other_disk"])
 PREFIX = "backup_"
@@ -101,23 +99,24 @@ def create(backup_dir: Path | None = None, keep: int | None = None,
     """Write a new archive, verify it, then remove all but the newest `keep` archives.
     Returns the new archive's path. On the lakehouse's own disk: a warning, or with
     `require_other_disk` an error before anything is written."""
-    backup_dir, keep = backup_dir or BACKUP_DIR, KEEP if keep is None else keep
+    backup_dir, keep = backup_dir or paths.backup_dir(), KEEP if keep is None else keep
+    lakehouse = paths.lakehouse().root
     if keep < 1:      # 0 would remove the archive just made, together with the old ones
         raise ValueError(f"backup.keep must be at least 1 (is {keep}); nothing written")
     strict = REQUIRE_OTHER_DISK if require_other_disk is None else require_other_disk
-    if same_disk(backup_dir, LAKEHOUSE):
+    if same_disk(backup_dir, lakehouse):
         if strict:
             raise RuntimeError(f"backup.path {backup_dir} is on the same disk as the lakehouse "
                                "(is the backup disk connected?); nothing written")
         log.warning("backup on the same disk as the lakehouse: it protects against mistakes, "
                     "not against losing the disk (backup.path in config.yaml)")
     backup_dir.mkdir(parents=True, exist_ok=True)
-    manifest = _manifest(LAKEHOUSE) if LAKEHOUSE.exists() else {"tables": {}}
+    manifest = _manifest(lakehouse) if lakehouse.exists() else {"tables": {}}
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     target = backup_dir / f"{PREFIX}{stamp}.tar.gz"
     partial = target.with_suffix(".partial")        # renamed only when complete
     with tarfile.open(partial, "w:gz", compresslevel=1) as tar:  # Parquet is compressed already
-        for name, root in (("lakehouse", LAKEHOUSE), ("inbox/kvk", INBOX_KVK)):
+        for name, root in (("lakehouse", lakehouse), ("inbox/kvk", paths.inbox() / "kvk")):
             if not root.exists():
                 continue
             for f in _files(root):
@@ -141,7 +140,7 @@ def create(backup_dir: Path | None = None, keep: int | None = None,
 
 def backups(backup_dir: Path | None = None) -> list[Path]:
     """The archives in the backup folder, newest first."""
-    return sorted((backup_dir or BACKUP_DIR).glob(f"{PREFIX}*.tar.gz"), reverse=True)
+    return sorted((backup_dir or paths.backup_dir()).glob(f"{PREFIX}*.tar.gz"), reverse=True)
 
 
 def _extract(tar: tarfile.TarFile, to: Path) -> None:
@@ -185,7 +184,7 @@ def verify(archive: Path) -> list[str]:
 def restore(archive: Path, to: Path) -> Path:
     """Unpack an archive into `to`, which must be new or empty (never the live lakehouse).
     Returns `to`; the lakehouse is then at <to>/lakehouse, the KVK uploads at <to>/inbox/kvk."""
-    live, target = LAKEHOUSE.resolve(), to.resolve()
+    live, target = paths.lakehouse().root.resolve(), to.resolve()
     if target == live or target in live.parents or live in target.parents:
         raise ValueError(f"restore into a new folder, not over the lakehouse: {to}")
     if to.exists() and any(to.iterdir()):
@@ -218,7 +217,7 @@ if __name__ == "__main__":
     elif args.task == "verify":
         archive = args.archive or next(iter(backups()), None)
         if archive is None:
-            sys.exit(f"no backups in {BACKUP_DIR}")
+            sys.exit(f"no backups in {paths.backup_dir()}")
         problems = verify(archive)
         print(f"{archive}: " + ("OK" if not problems else "; ".join(problems)))
         sys.exit(1 if problems else 0)

@@ -57,16 +57,14 @@ from pathlib import Path
 import pandas as pd
 
 from checks.quarantine import cleanup
-from pipeline.common.config import project_path, settings
+from pipeline.common import paths  # where the lakehouse is: paths.lakehouse()
+from pipeline.common.config import settings
 
-LAKEHOUSE = project_path(settings["paths"]["lakehouse"])
-QUARANTINE_ROOT = LAKEHOUSE / "quarantine"
-KVK_ROOT = LAKEHOUSE / "bronze" / "kvk"
-BATCH_LOGS = {                                   # source -> its log of successful loads
-    "cbs": LAKEHOUSE / "bronze" / "_ingestion_log",
-    "kvk": LAKEHOUSE / "bronze" / "kvk" / "_batch_log",
-    "reference": LAKEHOUSE / "bronze" / "reference" / "_batch_log",
-}
+
+def batch_logs() -> dict[str, Path]:
+    """Source -> its log of successful loads, in the configured lakehouse."""
+    lh = paths.lakehouse()
+    return {"cbs": lh.cbs_log, "kvk": lh.kvk_log, "reference": lh.reference_log}
 
 log = logging.getLogger("maintenance")
 
@@ -84,7 +82,7 @@ def _read_log(path) -> pd.DataFrame:
 
 def make_resolver(logs: dict | None = None):
     """is_resolved(entry) -> reason or None, reading each batch log once."""
-    logs = {src: _read_log(path) for src, path in BATCH_LOGS.items()} if logs is None else logs
+    logs = {src: _read_log(path) for src, path in batch_logs().items()} if logs is None else logs
 
     def is_resolved(entry: dict) -> str | None:
         """Reason why this quarantine entry is resolved, or None if it isn't."""
@@ -112,7 +110,7 @@ def kvk_retention(dry_run: bool = False, path: Path | None = None) -> list[str]:
     """Delete the rows of KVK batches that are neither the newest nor the first of their
     month, and mark them "retired" in the batch log. Returns the retired batch_ids."""
     from deltalake import DeltaTable
-    root = path or KVK_ROOT
+    root = path or paths.lakehouse().kvk_bronze
     data, batch_log = root / "basis_bedrijfsgegevens", root / "_batch_log"
     if not (batch_log / "_delta_log").exists():
         return []
@@ -145,7 +143,7 @@ def clear_personal_data(dry_run: bool = False, path: Path | None = None,
     of the rows changed. The log is small, so it is rewritten in one commit."""
     import pyarrow as pa
     from deltalake import DeltaTable, write_deltalake
-    batch_log = path or KVK_ROOT / "_batch_log"
+    batch_log = path or paths.lakehouse().kvk_log
     if not (batch_log / "_delta_log").exists():
         return []
     days = int(settings["retention"]["confirmed_by_days"])
@@ -174,7 +172,7 @@ def clear_personal_data(dry_run: bool = False, path: Path | None = None,
 
 def delta_tables(root: Path | None = None) -> list[Path]:
     """Every Delta table in the lakehouse (folders with a _delta_log), staging excluded."""
-    root = root or LAKEHOUSE
+    root = root or paths.lakehouse().root
     return sorted(p.parent for p in root.rglob("_delta_log")
                   if p.is_dir() and "_staging" not in p.parts)
 
@@ -196,14 +194,14 @@ def optimize_and_vacuum(dry_run: bool = False, root: Path | None = None) -> dict
                  if (path / f).exists()]
         if stale and not dry_run:
             dt.vacuum(retention_hours=hours, dry_run=False, enforce_retention_duration=False)
-        out[str(path.relative_to(root or LAKEHOUSE))] = len(stale)
+        out[str(path.relative_to(root or paths.lakehouse().root))] = len(stale)
     return out
 
 
 def clean_quarantine(dry_run: bool = False) -> list[tuple[str, str]]:
     """Run the quarantine cleanup with the configured retention; returns (folder, reason) pairs."""
     days = int(settings["quarantine"]["retention_days"])
-    return cleanup(QUARANTINE_ROOT, make_resolver(), days, dry_run=dry_run)
+    return cleanup(paths.lakehouse().quarantine, make_resolver(), days, dry_run=dry_run)
 
 
 if __name__ == "__main__":

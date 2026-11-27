@@ -8,6 +8,7 @@ import requests
 from conftest import DP_81589, table_info, topic_keys
 from pipeline.bronze import cbs as b
 from pipeline.bronze import odata
+from pipeline.common import paths
 from pipeline.silver import cbs as s
 
 Endpoint = b.Endpoint
@@ -224,7 +225,7 @@ def test_only_filters_by_endpoint_name(pipeline):
 
 # =========================================================================== run(): checks & quarantine
 def quarantine_folders():
-    return sorted(p.name for p in (b.QUARANTINE_ROOT / "cbs").glob("*") if p.is_dir())
+    return sorted(p.name for p in (paths.lakehouse().quarantine / "cbs").glob("*") if p.is_dir())
 
 
 def test_batch_failing_a_check_is_quarantined_not_written_and_retried(pipeline):
@@ -236,11 +237,11 @@ def test_batch_failing_a_check_is_quarantined_not_written_and_retried(pipeline):
     folders = quarantine_folders()
     assert len(folders) == 2 and folders[0].endswith("_81589ned_typeddataset_2024KW04")
 
-    report = json.loads((b.QUARANTINE_ROOT / "cbs" / folders[0] / "report.json").read_text())
+    report = json.loads((paths.lakehouse().quarantine / "cbs" / folders[0] / "report.json").read_text())
     assert report["request_key"] == "81589NED/TypedDataSet?Perioden=2024KW04#status=Definitief"
     failed = [c["name"] for c in report["checks"] if not c["passed"]]
     assert failed == ["measures_numeric_or_null"]
-    records = json.loads((b.QUARANTINE_ROOT / "cbs" / folders[0] / "records.json").read_text())
+    records = json.loads((paths.lakehouse().quarantine / "cbs" / folders[0] / "records.json").read_text())
     assert records[0]["TotaalBedrijven_1"] == "n/a"
 
     pipeline["records"] = None                     # CBS fixes the data
@@ -265,7 +266,7 @@ def test_same_failing_batch_is_quarantined_once(pipeline):
 def test_each_check_stops_a_batch(pipeline, bad, check):
     pipeline["records"] = bad
     b.run(None, False, False)
-    folder = b.QUARANTINE_ROOT / "cbs" / quarantine_folders()[0]
+    folder = paths.lakehouse().quarantine / "cbs" / quarantine_folders()[0]
     report = json.loads((folder / "report.json").read_text())
     assert check in [c["name"] for c in report["checks"] if not c["passed"]]
     assert not any("TypedDataSet" in k for k in pipeline["written"])

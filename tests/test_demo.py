@@ -6,7 +6,7 @@ from urllib.parse import parse_qs, urlparse
 
 from streamlit.testing.v1 import AppTest
 
-from pipeline.bronze import kvk as kvk_bronze
+from pipeline.common import paths
 from tools import demo, lineage
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -46,8 +46,8 @@ def test_every_link_points_at_something_that_exists():
         elif u.port == 3000 and u.path.startswith("/assets/"):
             assert u.path.split("/")[2] in assets, url
     # the KVK table the viewer opens is where bronze KVK writes it
-    lakehouse = kvk_bronze.DATA_TABLE.parents[2]           # .../bronze/kvk/<table>
-    assert demo.KVK_TABLE == str(kvk_bronze.DATA_TABLE.relative_to(lakehouse))
+    lakehouse = paths.lakehouse().kvk_data.parents[2]           # .../bronze/kvk/<table>
+    assert demo.KVK_TABLE == str(paths.lakehouse().kvk_data.relative_to(lakehouse))
 
 
 def demo_layers():
@@ -63,7 +63,7 @@ def test_a_link_opens_one_sector_on_the_risk_page():
     t = risk_inputs({"total": [5.0] * 8, "Q": [7.0] * 8, "I": [3.0] * 8}, [F] * 6 + [V, V])
     for name, df in {"gold_risk_index": g.build(g.build_risk_index, t, settings_=SETTINGS),
                      "gold_risk_index_history": g.build(g.build_risk_index_history, t)}.items():
-        publish.write_table(g.GOLD_ROOT / name, df.assign(run_id="gold_test"))
+        publish.write_table(paths.lakehouse().gold / name, df.assign(run_id="gold_test"))
     at = AppTest.from_file(APP, default_timeout=60)
     at.query_params["group"] = "I"          # not the first in the list (Q is highest)
     at.run()

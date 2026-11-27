@@ -73,12 +73,9 @@ from pathlib import Path
 import pandas as pd
 
 from checks.kvk import match_columns
-from pipeline.common.config import project_path, settings
+from pipeline.common import paths  # where the lakehouse is: paths.lakehouse()
+from pipeline.common.config import settings
 
-LAKEHOUSE = project_path(settings["paths"]["lakehouse"])
-KVK_BRONZE = LAKEHOUSE / "bronze" / "kvk"
-SILVER_ROOT = LAKEHOUSE / "silver"
-RUN_LOG = LAKEHOUSE / "_run_log"
 PIPELINE = "silver_kvk"
 # run-log input keys that identify what a run was built from (see unchanged_since)
 NEWEST_BATCH = "bronze/kvk/_batch_log#batch_id"
@@ -107,9 +104,8 @@ SBI_COLUMNS = ["main_activity_codes", "main_activity_count", "has_multiple_main_
 # =========================================================================== reading
 def _folders(lakehouse: Path | None) -> tuple[Path, Path, Path]:
     """(KVK bronze, silver, run log) of `lakehouse`, or the configured ones for None."""
-    if lakehouse is None:
-        return KVK_BRONZE, SILVER_ROOT, RUN_LOG
-    return lakehouse / "bronze" / "kvk", lakehouse / "silver", lakehouse / "_run_log"
+    lh = paths.lakehouse(lakehouse)
+    return lh.kvk_bronze, lh.silver, lh.run_log
 
 
 def read_kvk_bronze(versions: dict | None = None, batches: list[str] | None = None,
@@ -117,7 +113,7 @@ def read_kvk_bronze(versions: dict | None = None, batches: list[str] | None = No
     """Rows of every successfully logged KVK batch, with batch_id and ingested_at.
     `batches`: only these batch_ids (a run reads only the newest)."""
     from deltalake import DeltaTable
-    root = KVK_BRONZE if root is None else root           # the KVK bronze folder
+    root = paths.lakehouse().kvk_bronze if root is None else root   # the KVK bronze folder
     data, batch_log = root / "basis_bedrijfsgegevens", root / "_batch_log"
     if not (data / "_delta_log").exists() or not (batch_log / "_delta_log").exists():
         log.warning("KVK bronze missing: %s (load a KVK file first: python -m pipeline.bronze.kvk --inbox)", data)
@@ -154,7 +150,7 @@ def read_crosswalk(versions: dict | None = None, root: Path | None = None) -> pd
     """The SBI 2008 <-> 2025 crosswalk from silver (map_sbi2008_sbi2025), only the two
     code columns. Without it every code becomes 'unknown', so run pipeline/silver/cbs.py first."""
     from deltalake import DeltaTable
-    path = (SILVER_ROOT if root is None else root) / "map_sbi2008_sbi2025"   # root: silver
+    path = (paths.lakehouse().silver if root is None else root) / "map_sbi2008_sbi2025"   # root: silver
     if not (path / "_delta_log").exists():
         log.warning("Crosswalk missing: %s (run pipeline/bronze/reference.py and pipeline/silver/cbs.py first)",
                     path)
@@ -180,7 +176,7 @@ def crosswalk_batch(root: Path | None = None) -> str | None:
     """The batch_id(s) of the crosswalk in silver (`root`, default: the configured
     folder), as read_crosswalk records them; '' when there is no crosswalk table."""
     from deltalake import DeltaTable
-    path = (SILVER_ROOT if root is None else root) / "map_sbi2008_sbi2025"
+    path = (paths.lakehouse().silver if root is None else root) / "map_sbi2008_sbi2025"
     if not (path / "_delta_log").exists():
         return ""
     return _batch_ids(DeltaTable(str(path)).to_pandas(columns=["batch_id"])["batch_id"])
@@ -330,7 +326,7 @@ def newest_batch(versions: dict | None = None, root: Path | None = None) -> str 
     from deltalake import DeltaTable
 
     from pipeline.bronze.kvk import by_snapshot_date
-    batch_log = (KVK_BRONZE if root is None else root) / "_batch_log"   # root: KVK bronze
+    batch_log = (paths.lakehouse().kvk_bronze if root is None else root) / "_batch_log"   # root: KVK bronze
     if not (batch_log / "_delta_log").exists():
         return None
     log_df = DeltaTable(str(batch_log)).to_pandas()

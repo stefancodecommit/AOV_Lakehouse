@@ -21,9 +21,8 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))   # project root: pipeline/common/config.py
 from checks.layers import GOLD_KEYS  # noqa: E402
-from pipeline.common.config import project_path, settings  # noqa: E402
+from pipeline.common import paths  # noqa: E402
 
-GOLD_ROOT = project_path(settings["paths"]["lakehouse"]) / "gold"
 GOLD_TABLES = list(GOLD_KEYS)          # every gold table, in the dictionary's order
 FINAL = "Definitief"
 
@@ -32,7 +31,7 @@ FINAL = "Definitief"
 def table_version(name: str, root: Path | None = None) -> int | None:
     """Current Delta version of a gold table, or None when it doesn't exist (yet)."""
     from deltalake import DeltaTable
-    path = (root or GOLD_ROOT) / name
+    path = (root or paths.lakehouse().gold) / name
     if not (path / "_delta_log").exists():
         return None
     return DeltaTable(str(path)).version()
@@ -44,7 +43,7 @@ def read_table(name: str, version: int | None, root: Path | None = None) -> pd.D
     from deltalake import DeltaTable
     if version is None:
         return pd.DataFrame()
-    df = DeltaTable(str((root or GOLD_ROOT) / name)).to_pandas()
+    df = DeltaTable(str((root or paths.lakehouse().gold) / name)).to_pandas()
     return df.convert_dtypes(convert_string=False, convert_boolean=True,
                              convert_floating=False)
 
@@ -60,7 +59,7 @@ def load_table(name: str) -> pd.DataFrame:
 
     # the folder is part of the key too: another lakehouse (config, tests) starts at
     # version 0 again and must not get this one's cached data
-    return _cached(name, table_version(name), str(GOLD_ROOT))
+    return _cached(name, table_version(name), str(paths.lakehouse().gold))
 
 
 # =========================================================================== pure helpers

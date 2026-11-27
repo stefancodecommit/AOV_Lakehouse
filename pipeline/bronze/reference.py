@@ -58,14 +58,10 @@ import pandas as pd
 
 from checks.files import norm, sha256
 from pipeline.bronze import batchlog
-from pipeline.common.config import project_path, settings
+from pipeline.common import paths  # where the lakehouse is: paths.lakehouse()
+from pipeline.common.config import settings
 
 CROSSWALK_URL = settings["reference"]["sbi_crosswalk_url"]
-DOWNLOAD_DIR = project_path(settings["paths"]["inbox"]) / "reference"
-REF_ROOT = project_path(settings["paths"]["lakehouse"]) / "bronze" / "reference"
-QUARANTINE_ROOT = project_path(settings["paths"]["lakehouse"]) / "quarantine"
-DATA_TABLE = REF_ROOT / "sbi2008_sbi2025"
-LOG_TABLE = REF_ROOT / "_batch_log"
 DATASET = "sbi2008_sbi2025"
 SHEET_PREFIX = "Schakeltabel"
 
@@ -143,15 +139,13 @@ def check_crosswalk(df: pd.DataFrame) -> tuple[list[str], list[str]]:
 def _folders(lakehouse: Path | None) -> tuple[Path, Path, Path]:
     """(crosswalk table, batch log, quarantine folder) of `lakehouse`, or the configured
     ones for None. ingest() takes a lakehouse (e.g. a copy to try a change on)."""
-    if lakehouse is None:
-        return DATA_TABLE, LOG_TABLE, QUARANTINE_ROOT
-    ref = lakehouse / "bronze" / "reference"
-    return ref / DATASET, ref / "_batch_log", lakehouse / "quarantine"
+    lh = paths.lakehouse(lakehouse)
+    return lh.crosswalk, lh.reference_log, lh.quarantine
 
 
 def ingested_hashes(log_table: Path | None = None) -> dict[str, str]:
     """file_sha256 -> batch_id of every successful crosswalk batch (pipeline/bronze/batchlog.py)."""
-    return batchlog.ingested_hashes(LOG_TABLE if log_table is None else log_table)
+    return batchlog.ingested_hashes(paths.lakehouse().reference_log if log_table is None else log_table)
 
 
 def write_batch(df: pd.DataFrame, batch_id: str, now: datetime, source_file: str,
@@ -165,8 +159,8 @@ def write_batch(df: pd.DataFrame, batch_id: str, now: datetime, source_file: str
     import pyarrow as pa
     from deltalake import write_deltalake
 
-    data_table = DATA_TABLE if data_table is None else data_table
-    log_table = LOG_TABLE if log_table is None else log_table
+    data_table = paths.lakehouse().crosswalk if data_table is None else data_table
+    log_table = paths.lakehouse().reference_log if log_table is None else log_table
     batchlog.remove_orphan_rows(data_table, log_table)
     n = len(df)
     schema = pa.schema([pa.field(c, pa.string()) for c in COLUMNS] + [
@@ -197,7 +191,8 @@ def write_log(batch_id: str, now: datetime, source_file: str, source_url: str | 
         ("ingested_at", pa.timestamp("us", tz="UTC")), ("source_file", pa.string()),
         ("source_url", pa.string()), ("file_sha256", pa.string()),
         ("source_version", pa.string()), ("row_count", pa.int64()), ("status", pa.string())]))
-    write_deltalake(str(LOG_TABLE if log_table is None else log_table), table, mode="append")
+    write_deltalake(str(paths.lakehouse().reference_log if log_table is None else log_table), table,
+                    mode="append")
 
 
 # --------------------------------------------------------------------------- main
@@ -233,11 +228,11 @@ def ingest(path: Path, source_url: str | None = None, lakehouse: Path | None = N
 
 def download(url: str, dest_dir: Path | None = None) -> Path:
     """Download the file at `url` into `dest_dir` (default: inbox/reference/) and return
-    its path. (The default was `dest_dir: Path = DOWNLOAD_DIR` until 2026-11-27: Python
-    fixes such a default when it loads the module, so a test's patch of DOWNLOAD_DIR
-    never reached it.)"""
+    its path. (The default was `dest_dir: Path = DOWNLOAD_DIR`, a constant, until
+    2026-11-27: Python fixes such a default when it loads the module, so a test's patch
+    of DOWNLOAD_DIR never reached it.)"""
     import requests
-    dest_dir = DOWNLOAD_DIR if dest_dir is None else dest_dir
+    dest_dir = paths.inbox() / "reference" if dest_dir is None else dest_dir
     dest_dir.mkdir(parents=True, exist_ok=True)
     dest = dest_dir / url.rstrip("/").rsplit("/", 1)[-1]
     resp = requests.get(url, timeout=120)

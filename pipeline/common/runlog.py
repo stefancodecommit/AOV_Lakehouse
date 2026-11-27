@@ -33,9 +33,8 @@ import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 
-from pipeline.common.config import PROJECT_DIR, project_path, settings
-
-RUN_LOG = project_path(settings["paths"]["lakehouse"]) / "_run_log"
+from pipeline.common import paths
+from pipeline.common.config import PROJECT_DIR
 
 
 def new_run_id(pipeline: str, now: datetime | None = None) -> str:
@@ -83,13 +82,13 @@ def write_run(run_id: str, pipeline: str, started_at: datetime, status: str,
         "tables": [json.dumps(tables or {}, sort_keys=True)],
         "inputs": [json.dumps(inputs or {}, sort_keys=True)],
         "code_version": [code_version()]}, schema=schema())
-    write_deltalake(str(path or RUN_LOG), row, mode="append")
+    write_deltalake(str(path or paths.lakehouse().run_log), row, mode="append")
 
 
 def read_runs(path: Path | None = None):
     """The run log as a DataFrame, oldest first (empty when nothing has run yet)."""
     import pandas as pd
-    path = path or RUN_LOG
+    path = path or paths.lakehouse().run_log
     if not (path / "_delta_log").exists():
         return pd.DataFrame(columns=schema().names)
     from deltalake import DeltaTable
